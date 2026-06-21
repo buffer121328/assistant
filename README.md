@@ -2,7 +2,7 @@
 
 个人 Agent 助手系统后端。项目以飞书 / 企业微信作为手机端入口，后端负责消息接入、任务管理、Agent 调度、模型网关、工具调用、结果推送和审计。
 
-当前仓库已完成 MVP 阶段 02 Persistence & Task Service：在 Foundation 能力之上新增 PostgreSQL 持久化结构、Alembic 迁移、Task Service 和最小 Task API。后续按 OpenSpec + ATDD 的 phase-by-phase 范式继续推进。
+当前仓库已完成 MVP 阶段 03 Feishu Webhook：在 Persistence & Task Service 能力之上新增飞书 Webhook 接入、请求校验、消息归一化、用户绑定查询、消息去重和命令入库。后续按 OpenSpec + ATDD 的 phase-by-phase 范式继续推进。
 
 ## 项目介绍
 
@@ -44,7 +44,7 @@ curl http://127.0.0.1:8000/health
 DATABASE_URL="postgresql+asyncpg://<user>:<password>@<host>:<port>/<database>" uv run alembic upgrade head
 ```
 
-当前阶段提供 `GET /health` 和最小 Task API。Task API 需要可连接的 PostgreSQL `DATABASE_URL` 和已存在的用户记录；尚未实现飞书 Webhook、模型网关、Dify、Tavily、Redis 调度或 Celery worker。
+当前阶段提供 `GET /health`、最小 Task API 和飞书 Webhook 接入。Task API 需要可连接的 PostgreSQL `DATABASE_URL` 和已存在的用户记录；飞书 Webhook 创建任务前还需要已存在的 `platform_accounts` 绑定，其中 `platform = feishu`，`platform_user_id` 为飞书 `open_id`。尚未实现模型网关、Dify、Tavily、Redis 调度或 Celery worker。
 
 ## 如何配置
 
@@ -58,8 +58,10 @@ DATABASE_URL="postgresql+asyncpg://<user>:<password>@<host>:<port>/<database>" u
 - `DATABASE_URL`：PostgreSQL asyncpg URL。默认值是占位值；运行迁移或 Task API 前必须通过环境变量或本地 `.env` 提供真实可连接地址。
 - `REDIS_URL`：Redis URL，占位配置；本阶段不连接 Redis。
 - `SENTRY_DSN`：Sentry DSN，可为空；本阶段不初始化 Sentry 连接。
+- `FEISHU_WEBHOOK_VERIFICATION_TOKEN`：飞书 Webhook verification token，默认是占位值；用于校验请求 `token`。
+- `FEISHU_WEBHOOK_SIGNING_SECRET`：飞书 Webhook signing secret，默认是占位值；用于校验请求签名。
 
-本阶段不会读取或要求 DeepSeek、Dify、Tavily、飞书等真实密钥，也不会连接这些外部服务。
+本阶段不会读取或要求 DeepSeek、Dify、Tavily 等真实密钥，也不会连接这些外部服务。飞书 Webhook 配置只用于请求校验；真实值仅放在本地 `.env` 或运行环境变量中，不提交仓库。
 
 ## 项目目录介绍
 
@@ -87,6 +89,7 @@ DATABASE_URL="postgresql+asyncpg://<user>:<password>@<host>:<port>/<database>" u
 │   │       ├── config.py
 │   │       ├── database.py
 │   │       ├── errors.py
+│   │       ├── feishu.py
 │   │       ├── logging.py
 │   │       ├── main.py
 │   │       ├── models.py
@@ -123,9 +126,11 @@ DATABASE_URL="postgresql+asyncpg://<user>:<password>@<host>:<port>/<database>" u
 ├── migrations/
 │   ├── env.py
 │   └── versions/
-│       └── 202606200001_create_mvp_tables.py
+│       ├── 202606200001_create_mvp_tables.py
+│       └── 202606210001_create_processed_messages.py
 ├── openspec/
 │   └── changes/
+│       ├── feishu-webhook/
 │       └── persistence-task-service/
 ├── packages/
 │   ├── agent_harness/
@@ -145,6 +150,7 @@ DATABASE_URL="postgresql+asyncpg://<user>:<password>@<host>:<port>/<database>" u
 │   └── ops/
 ├── tests/
 │   ├── acceptance/
+│   │   ├── test_feishu_webhook.py
 │   │   ├── test_foundation.py
 │   │   └── test_persistence_task_service.py
 │   ├── fixtures/
@@ -164,8 +170,9 @@ DATABASE_URL="postgresql+asyncpg://<user>:<password>@<host>:<port>/<database>" u
 - `apps/api/assistant_api/config.py`：基础配置加载。
 - `apps/api/assistant_api/database.py`：SQLAlchemy 异步数据库引擎、sessionmaker 和 FastAPI session 依赖。
 - `apps/api/assistant_api/models.py`：MVP 阶段数据库模型。
-- `apps/api/assistant_api/repositories.py`：Task 持久化读写封装。
-- `apps/api/assistant_api/routes.py`：当前包含 `GET /health` 和最小 Task API。
+- `apps/api/assistant_api/feishu.py`：飞书 Webhook 请求校验、消息归一化、命令映射、绑定查询、去重和任务入库逻辑。
+- `apps/api/assistant_api/repositories.py`：Task 和 Feishu Webhook 持久化读写封装。
+- `apps/api/assistant_api/routes.py`：当前包含 `GET /health`、最小 Task API 和 `POST /api/webhooks/feishu`。
 - `apps/api/assistant_api/schemas.py`：Task API 请求和响应 schema。
 - `apps/api/assistant_api/services.py`：Task Service 创建、查询、状态流转和结果记录逻辑。
 - `apps/api/assistant_api/errors.py`：统一 JSON 错误响应。
@@ -184,6 +191,7 @@ DATABASE_URL="postgresql+asyncpg://<user>:<password>@<host>:<port>/<database>" u
 - `docs/mvp/index.md`：MVP 阶段开发文档索引，用于后续逐阶段生成和完善 OpenSpec。
 - `docs/runbooks/`：运行手册目录。
 - `openspec/changes/persistence-task-service/`：MVP 阶段 02 Persistence & Task Service 的 OpenSpec change。
+- `openspec/changes/feishu-webhook/`：MVP 阶段 03 Feishu Webhook 的 OpenSpec change。
 - `tests/`：自动化测试，按 acceptance、integration、unit 分层。
 - `pyproject.toml`：Python 项目元数据和依赖声明。
 - `pyrightconfig.json`：Python 类型检查相关配置。
@@ -219,14 +227,16 @@ V1/MVP 计划支持：
 - 结构化日志：输出 JSON 日志并过滤常见敏感字段。
 - 统一错误响应：未知路由和应用异常返回稳定 JSON 格式。
 - Alembic 初始迁移：创建 `users`、`platform_accounts`、`tasks`、`memories`、`model_logs`、`tool_logs`、`approvals` 表。
+- Alembic 飞书去重迁移：创建 `processed_messages` 表，并通过 `platform + message_id` 防止重复处理。
 - `POST /api/tasks`：为已存在用户创建 `pending` 任务。
 - `GET /api/tasks/{task_id}`：查询单个任务。
 - `GET /api/tasks?user_id=...`：按用户查询任务列表，按创建时间倒序返回。
 - Task Service：支持任务创建、合法状态流转、成功结果记录和失败错误记录。
+- `POST /api/webhooks/feishu`：处理飞书 URL verification 和 `im.message.receive_v1` 文本事件，校验签名与 token，归一化文本消息，按首个空白分隔 token 映射 `/plan`、`/learn`、`/daily`、`/office`、`/memory`、`/status`，仅为已绑定飞书用户创建 `pending` 任务。
 
 当前尚未实现：
 
-- 飞书 / 企业微信 Webhook。
+- 企业微信 Webhook。
 - Redis、Celery worker 和异步调度。
 - Model Gateway、Dify Workflow、Tavily 工具调用和 Agent Harness。
 - 任务取消、审批处理和结果推送。

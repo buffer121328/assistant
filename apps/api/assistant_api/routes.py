@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .database import get_session
 from .errors import AppError
+from .feishu import handle_feishu_webhook
 from .schemas import (
     TaskCreateRequest,
     TaskListResponse,
@@ -30,6 +31,19 @@ def raise_app_error(exc: TaskServiceError) -> None:
         message=str(exc),
         status_code=exc.status_code,
     ) from exc
+
+
+@router.post("/api/webhooks/feishu")
+async def receive_feishu_webhook(
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> dict[str, object]:
+    return await handle_feishu_webhook(
+        body=await request.body(),
+        headers=request.headers,
+        session=session,
+        settings=request.app.state.settings,
+    )
 
 
 @router.post(

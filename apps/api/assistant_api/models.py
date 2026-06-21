@@ -86,6 +86,23 @@ class Task(TimestampMixin, Base):
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+class ProcessedMessage(TimestampMixin, Base):
+    __tablename__ = "processed_messages"
+    __table_args__ = (
+        UniqueConstraint(
+            "platform",
+            "message_id",
+            name="uq_processed_messages_platform_message_id",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    platform: Mapped[str] = mapped_column(String(64), nullable=False)
+    message_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    reason: Mapped[str] = mapped_column(String(64), nullable=False)
+    task_id: Mapped[str | None] = mapped_column(ForeignKey("tasks.id"), nullable=True)
+
+
 class Memory(TimestampMixin, Base):
     __tablename__ = "memories"
 

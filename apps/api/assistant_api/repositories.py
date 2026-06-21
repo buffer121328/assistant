@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .models import Task, TaskStatus, User
+from .models import PlatformAccount, ProcessedMessage, Task, TaskStatus, User
 
 
 @dataclass(frozen=True)
@@ -49,3 +49,56 @@ class TaskRepository:
             .order_by(Task.created_at.desc(), Task.id.desc())
         )
         return list(result)
+
+
+@dataclass(frozen=True)
+class ProcessedMessageCreate:
+    platform: str
+    message_id: str
+    reason: str
+    task_id: str | None = None
+
+
+class FeishuWebhookRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def get_user_id_by_platform_account(
+        self,
+        *,
+        platform: str,
+        platform_user_id: str,
+    ) -> str | None:
+        return await self.session.scalar(
+            select(PlatformAccount.user_id).where(
+                PlatformAccount.platform == platform,
+                PlatformAccount.platform_user_id == platform_user_id,
+            )
+        )
+
+    async def get_processed_message(
+        self,
+        *,
+        platform: str,
+        message_id: str,
+    ) -> ProcessedMessage | None:
+        return await self.session.scalar(
+            select(ProcessedMessage).where(
+                ProcessedMessage.platform == platform,
+                ProcessedMessage.message_id == message_id,
+            )
+        )
+
+    async def create_processed_message(
+        self,
+        data: ProcessedMessageCreate,
+    ) -> ProcessedMessage:
+        processed_message = ProcessedMessage(
+            platform=data.platform,
+            message_id=data.message_id,
+            reason=data.reason,
+            task_id=data.task_id,
+        )
+        self.session.add(processed_message)
+        await self.session.flush()
+        return processed_message

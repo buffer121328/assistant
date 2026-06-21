@@ -17,6 +17,8 @@ EXTERNAL_ENV_VARS = (
     "TAVILY_API_KEY",
     "FEISHU_APP_ID",
     "FEISHU_APP_SECRET",
+    "FEISHU_WEBHOOK_VERIFICATION_TOKEN",
+    "FEISHU_WEBHOOK_SIGNING_SECRET",
 )
 
 
@@ -60,6 +62,8 @@ def test_settings_load_default_values(monkeypatch) -> None:
     assert settings.database_url == "postgresql+asyncpg://placeholder"
     assert settings.redis_url == "redis://placeholder"
     assert settings.sentry_dsn is None
+    assert settings.feishu_webhook_verification_token == "placeholder-feishu-verification-token"
+    assert settings.feishu_webhook_signing_secret == "placeholder-feishu-signing-secret"
 
 
 def test_settings_support_environment_overrides(monkeypatch) -> None:
@@ -69,6 +73,8 @@ def test_settings_support_environment_overrides(monkeypatch) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://example")
     monkeypatch.setenv("REDIS_URL", "redis://example")
     monkeypatch.setenv("SENTRY_DSN", "https://example.invalid/1")
+    monkeypatch.setenv("FEISHU_WEBHOOK_VERIFICATION_TOKEN", "test-token")
+    monkeypatch.setenv("FEISHU_WEBHOOK_SIGNING_SECRET", "test-signing-secret")
 
     settings = load_settings()
 
@@ -78,6 +84,8 @@ def test_settings_support_environment_overrides(monkeypatch) -> None:
     assert settings.database_url == "postgresql+asyncpg://example"
     assert settings.redis_url == "redis://example"
     assert settings.sentry_dsn == "https://example.invalid/1"
+    assert settings.feishu_webhook_verification_token == "test-token"
+    assert settings.feishu_webhook_signing_secret == "test-signing-secret"
 
 
 def test_structured_logging_does_not_emit_secrets(capsys) -> None:

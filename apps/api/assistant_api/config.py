@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://placeholder"
     redis_url: str = "redis://placeholder"
     sentry_dsn: str | None = None
+    feishu_webhook_verification_token: str = "placeholder-feishu-verification-token"
+    feishu_webhook_signing_secret: str = "placeholder-feishu-signing-secret"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

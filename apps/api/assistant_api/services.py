@@ -50,6 +50,7 @@ class TaskService:
         input_text: str,
         workflow_key: str | None = None,
         model_class: str | None = None,
+        commit: bool = True,
     ) -> Task:
         if not await self.repository.user_exists(user_id):
             raise UserNotFoundError(f"User not found: {user_id}")
@@ -64,8 +65,9 @@ class TaskService:
                 model_class=model_class,
             )
         )
-        await self.session.commit()
-        await self.session.refresh(task)
+        if commit:
+            await self.session.commit()
+            await self.session.refresh(task)
         return task
 
     async def get_task(self, task_id: str) -> Task:
