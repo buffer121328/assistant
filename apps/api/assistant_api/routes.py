@@ -6,7 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .database import get_session
 from .errors import AppError
 from .feishu import handle_feishu_webhook
+from .model_gateway import handle_model_chat
 from .schemas import (
+    ModelChatRequest,
+    ModelChatResponse,
     TaskCreateRequest,
     TaskListResponse,
     TaskResponse,
@@ -31,6 +34,19 @@ def raise_app_error(exc: TaskServiceError) -> None:
         message=str(exc),
         status_code=exc.status_code,
     ) from exc
+
+
+@router.post("/internal/models/chat", response_model=ModelChatResponse)
+async def chat_with_model(
+    payload: ModelChatRequest,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> ModelChatResponse:
+    return await handle_model_chat(
+        payload=payload,
+        session=session,
+        settings=request.app.state.settings,
+    )
 
 
 @router.post("/api/webhooks/feishu")

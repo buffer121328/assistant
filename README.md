@@ -2,7 +2,7 @@
 
 个人 Agent 助手系统后端。项目以飞书 / 企业微信作为手机端入口，后端负责消息接入、任务管理、Agent 调度、模型网关、工具调用、结果推送和审计。
 
-当前仓库已完成 MVP 阶段 03 Feishu Webhook：在 Persistence & Task Service 能力之上新增飞书 Webhook 接入、请求校验、消息归一化、用户绑定查询、消息去重和命令入库。后续按 OpenSpec + ATDD 的 phase-by-phase 范式继续推进。
+当前仓库已完成 MVP 阶段 04 Model Gateway：在 Feishu Webhook 能力之上新增内部模型网关端点、DeepSeek 适配器、`light` / `standard` 路由、有限重试、超时映射和 `model_logs` 记录。后续按 OpenSpec + ATDD 的 phase-by-phase 范式继续推进。
 
 ## 项目介绍
 
@@ -44,7 +44,7 @@ curl http://127.0.0.1:8000/health
 DATABASE_URL="postgresql+asyncpg://<user>:<password>@<host>:<port>/<database>" uv run alembic upgrade head
 ```
 
-当前阶段提供 `GET /health`、最小 Task API 和飞书 Webhook 接入。Task API 需要可连接的 PostgreSQL `DATABASE_URL` 和已存在的用户记录；飞书 Webhook 创建任务前还需要已存在的 `platform_accounts` 绑定，其中 `platform = feishu`，`platform_user_id` 为飞书 `open_id`。尚未实现模型网关、Dify、Tavily、Redis 调度或 Celery worker。
+当前阶段提供 `GET /health`、最小 Task API、飞书 Webhook 接入和内部模型网关 `POST /internal/models/chat`。Task API 需要可连接的 PostgreSQL `DATABASE_URL` 和已存在的用户记录；飞书 Webhook 创建任务前还需要已存在的 `platform_accounts` 绑定，其中 `platform = feishu`，`platform_user_id` 为飞书 `open_id`。模型网关只负责模型调用和日志记录，不执行 Agent Harness、Dify Workflow、Tavily 搜索、Redis 调度、Celery worker 或飞书结果推送。
 
 ## 如何配置
 
@@ -60,8 +60,14 @@ DATABASE_URL="postgresql+asyncpg://<user>:<password>@<host>:<port>/<database>" u
 - `SENTRY_DSN`：Sentry DSN，可为空；本阶段不初始化 Sentry 连接。
 - `FEISHU_WEBHOOK_VERIFICATION_TOKEN`：飞书 Webhook verification token，默认是占位值；用于校验请求 `token`。
 - `FEISHU_WEBHOOK_SIGNING_SECRET`：飞书 Webhook signing secret，默认是占位值；用于校验请求签名。
+- `DEEPSEEK_API_KEY`：DeepSeek API key，默认是占位值；真实调用前必须通过环境变量或本地 `.env` 提供。
+- `DEEPSEEK_BASE_URL`：DeepSeek 兼容接口 base URL，默认 `https://deepseek.invalid/v1`，用于避免默认配置误连真实外部服务。
+- `DEEPSEEK_LIGHT_MODEL`：`light` 路由使用的模型别名，默认占位值。
+- `DEEPSEEK_STANDARD_MODEL`：`standard` 路由使用的模型别名，默认占位值。
+- `MODEL_GATEWAY_TIMEOUT_SECONDS`：模型提供方 HTTP 超时时间，默认 `10.0`。
+- `MODEL_GATEWAY_RETRY_ATTEMPTS`：模型提供方超时或瞬时失败的最大尝试次数，默认 `2`。
 
-本阶段不会读取或要求 DeepSeek、Dify、Tavily 等真实密钥，也不会连接这些外部服务。飞书 Webhook 配置只用于请求校验；真实值仅放在本地 `.env` 或运行环境变量中，不提交仓库。
+默认配置不会在服务启动时连接 DeepSeek、Dify、Tavily 等外部服务。调用 `POST /internal/models/chat` 时会按 DeepSeek 配置发起模型请求；真实密钥、私有 URL 和 Token 只能放在本地 `.env` 或运行环境变量中，不提交仓库。
 
 ## 项目目录介绍
 
@@ -92,6 +98,7 @@ DATABASE_URL="postgresql+asyncpg://<user>:<password>@<host>:<port>/<database>" u
 │   │       ├── feishu.py
 │   │       ├── logging.py
 │   │       ├── main.py
+│   │       ├── model_gateway.py
 │   │       ├── models.py
 │   │       ├── repositories.py
 │   │       ├── routes.py
@@ -131,12 +138,16 @@ DATABASE_URL="postgresql+asyncpg://<user>:<password>@<host>:<port>/<database>" u
 ├── openspec/
 │   └── changes/
 │       ├── feishu-webhook/
+│       ├── model-gateway/
 │       └── persistence-task-service/
 ├── packages/
 │   ├── agent_harness/
 │   ├── common/
 │   ├── memory/
 │   ├── model_gateway/
+│   │   ├── __init__.py
+│   │   ├── core.py
+│   │   └── deepseek.py
 │   ├── runtime/
 │   ├── schemas/
 │   ├── tools/
@@ -152,6 +163,7 @@ DATABASE_URL="postgresql+asyncpg://<user>:<password>@<host>:<port>/<database>" u
 │   ├── acceptance/
 │   │   ├── test_feishu_webhook.py
 │   │   ├── test_foundation.py
+│   │   ├── test_model_gateway.py
 │   │   └── test_persistence_task_service.py
 │   ├── fixtures/
 │   ├── integration/
@@ -171,15 +183,17 @@ DATABASE_URL="postgresql+asyncpg://<user>:<password>@<host>:<port>/<database>" u
 - `apps/api/assistant_api/database.py`：SQLAlchemy 异步数据库引擎、sessionmaker 和 FastAPI session 依赖。
 - `apps/api/assistant_api/models.py`：MVP 阶段数据库模型。
 - `apps/api/assistant_api/feishu.py`：飞书 Webhook 请求校验、消息归一化、命令映射、绑定查询、去重和任务入库逻辑。
-- `apps/api/assistant_api/repositories.py`：Task 和 Feishu Webhook 持久化读写封装。
-- `apps/api/assistant_api/routes.py`：当前包含 `GET /health`、最小 Task API 和 `POST /api/webhooks/feishu`。
-- `apps/api/assistant_api/schemas.py`：Task API 请求和响应 schema。
+- `apps/api/assistant_api/model_gateway.py`：内部模型网关 API 编排，负责请求转换、路由、DeepSeek 调用和 `model_logs` 写入。
+- `apps/api/assistant_api/repositories.py`：Task、Feishu Webhook 和 Model Log 持久化读写封装。
+- `apps/api/assistant_api/routes.py`：当前包含 `GET /health`、最小 Task API、`POST /api/webhooks/feishu` 和 `POST /internal/models/chat`。
+- `apps/api/assistant_api/schemas.py`：Task API 和 Model Gateway 请求/响应 schema。
 - `apps/api/assistant_api/services.py`：Task Service 创建、查询、状态流转和结果记录逻辑。
 - `apps/api/assistant_api/errors.py`：统一 JSON 错误响应。
 - `apps/api/assistant_api/logging.py`：结构化日志初始化和敏感字段过滤。
 - `apps/worker/`：后续 Celery worker 进程入口。
 - `apps/scheduler/`：后续调度进程入口。
-- `packages/`：后续内部共享模块。
+- `packages/model_gateway/`：模型网关共享模块，包含任务类型路由、日志摘要脱敏和 DeepSeek 适配器。
+- `packages/`：内部共享模块目录，后续继续放 Agent Harness、工作流、工具和记忆相关能力。
 - `configs/`：占位配置和模板目录，不写真实密钥。
 - `infra/`：基础设施、Docker 和 CI 目录。
 - `migrations/`：Alembic 迁移入口和 MVP 初始表结构迁移。
@@ -192,6 +206,7 @@ DATABASE_URL="postgresql+asyncpg://<user>:<password>@<host>:<port>/<database>" u
 - `docs/runbooks/`：运行手册目录。
 - `openspec/changes/persistence-task-service/`：MVP 阶段 02 Persistence & Task Service 的 OpenSpec change。
 - `openspec/changes/feishu-webhook/`：MVP 阶段 03 Feishu Webhook 的 OpenSpec change。
+- `openspec/changes/model-gateway/`：MVP 阶段 04 Model Gateway 的 OpenSpec change。
 - `tests/`：自动化测试，按 acceptance、integration、unit 分层。
 - `pyproject.toml`：Python 项目元数据和依赖声明。
 - `pyrightconfig.json`：Python 类型检查相关配置。
@@ -233,12 +248,15 @@ V1/MVP 计划支持：
 - `GET /api/tasks?user_id=...`：按用户查询任务列表，按创建时间倒序返回。
 - Task Service：支持任务创建、合法状态流转、成功结果记录和失败错误记录。
 - `POST /api/webhooks/feishu`：处理飞书 URL verification 和 `im.message.receive_v1` 文本事件，校验签名与 token，归一化文本消息，按首个空白分隔 token 映射 `/plan`、`/learn`、`/daily`、`/office`、`/memory`、`/status`，仅为已绑定飞书用户创建 `pending` 任务。
+- `POST /internal/models/chat`：内部模型网关端点，接收 provider-independent chat 请求，按 `task_type` 或显式 `model_class` 路由到 DeepSeek `light` / `standard` 配置，返回统一模型响应，并为成功和失败调用写入最小 `model_logs`。
+- Model Gateway 路由：`router`、`memory_extract`、`status_summary`、`card_render` 默认使用 `light`；`plan`、`learn`、`daily`、`office_text`、`research_report` 默认使用 `standard`；显式合法 `model_class` 可覆盖默认路由；`complex` 和 `coding_plan` 当前返回 unsupported 错误。
+- Model Gateway 错误处理：malformed request、未知任务类型、非法模型类型、provider timeout 和 provider error 返回统一 JSON 错误，并避免在响应和 `model_logs` 中写入 API key、Token、Authorization header、Cookie 或私有 URL。
 
 当前尚未实现：
 
 - 企业微信 Webhook。
 - Redis、Celery worker 和异步调度。
-- Model Gateway、Dify Workflow、Tavily 工具调用和 Agent Harness。
+- Dify Workflow、Tavily 工具调用和 Agent Harness。
 - 任务取消、审批处理和结果推送。
 
 ## 开发范式

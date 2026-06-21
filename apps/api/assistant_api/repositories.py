@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .models import PlatformAccount, ProcessedMessage, Task, TaskStatus, User
+from .models import ModelLog, PlatformAccount, ProcessedMessage, Task, TaskStatus, User
 
 
 @dataclass(frozen=True)
@@ -102,3 +102,29 @@ class FeishuWebhookRepository:
         self.session.add(processed_message)
         await self.session.flush()
         return processed_message
+
+
+@dataclass(frozen=True)
+class ModelLogCreate:
+    task_id: str | None
+    model_class: str | None
+    request_text: str | None
+    response_text: str | None
+    error_message: str | None
+
+
+class ModelLogRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def create_model_log(self, data: ModelLogCreate) -> ModelLog:
+        model_log = ModelLog(
+            task_id=data.task_id,
+            model_class=data.model_class,
+            request_text=data.request_text,
+            response_text=data.response_text,
+            error_message=data.error_message,
+        )
+        self.session.add(model_log)
+        await self.session.flush()
+        return model_log

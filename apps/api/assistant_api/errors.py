@@ -1,4 +1,5 @@
 from fastapi import Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -48,4 +49,17 @@ async def http_error_handler(
         code="http_error",
         message=str(exc.detail),
         status_code=exc.status_code,
+    )
+
+
+async def request_validation_error_handler(
+    _request: Request,
+    exc: Exception,
+) -> JSONResponse:
+    if not isinstance(exc, RequestValidationError):
+        raise exc
+    return error_response(
+        code="validation_error",
+        message="Invalid request",
+        status_code=422,
     )
