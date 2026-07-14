@@ -13,12 +13,10 @@ EXTERNAL_ENV_VARS = (
     "REDIS_URL",
     "SENTRY_DSN",
     "DEEPSEEK_API_KEY",
-    "DIFY_API_KEY",
     "TAVILY_API_KEY",
-    "FEISHU_APP_ID",
-    "FEISHU_APP_SECRET",
-    "FEISHU_WEBHOOK_VERIFICATION_TOKEN",
-    "FEISHU_WEBHOOK_SIGNING_SECRET",
+    "LANGBOT_WEBHOOK_SECRET",
+    "LANGBOT_API_BASE_URL",
+    "LANGBOT_API_KEY",
 )
 
 
@@ -47,12 +45,13 @@ def test_health_endpoint_returns_service_status() -> None:
     }
 
 
-def test_settings_load_default_values(monkeypatch) -> None:
+def test_settings_load_default_values(monkeypatch, tmp_path) -> None:
     for key in EXTERNAL_ENV_VARS:
         monkeypatch.delenv(key, raising=False)
     monkeypatch.delenv("APP_ENV", raising=False)
     monkeypatch.delenv("LOG_LEVEL", raising=False)
     monkeypatch.delenv("SERVICE_NAME", raising=False)
+    monkeypatch.chdir(tmp_path)
 
     settings = load_settings()
 
@@ -62,8 +61,9 @@ def test_settings_load_default_values(monkeypatch) -> None:
     assert settings.database_url == "postgresql+asyncpg://placeholder"
     assert settings.redis_url == "redis://placeholder"
     assert settings.sentry_dsn is None
-    assert settings.feishu_webhook_verification_token == "placeholder-feishu-verification-token"
-    assert settings.feishu_webhook_signing_secret == "placeholder-feishu-signing-secret"
+    assert settings.langbot_webhook_secret == "placeholder-langbot-webhook-secret"
+    assert settings.langbot_api_base_url == "https://langbot.invalid"
+    assert settings.langbot_api_key == "placeholder-langbot-api-key"
 
 
 def test_settings_support_environment_overrides(monkeypatch) -> None:
@@ -73,8 +73,9 @@ def test_settings_support_environment_overrides(monkeypatch) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://example")
     monkeypatch.setenv("REDIS_URL", "redis://example")
     monkeypatch.setenv("SENTRY_DSN", "https://example.invalid/1")
-    monkeypatch.setenv("FEISHU_WEBHOOK_VERIFICATION_TOKEN", "test-token")
-    monkeypatch.setenv("FEISHU_WEBHOOK_SIGNING_SECRET", "test-signing-secret")
+    monkeypatch.setenv("LANGBOT_WEBHOOK_SECRET", "test-langbot-secret")
+    monkeypatch.setenv("LANGBOT_API_BASE_URL", "https://langbot.example.invalid")
+    monkeypatch.setenv("LANGBOT_API_KEY", "test-langbot-key")
 
     settings = load_settings()
 
@@ -84,8 +85,9 @@ def test_settings_support_environment_overrides(monkeypatch) -> None:
     assert settings.database_url == "postgresql+asyncpg://example"
     assert settings.redis_url == "redis://example"
     assert settings.sentry_dsn == "https://example.invalid/1"
-    assert settings.feishu_webhook_verification_token == "test-token"
-    assert settings.feishu_webhook_signing_secret == "test-signing-secret"
+    assert settings.langbot_webhook_secret == "test-langbot-secret"
+    assert settings.langbot_api_base_url == "https://langbot.example.invalid"
+    assert settings.langbot_api_key == "test-langbot-key"
 
 
 def test_structured_logging_does_not_emit_secrets(capsys) -> None:

@@ -8,11 +8,14 @@
 
 - 项目方案文档在 `docs/个人Agent助手系统完整方案.md`。
 - MVP 阶段开发文档入口在 `docs/mvp/index.md`。
+- V2 分阶段实施文档入口在 `docs/v2/index.md`。
+- FinchBot 参考项目本地路径为 `/Users/cheng/Desktop/FinchBot`，只作为能力设计来源，不整体迁入。
 - 当前项目是个人 Agent 助手系统的 Python 后端仓库。
 - Python 版本由 `.python-version` 固定为 `3.12`。
 - 依赖由 `uv` 管理，锁文件为 `uv.lock`。
-- 当前依赖边界以 V1/MVP 后端为准：FastAPI、PostgreSQL、Redis、Celery、Dify API、Tavily、DeepSeek/模型网关相关客户端能力。
-- V2/V3 依赖，例如 LangGraph、MinIO、pgvector 迁移、Office 文件生成、Next.js 管理后台等，只有在明确进入对应阶段时再引入。
+- 当前产品入口只有 LangBot 与 PySide6 GUI；模型任务统一进入受控 LangGraph 执行层。
+- 当前依赖边界：FastAPI、PostgreSQL、Redis、Celery、LangBot 通道、PySide6、LangChain/LangGraph、Tavily、DeepSeek/模型网关相关客户端能力。
+- V2 依赖，例如 MCP、pgvector 迁移、Office 文件生成、Next.js 管理后台等，只有在明确进入对应阶段时再引入。
 
 ## 工作规则
 
@@ -29,6 +32,7 @@
 
 - 项目采用 OpenSpec + ATDD 的 phase-by-phase 开发范式。
 - 阶段推进前，优先读取 `docs/mvp/index.md` 和对应阶段文档。
+- 完成 `docs/mvp/09-mvp-langgraph-harness-refactor.md` 后，再按 `docs/v2/index.md` 推进 V2 分阶段实施。
 - 每个阶段开始前，先明确本阶段目标、范围、验收标准和不做事项。
 - 行为变化先写验收标准，再补自动化测试，最后实现代码。
 - 测试应覆盖用户可观察行为，优先写 API、服务层或端到端边界的验收测试。

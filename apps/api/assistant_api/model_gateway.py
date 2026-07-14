@@ -131,8 +131,4 @@ def _app_error(
 
 
 def _sensitive_values(settings: Settings) -> tuple[str | None, ...]:
-    return (
-        settings.deepseek_api_key,
-        settings.feishu_webhook_verification_token,
-        settings.feishu_webhook_signing_secret,
-    )
+    return (settings.deepseek_api_key,)

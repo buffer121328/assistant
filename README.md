@@ -1,24 +1,25 @@
 # assistant-api
 
-个人 Agent 助手系统后端。项目以飞书 / 企业微信作为手机端入口，后端负责消息接入、任务管理、Agent 调度、模型网关、工具调用、结果推送和审计。
+个人 Agent 助手系统。当前产品入口只保留两类：LangBot 作为主消息通道和响应通道，PySide6 原生小窗口作为本机 GUI；FastAPI 提供二者共用的内部 API。旧网页控制台、项目 CLI 和其他直连消息通道已经移除。
 
-当前仓库已完成 MVP 阶段 04 Model Gateway：在 Feishu Webhook 能力之上新增内部模型网关端点、DeepSeek 适配器、`light` / `standard` 路由、有限重试、超时映射和 `model_logs` 记录。后续按 OpenSpec + ATDD 的 phase-by-phase 范式继续推进。
+项目已完成 MVP 阶段 09、V2-01 至 V2-06，以及 V3-00 至 V3-08。当前能力包括任务管理、模型驱动 Agent 路由与 Agent Core、分层规划、受控 LangGraph 工具循环、PostgreSQL checkpoint 审批恢复、可选 Langfuse Trace、动态工具快照与按需注入、工具审批、记忆与状态、周期维护、离线评测、桌面交互、轻量能力目录和本地 Skill 生命周期管理。
 
 ## 项目介绍
 
-目标是构建一个个人 Agent 助手系统：
+- LangBot 接收多平台消息并把结果推回原会话。
+- PySide6 GUI 提交任务、查看结果、处理工具审批、管理本地 Skills 并驻留系统托盘。
+- FastAPI、PostgreSQL、Redis 与 Celery 组成后端运行层。
+- `/plan`、`/learn`、`/daily`、`/office` 使用 Agent Profile、Planning Layer、模型驱动 LangGraph Agent Core 与 ToolRegistry。
+- `/memory`、`/status` 使用确定性的本地服务，不调用外部模型。
+- LangBot 无斜杠自由文本和 GUI“智能路由”创建 `agent` 任务，由 worker 中的轻量模型从四个已注册 Agent Profile 里选择；固定模式不调用路由模型。
+- Capability Registry 统一索引代码、Agent Profile、Skill 和 Tool；目录查询只读取元数据，不加载具体实现。
+- Model Gateway 统一承载 DeepSeek 兼容模型调用，Tavily 提供 `search.web`。
 
-- 通过飞书 / 企业微信接收用户指令。
-- 使用 FastAPI 作为后端 API 中枢。
-- 使用 PostgreSQL 保存用户、任务、记忆、模型日志和工具日志。
-- 使用 Redis + Celery 处理异步任务。
-- 通过 Model Gateway 统一调用 DeepSeek 等模型。
-- 通过 Dify Workflow 执行 V1/MVP 固定工作流。
-- 通过 Tavily 等工具支持搜索和资料整理。
-
-完整方案见 `docs/个人Agent助手系统完整方案.md`。MVP 阶段开发文档入口见 `docs/mvp/index.md`。
+方案文档见 `docs/个人Agent助手系统完整方案.md`，MVP 文档见 `docs/mvp/index.md`，V2 文档见 `docs/v2/index.md`，V3 文档见 `docs/v3/index.md`。
 
 ## 启动方式
+
+完整配置与初始化步骤见 `docs/mvp-startup-config.md`。
 
 安装依赖：
 
@@ -26,11 +27,30 @@
 uv sync
 ```
 
-启动本地开发服务：
+使用 Docker Compose 启动后端：
+
+```bash
+cp .env.example .env
+docker compose up -d postgres redis
+docker compose run --rm assistant-api alembic upgrade head
+docker compose up --build -d assistant-api celery-worker celery-beat
+```
+
+本地分别启动 API、worker 与单实例 Beat：
 
 ```bash
 uv run uvicorn --app-dir apps/api assistant_api.main:app --reload
+PYTHONPATH=apps/api:. uv run celery -A assistant_api.worker:celery_app worker --loglevel=INFO
+PYTHONPATH=apps/api:. uv run celery -A assistant_api.worker:celery_app beat --loglevel=INFO
 ```
+
+启动 PySide6 桌面小窗口：
+
+```bash
+uv run assistant-desktop
+```
+
+桌面端不会自动启动后端。使用前必须完成数据库迁移，启动 API、Redis、PostgreSQL 和 `celery-worker`，并在数据库中准备用户。GUI 的 API 地址和用户 ID 保存在操作系统 `QSettings` 中，不保存密钥。
 
 健康检查：
 
@@ -38,254 +58,114 @@ uv run uvicorn --app-dir apps/api assistant_api.main:app --reload
 curl http://127.0.0.1:8000/health
 ```
 
-初始化数据库 schema：
-
-```bash
-DATABASE_URL="postgresql+asyncpg://<user>:<password>@<host>:<port>/<database>" uv run alembic upgrade head
-```
-
-当前阶段提供 `GET /health`、最小 Task API、飞书 Webhook 接入和内部模型网关 `POST /internal/models/chat`。Task API 需要可连接的 PostgreSQL `DATABASE_URL` 和已存在的用户记录；飞书 Webhook 创建任务前还需要已存在的 `platform_accounts` 绑定，其中 `platform = feishu`，`platform_user_id` 为飞书 `open_id`。模型网关只负责模型调用和日志记录，不执行 Agent Harness、Dify Workflow、Tavily 搜索、Redis 调度、Celery worker 或飞书结果推送。
-
 ## 如何配置
 
-配置从安全默认值和环境变量加载。本地 `.env` 可用于开发环境，但 `.env` 和 `.env.*` 不提交仓库；示例配置只能放在 `.env.example`，且只能包含占位值。
+`.env.example` 只包含占位值。本地可复制为 `.env`；`.env`、Token、Cookie、API Key 和私有 URL 不提交仓库。
 
-当前阶段支持的配置项：
+主要配置：
 
-- `APP_ENV`：应用环境，默认 `local`。
-- `LOG_LEVEL`：日志级别，默认 `INFO`。
-- `SERVICE_NAME`：API 服务名称，默认 `assistant-api`。
-- `DATABASE_URL`：PostgreSQL asyncpg URL。默认值是占位值；运行迁移或 Task API 前必须通过环境变量或本地 `.env` 提供真实可连接地址。
-- `REDIS_URL`：Redis URL，占位配置；本阶段不连接 Redis。
-- `SENTRY_DSN`：Sentry DSN，可为空；本阶段不初始化 Sentry 连接。
-- `FEISHU_WEBHOOK_VERIFICATION_TOKEN`：飞书 Webhook verification token，默认是占位值；用于校验请求 `token`。
-- `FEISHU_WEBHOOK_SIGNING_SECRET`：飞书 Webhook signing secret，默认是占位值；用于校验请求签名。
-- `DEEPSEEK_API_KEY`：DeepSeek API key，默认是占位值；真实调用前必须通过环境变量或本地 `.env` 提供。
-- `DEEPSEEK_BASE_URL`：DeepSeek 兼容接口 base URL，默认 `https://deepseek.invalid/v1`，用于避免默认配置误连真实外部服务。
-- `DEEPSEEK_LIGHT_MODEL`：`light` 路由使用的模型别名，默认占位值。
-- `DEEPSEEK_STANDARD_MODEL`：`standard` 路由使用的模型别名，默认占位值。
-- `MODEL_GATEWAY_TIMEOUT_SECONDS`：模型提供方 HTTP 超时时间，默认 `10.0`。
-- `MODEL_GATEWAY_RETRY_ATTEMPTS`：模型提供方超时或瞬时失败的最大尝试次数，默认 `2`。
+- `DATABASE_URL`：PostgreSQL asyncpg URL，同时供 LangGraph 官方 PostgreSQL checkpoint saver 使用；默认 Agent worker 不对其他数据库伪回退。
+- `REDIS_URL`：Celery broker 与 result backend。
+- `LANGBOT_WEBHOOK_SECRET`：`POST /api/webhooks/langbot` 的请求校验密钥。
+- `LANGBOT_API_BASE_URL`、`LANGBOT_API_KEY`、`LANGBOT_SEND_TIMEOUT_SECONDS`：LangBot 结果回推配置。
+- `DEEPSEEK_API_KEY`、`DEEPSEEK_BASE_URL`、模型别名与网关超时/重试：内部 Model Gateway 配置。
+- `TAVILY_BASE_URL`、`TAVILY_API_KEY`、超时与结果上限：`search.web` 配置。
+- `LANGFUSE_PUBLIC_KEY`、`LANGFUSE_SECRET_KEY`、`LANGFUSE_BASE_URL`：可选 Langfuse v4 配置；public/secret key 必须同时存在才启用，未配置或部分配置时使用零网络 No-op。
+- `RUNNING_TASK_TIMEOUT_SECONDS`：超时 `running` 任务失败阈值。
+- `PENDING_TASK_COMPENSATION_DELAY_SECONDS`：逾期 `pending` 任务补偿阈值。
+- `SCHEDULER_MAINTENANCE_INTERVAL_SECONDS`：单实例 Celery Beat 的维护投递周期。
+- `MANAGED_SKILLS_ROOT`：托管 Skill 的可写根目录，本地默认 `var/skills`；Compose 容器固定使用持久卷中的 `/app/data/skills`。
 
-默认配置不会在服务启动时连接 DeepSeek、Dify、Tavily 等外部服务。调用 `POST /internal/models/chat` 时会按 DeepSeek 配置发起模型请求；真实密钥、私有 URL 和 Token 只能放在本地 `.env` 或运行环境变量中，不提交仓库。
+真实 LangBot 联调还需要创建平台绑定：`platform = langbot`，`platform_user_id = <adapter>:<sender_id>`。默认占位配置不会在服务启动时连接 LangBot、DeepSeek、Tavily、Langfuse 或 MCP Server。
 
 ## 项目目录介绍
 
-目录规则：
-
-- `apps/` 放可启动进程入口；FastAPI API 服务代码放在 `apps/api/assistant_api/`，后续 worker 和 scheduler 分别放在 `apps/worker/`、`apps/scheduler/`。
-- `packages/` 放可被多个进程复用的内部模块；例如模型网关、Agent Harness、工作流、工具、记忆、schemas 和通用能力。
-- `configs/` 放占位配置、模型、工作流、工具和环境相关模板；不得写入真实密钥。
-- `infra/` 放 Docker、CI 和部署相关文件。
-- `migrations/` 放 Alembic 数据库迁移文件。
-- `scripts/` 放迁移、运维等本地脚本。
-- `prompts/` 放系统提示词、命令提示词和工作流提示词。
-- `tests/acceptance/` 放用户可观察行为验收测试，`tests/integration/` 放跨模块集成测试，`tests/unit/` 放纯单元测试，`tests/fixtures/` 放测试夹具。
-- 根目录只放项目元数据、文档入口和工具配置；不要新增根层业务包。
-
 ```text
-.
-├── AGENTS.md
-├── README.md
-├── alembic.ini
+assistant/
 ├── apps/
-│   ├── api/
-│   │   └── assistant_api/
-│   │       ├── __init__.py
-│   │       ├── config.py
-│   │       ├── database.py
-│   │       ├── errors.py
-│   │       ├── feishu.py
-│   │       ├── logging.py
-│   │       ├── main.py
-│   │       ├── model_gateway.py
-│   │       ├── models.py
-│   │       ├── repositories.py
-│   │       ├── routes.py
-│   │       ├── schemas.py
-│   │       └── services.py
-│   ├── scheduler/
-│   └── worker/
-├── configs/
-│   ├── environments/
-│   ├── models/
-│   ├── tools/
-│   └── workflows/
-├── docs/
-│   ├── architecture/
-│   ├── decisions/
-│   ├── 个人Agent助手系统完整方案.md
-│   ├── runbooks/
-│   └── mvp/
-│       ├── index.md
-│       ├── 00-mvp-scope.md
-│       ├── 01-foundation.md
-│       ├── 02-persistence-task-service.md
-│       ├── 03-feishu-webhook.md
-│       ├── 04-model-gateway.md
-│       ├── 05-dify-agent-harness.md
-│       ├── 06-search-content-commands.md
-│       ├── 07-memory-status-dispatcher.md
-│       └── 08-mvp-acceptance-release.md
-├── infra/
-│   ├── ci/
-│   └── docker/
-├── migrations/
-│   ├── env.py
-│   └── versions/
-│       ├── 202606200001_create_mvp_tables.py
-│       └── 202606210001_create_processed_messages.py
-├── openspec/
-│   └── changes/
-│       ├── feishu-webhook/
-│       ├── model-gateway/
-│       └── persistence-task-service/
+│   ├── api/assistant_api/       # FastAPI、LangBot、任务与 Celery 入口
+│   ├── desktop/assistant_desktop/ # PySide6 GUI
+│   └── scheduler/               # V2-04 周期维护编排
 ├── packages/
-│   ├── agent_harness/
-│   ├── common/
-│   ├── memory/
-│   ├── model_gateway/
-│   │   ├── __init__.py
-│   │   ├── core.py
-│   │   └── deepseek.py
-│   ├── runtime/
-│   ├── schemas/
-│   ├── tools/
-│   └── workflows/
-├── prompts/
-│   ├── commands/
-│   ├── system/
-│   └── workflows/
-├── scripts/
-│   ├── migrate/
-│   └── ops/
-├── tests/
-│   ├── acceptance/
-│   │   ├── test_feishu_webhook.py
-│   │   ├── test_foundation.py
-│   │   ├── test_model_gateway.py
-│   │   └── test_persistence_task_service.py
-│   ├── fixtures/
-│   ├── integration/
-│   └── unit/
-├── pyproject.toml
-├── pyrightconfig.json
-├── uv.lock
-└── .python-version
+│   ├── agent_harness/           # Agent 模型协议、规划与有界 LangGraph 执行边界
+│   ├── capabilities/            # V3 统一能力目录与懒解析
+│   ├── model_gateway/           # 模型适配与脱敏
+│   ├── observability/           # 框架无关的 Trace/Score 协议与 No-op
+│   ├── tools/                   # 工具快照、候选选择、执行注册、搜索与 MCP 适配
+│   ├── memory/                  # 记忆维护
+│   └── evaluation/              # 离线评测
+├── prompts/skills/              # 只读内置 Skills
+├── var/skills/                  # 本地托管 Skills（运行时生成，不提交）
+├── migrations/                  # Alembic 迁移
+├── openspec/                    # 当前规范与变更归档
+├── docs/                        # MVP、V2、V3 文档
+├── tests/                       # 验收、集成、单元和评测数据
+├── Dockerfile
+└── docker-compose.yml
 ```
-
-- `AGENTS.md`：协作和开发规则。
-- `README.md`：项目说明、启动、配置、目录和功能说明；每个阶段完成后更新。
-- `alembic.ini`：Alembic 配置入口。
-- `apps/api/assistant_api/`：当前 FastAPI API 服务应用包。
-- `apps/api/assistant_api/main.py`：FastAPI 应用入口，暴露 `assistant_api.main:app`。
-- `apps/api/assistant_api/config.py`：基础配置加载。
-- `apps/api/assistant_api/database.py`：SQLAlchemy 异步数据库引擎、sessionmaker 和 FastAPI session 依赖。
-- `apps/api/assistant_api/models.py`：MVP 阶段数据库模型。
-- `apps/api/assistant_api/feishu.py`：飞书 Webhook 请求校验、消息归一化、命令映射、绑定查询、去重和任务入库逻辑。
-- `apps/api/assistant_api/model_gateway.py`：内部模型网关 API 编排，负责请求转换、路由、DeepSeek 调用和 `model_logs` 写入。
-- `apps/api/assistant_api/repositories.py`：Task、Feishu Webhook 和 Model Log 持久化读写封装。
-- `apps/api/assistant_api/routes.py`：当前包含 `GET /health`、最小 Task API、`POST /api/webhooks/feishu` 和 `POST /internal/models/chat`。
-- `apps/api/assistant_api/schemas.py`：Task API 和 Model Gateway 请求/响应 schema。
-- `apps/api/assistant_api/services.py`：Task Service 创建、查询、状态流转和结果记录逻辑。
-- `apps/api/assistant_api/errors.py`：统一 JSON 错误响应。
-- `apps/api/assistant_api/logging.py`：结构化日志初始化和敏感字段过滤。
-- `apps/worker/`：后续 Celery worker 进程入口。
-- `apps/scheduler/`：后续调度进程入口。
-- `packages/model_gateway/`：模型网关共享模块，包含任务类型路由、日志摘要脱敏和 DeepSeek 适配器。
-- `packages/`：内部共享模块目录，后续继续放 Agent Harness、工作流、工具和记忆相关能力。
-- `configs/`：占位配置和模板目录，不写真实密钥。
-- `infra/`：基础设施、Docker 和 CI 目录。
-- `migrations/`：Alembic 迁移入口和 MVP 初始表结构迁移。
-- `scripts/`：本地迁移和运维脚本目录。
-- `prompts/`：提示词资产目录。
-- `docs/`：方案文档和后续项目文档。
-- `docs/architecture/`：架构说明目录。
-- `docs/decisions/`：技术决策记录目录。
-- `docs/mvp/index.md`：MVP 阶段开发文档索引，用于后续逐阶段生成和完善 OpenSpec。
-- `docs/runbooks/`：运行手册目录。
-- `openspec/changes/persistence-task-service/`：MVP 阶段 02 Persistence & Task Service 的 OpenSpec change。
-- `openspec/changes/feishu-webhook/`：MVP 阶段 03 Feishu Webhook 的 OpenSpec change。
-- `openspec/changes/model-gateway/`：MVP 阶段 04 Model Gateway 的 OpenSpec change。
-- `tests/`：自动化测试，按 acceptance、integration、unit 分层。
-- `pyproject.toml`：Python 项目元数据和依赖声明。
-- `pyrightconfig.json`：Python 类型检查相关配置。
-- `uv.lock`：uv 锁文件，不手写。
-- `.python-version`：项目 Python 版本，当前为 `3.12`。
 
 ## 核心功能
 
-V1/MVP 计划支持：
+### 消息与桌面入口
 
-- `/plan`：问题拆解和阶段计划。
-- `/learn`：搜索资料并生成学习文档。
-- `/daily`：生成主题日报。
-- `/office`：整理纪要、邮件草稿、周报、PPT 大纲等 Office 文本。
-- `/memory`：写入、查看、删除用户偏好记忆。
-- `/status`：查询任务状态。
+- `POST /api/webhooks/langbot` 校验 `x-langbot-secret`，归一化消息，将已知斜杠命令映射到固定类型、将无斜杠自由文本映射到 `agent`，校验用户绑定，按 `platform + message_id` 去重并轻量投递任务；未知斜杠命令仍拒绝。
+- Result Dispatcher 保存 LangBot 的 `adapter`、`conversation_id`、`conversation_type`，对 `success`、`failed`、`cancelled` 和 `waiting_approval` 结果进行幂等回推。
+- PySide6 GUI 默认提供“智能路由”，同时保留六类固定任务，支持最近任务、结果查看、待审批工具、批准/拒绝、Skill 管理与系统托盘常驻。
+- `GET /app` 和旧直连消息路由不再提供；后端 API 是 LangBot 与 GUI 的内部边界，不作为网页产品入口。
 
-当前核心服务模块规划：
+### Agent、Skills 与工具路径
 
-- Message Gateway
-- Task Service
-- Agent Harness
-- Workflow Executor
-- Model Gateway
-- Tool Gateway
-- Memory Service
-- Result Dispatcher
+- 自由文本路径为：`agent` 任务 → 轻量 Model Router → Registry 中启用且有白名单映射的 Agent Profile → 原有 AgentHarness；模型不能直接选择 Tool、Skill、代码能力或任意 handler。
+- 固定命令路径不经过 Model Router：`memory/status` 直接走本地服务，`plan/learn/daily/office` 直接走对应 Agent Profile。
+- V2-02 提供 `v2.planner`、`v2.researcher`、`v2.daily`、`v2.office`，执行时按 Profile 加载指定 `prompts/skills/*/SKILL.md`；V3-07 将这些指令注入模型上下文，但不会自动启用工具。
+- V2-03 在 V2-02 规划层上实现结构化 Plan、真实 LangGraph `StateGraph`、最大步数/超时限制和 ToolRegistry。未注册或不在 `allowed_tools` 的调用会被拒绝。
+- V3-06 将受信任内置工具归一化为严格 `ToolDescriptor`，通过不可变 `ToolCatalogSnapshot` revision、确定性候选选择和有限工具预算生成本轮计划；LangGraph 只构造计划内 Function Calling Schema，ToolRegistry 再校验 revision、版本、来源可用性、白名单和审批。
+- V3-07 增加严格 AgentDecision 和真实 `model → tool → model` 循环。模型可生成最多五条展示计划并逐轮选择一个计划内工具；结果来自模型 final 决策，不再由固定模板渲染，展示计划不能扩大 ExecutionPlan 权限。
+- 默认 worker 继续只通过内部 Model Gateway 调用模型并写 `model_logs`。生产图使用严格序列化的 `AsyncPostgresSaver`，以 task ID 关联 checkpoint；审批 interrupt 后按同一任务恢复，并由 ToolRegistry 二次校验批准记录。
+- V3-08 用 task ID 关联可选的 `agent.task` 根 observation、模型 generation、LangGraph step 和工具调用。所有载荷先递归脱敏和裁剪；Langfuse 初始化、上报、flush 或 shutdown 失败不改变任务结果，数据库审计仍是权威记录。
+- `/learn` 通过 `search.web` 获取资料，`/daily` 通过 `search.web` 获取来源，`/office` 默认不执行搜索。
+- 高风险工具进入 `waiting_approval`；批准后精确授权并幂等恢复，拒绝后任务取消。
+- 当前动态快照只接入受信任的内置 `search.web`。MCP 提供显式 `list_tools` 发现协议，但没有 MCP Server 配置，默认不启用且未配置时零连接；新发现外部工具默认禁用。完整 MCP Gateway、深度浏览、真实 Office 文件生成、邮件/日历接入仍是后续能力。
 
-当前已实现的能力：
+### V3 能力目录与扩展边界
 
-- `GET /health`：返回服务名称和健康状态。
-- 基础配置加载：支持默认值和环境变量覆盖。
-- 结构化日志：输出 JSON 日志并过滤常见敏感字段。
-- 统一错误响应：未知路由和应用异常返回稳定 JSON 格式。
-- Alembic 初始迁移：创建 `users`、`platform_accounts`、`tasks`、`memories`、`model_logs`、`tool_logs`、`approvals` 表。
-- Alembic 飞书去重迁移：创建 `processed_messages` 表，并通过 `platform + message_id` 防止重复处理。
-- `POST /api/tasks`：为已存在用户创建 `pending` 任务。
-- `GET /api/tasks/{task_id}`：查询单个任务。
-- `GET /api/tasks?user_id=...`：按用户查询任务列表，按创建时间倒序返回。
-- Task Service：支持任务创建、合法状态流转、成功结果记录和失败错误记录。
-- `POST /api/webhooks/feishu`：处理飞书 URL verification 和 `im.message.receive_v1` 文本事件，校验签名与 token，归一化文本消息，按首个空白分隔 token 映射 `/plan`、`/learn`、`/daily`、`/office`、`/memory`、`/status`，仅为已绑定飞书用户创建 `pending` 任务。
-- `POST /internal/models/chat`：内部模型网关端点，接收 provider-independent chat 请求，按 `task_type` 或显式 `model_class` 路由到 DeepSeek `light` / `standard` 配置，返回统一模型响应，并为成功和失败调用写入最小 `model_logs`。
-- Model Gateway 路由：`router`、`memory_extract`、`status_summary`、`card_render` 默认使用 `light`；`plan`、`learn`、`daily`、`office_text`、`research_report` 默认使用 `standard`；显式合法 `model_class` 可覆盖默认路由；`complex` 和 `coding_plan` 当前返回 unsupported 错误。
-- Model Gateway 错误处理：malformed request、未知任务类型、非法模型类型、provider timeout 和 provider error 返回统一 JSON 错误，并避免在响应和 `model_logs` 中写入 API key、Token、Authorization header、Cookie 或私有 URL。
+- `packages/capabilities/` 使用统一元数据描述 `code`、`agent_profile`、`skill`、`tool` 四类能力，默认目录覆盖 `memory`、`status`、四类 Profile、四个内置 Skill 和 `search.web`。
+- `GET /api/capabilities` 可按 `kind`、`enabled` 查询稳定排序的安全元数据；响应不包含 loader、实例、本地路径或外部服务配置。
+- Registry 的 `list/get` 不加载实现；只有显式 `resolve` 才调用已注册 loader，并在当前 revision 内缓存。目录可见不等于工具获准执行，最终门禁仍由 ToolRegistry 与审批记录控制。
+- V3-02 路由候选只包含 `profile.plan`、`profile.learn`、`profile.daily`、`profile.office`；模型输出必须通过严格 JSON、启用状态和执行映射校验，成功与失败都走脱敏审计边界。
+- V3-03 将内置根 `prompts/skills/` 与可写托管根分离。托管 Skill 可由 GUI 按模板创建，或安装恰好包含 `manifest.json` 与 `SKILL.md` 的受限本地 ZIP；创建和安装后默认停用，启停、失败和卸载均写持久审计。
+- `GET /api/skills` 与五类变更接口为 GUI 提供生命周期边界。服务端限制包和文件大小，拒绝路径穿越、额外文件、内置覆盖及未知操作者，并以临时目录加原子改名发布。
+- 启用托管 Skill 只允许 Registry 在显式 `resolve` 时读取说明，不会自动加入 Model Router、不会安装依赖或脚本，也不会自动获得 Tool 权限。
+- 扩展新能力时先选择类型：规则明确的操作写确定性代码，多步推理写 Agent Profile，可复用指令写 Skill，外部动作写 Tool；再定义稳定 capability ID、摘要、风险、审批需求和验收测试。
+- 新 Profile 不会仅因被发现就自动参与模型路由，必须显式增加执行映射；新 Tool 必须进入 ToolRegistry 与审批策略；重依赖只能由受控 loader 在调用时加载。
+- Skill 包契约、桌面路径和后续扩展边界见 `docs/v3/03-skill-lifecycle-gui.md`。
+- V3-04 已移除退役执行集成及其环境变量、客户端和 worker 分支。任务创建的 `model_class` 只接受 `light`、`standard` 或空值；历史未知值会安全失败，不会静默改走其他执行路径。
+- V3-05 只同步累计主规范与当前 runtime 的一致性，不改变代码行为；退役能力的负向回归要求和历史归档继续保留。
+- V3-06 让 Capability Registry 从一个完整工具快照 revision 投影元数据；目录可见、工具启用、计划允许和最终执行是四个独立边界。系统不扫描或热加载任意 Python 插件，不以全目录工具注入作为兜底。
+- V3-07 参考 FinchBot 的 Agent 循环、动态上下文和 checkpoint 机制，但没有迁入其文件工作区、自修改、shell、后台任务或 MCP 自配置能力。详见 `docs/v3/07-agent-core-runtime.md`。
+- V3-08 使用项目自有 Observability 协议隔离 Langfuse v4 SDK；默认 No-op，完整配置后才启用。Langfuse 负责运行 Trace、实验和可选评分，pytest 继续负责确定性安全与发布硬门禁。详见 `docs/v3/08-langfuse-observability-evaluation.md`。
 
-当前尚未实现：
+### 记忆、监控与演进
 
-- 企业微信 Webhook。
-- Redis、Celery worker 和异步调度。
-- Dify Workflow、Tavily 工具调用和 Agent Harness。
-- 任务取消、审批处理和结果推送。
+- `/memory` 支持记住、查看与软删除，按用户隔离；有效记忆会进入规划上下文。
+- `/status` 查询本人最近任务或指定任务，不泄露其他用户信息。
+- V2-04 使用 `TaskService` 幂等创建周期任务，由单实例 Celery Beat 投递、既有 worker 执行。
+- 记忆包含 `access_count`、重要性、过期和归档元数据；行为服务只生成建议，不会自动修改 prompt、skill、配置或工具开关。
+- 维护流程包括超时 `running` 任务失败与逾期 `pending` 任务补偿。
 
-## 开发范式
+### 评测与质量
 
-项目采用 OpenSpec + ATDD，并按阶段推进。
+- V2-05 评测与回归阶段已完成，数据集与基线继续保存在 `tests/evals/datasets/core_commands.json` 和 `tests/evals/baselines/v2-05.json`。V3-08 已移除 Deepeval；确定性关键词、禁词、长度、安全和基线规则现在由普通 Python/pytest 执行。
+- 本地或 CI 可运行 `uv run python scripts/run_evaluation.py` 获取机器可读 JSON 报告；失败、缺失基线或回归返回非零退出码。该命令不读取 Langfuse 配置、不调用外部模型、不发送遥测。
+- `packages.evaluation.run_langfuse_experiment` 只提供可注入的实验边界，调用方必须传入真实 task callable；静态 golden `actual_output` 不代表真实 Agent 质量。离线评测和 Langfuse 都不替代功能、安全、集成测试及人工发布检查。
 
-MVP 阶段先从 `docs/mvp/index.md` 进入，再按 `01` 到 `08` 的阶段文档逐步推进。
-
-每个阶段开始前需要明确：
-
-- 阶段目标
-- 范围和不做事项
-- 验收标准
-- 需要新增或更新的测试
-
-每个阶段完成后需要更新：
-
-- README 当前状态
-- 启动方式
-- 配置说明
-- 目录说明
-- 已完成核心功能
-
-## 常用命令
+## 验证
 
 ```bash
-uv sync
-uv lock --check
 uv run pytest
+uv run pytest --cov
 uv run ruff check .
 uv run mypy .
 ```
+
+V3 阶段遵循 OpenSpec + ATDD：每个 phase 先同步验收标准，再实现和验证，完成后同步主规范并归档变更。

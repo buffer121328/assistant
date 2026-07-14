@@ -1,0 +1,140 @@
+services:
+  assistant-api:
+    build:
+      context: .
+    image: assistant-api:local
+    command:
+      - uvicorn
+      - --app-dir
+      - apps/api
+      - assistant_api.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      SERVICE_NAME: ${SERVICE_NAME:-assistant-api}
+      MANAGED_SKILLS_ROOT: /app/data/skills
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://assistant:assistant@postgres:5432/assistant}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      LANGBOT_WEBHOOK_SECRET: ${LANGBOT_WEBHOOK_SECRET:-placeholder-langbot-webhook-secret}
+      LANGBOT_API_BASE_URL: ${LANGBOT_API_BASE_URL:-https://langbot.invalid}
+      LANGBOT_API_KEY: ${LANGBOT_API_KEY:-placeholder-langbot-api-key}
+      LANGBOT_SEND_TIMEOUT_SECONDS: ${LANGBOT_SEND_TIMEOUT_SECONDS:-10}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-placeholder-deepseek-api-key}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://deepseek.invalid/v1}
+      DEEPSEEK_LIGHT_MODEL: ${DEEPSEEK_LIGHT_MODEL:-deepseek-light-placeholder}
+      DEEPSEEK_STANDARD_MODEL: ${DEEPSEEK_STANDARD_MODEL:-deepseek-standard-placeholder}
+      MODEL_GATEWAY_TIMEOUT_SECONDS: ${MODEL_GATEWAY_TIMEOUT_SECONDS:-10}
+      MODEL_GATEWAY_RETRY_ATTEMPTS: ${MODEL_GATEWAY_RETRY_ATTEMPTS:-2}
+      TAVILY_BASE_URL: ${TAVILY_BASE_URL:-https://tavily.invalid}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-placeholder-tavily-api-key}
+      TAVILY_TIMEOUT_SECONDS: ${TAVILY_TIMEOUT_SECONDS:-10}
+      TAVILY_MAX_RESULTS: ${TAVILY_MAX_RESULTS:-5}
+      RUNNING_TASK_TIMEOUT_SECONDS: ${RUNNING_TASK_TIMEOUT_SECONDS:-300}
+      PENDING_TASK_COMPENSATION_DELAY_SECONDS: ${PENDING_TASK_COMPENSATION_DELAY_SECONDS:-120}
+      SCHEDULER_MAINTENANCE_INTERVAL_SECONDS: ${SCHEDULER_MAINTENANCE_INTERVAL_SECONDS:-300}
+    ports:
+      - "8000:8000"
+    volumes:
+      - skills-data:/app/data/skills
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery-worker:
+    build:
+      context: .
+    image: assistant-api:local
+    command:
+      - celery
+      - -A
+      - assistant_api.worker:celery_app
+      - worker
+      - --loglevel=INFO
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      SERVICE_NAME: ${SERVICE_NAME:-assistant-api}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://assistant:assistant@postgres:5432/assistant}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      LANGBOT_API_BASE_URL: ${LANGBOT_API_BASE_URL:-https://langbot.invalid}
+      LANGBOT_API_KEY: ${LANGBOT_API_KEY:-placeholder-langbot-api-key}
+      LANGBOT_SEND_TIMEOUT_SECONDS: ${LANGBOT_SEND_TIMEOUT_SECONDS:-10}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-placeholder-deepseek-api-key}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://deepseek.invalid/v1}
+      DEEPSEEK_LIGHT_MODEL: ${DEEPSEEK_LIGHT_MODEL:-deepseek-light-placeholder}
+      DEEPSEEK_STANDARD_MODEL: ${DEEPSEEK_STANDARD_MODEL:-deepseek-standard-placeholder}
+      MODEL_GATEWAY_TIMEOUT_SECONDS: ${MODEL_GATEWAY_TIMEOUT_SECONDS:-10}
+      MODEL_GATEWAY_RETRY_ATTEMPTS: ${MODEL_GATEWAY_RETRY_ATTEMPTS:-2}
+      TAVILY_BASE_URL: ${TAVILY_BASE_URL:-https://tavily.invalid}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-placeholder-tavily-api-key}
+      TAVILY_TIMEOUT_SECONDS: ${TAVILY_TIMEOUT_SECONDS:-10}
+      TAVILY_MAX_RESULTS: ${TAVILY_MAX_RESULTS:-5}
+      RUNNING_TASK_TIMEOUT_SECONDS: ${RUNNING_TASK_TIMEOUT_SECONDS:-300}
+      PENDING_TASK_COMPENSATION_DELAY_SECONDS: ${PENDING_TASK_COMPENSATION_DELAY_SECONDS:-120}
+      SCHEDULER_MAINTENANCE_INTERVAL_SECONDS: ${SCHEDULER_MAINTENANCE_INTERVAL_SECONDS:-300}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery-beat:
+    build:
+      context: .
+    image: assistant-api:local
+    command:
+      - celery
+      - -A
+      - assistant_api.worker:celery_app
+      - beat
+      - --loglevel=INFO
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      SERVICE_NAME: ${SERVICE_NAME:-assistant-api}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://assistant:assistant@postgres:5432/assistant}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      LANGBOT_API_KEY: ${LANGBOT_API_KEY:-placeholder-langbot-api-key}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-placeholder-deepseek-api-key}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-placeholder-tavily-api-key}
+      RUNNING_TASK_TIMEOUT_SECONDS: ${RUNNING_TASK_TIMEOUT_SECONDS:-300}
+      PENDING_TASK_COMPENSATION_DELAY_SECONDS: ${PENDING_TASK_COMPENSATION_DELAY_SECONDS:-120}
+      SCHEDULER_MAINTENANCE_INTERVAL_SECONDS: ${SCHEDULER_MAINTENANCE_INTERVAL_SECONDS:-300}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-assistant}
+      POSTGRES_USER: ${POSTGRES_USER:-assistant}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-assistant}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U assistant -d assistant"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres-data:
+  skills-data:

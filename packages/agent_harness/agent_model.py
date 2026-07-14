@@ -1,0 +1,198 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+import json
+import re
+from typing import Any, Literal, Protocol
+
+from packages.model_gateway import GatewayMessage, sanitize_text
+
+from .executors import AgentRunInput
+
+
+AgentAction = Literal["final", "tool_call"]
+_TOOL_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
+_MAX_DISPLAY_PLAN_STEPS = 5
+_MAX_DISPLAY_PLAN_STEP_LENGTH = 200
+
+
+class AgentDecisionError(ValueError):
+    pass
+
+
+@dataclass(frozen=True)
+class AgentDecision:
+    action: AgentAction
+    plan: tuple[str, ...] = ()
+    answer: str | None = None
+    tool_name: str | None = None
+    arguments: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class AgentModelRequest:
+    task_id: str
+    user_id: str
+    task_type: str
+    messages: tuple[GatewayMessage, ...]
+
+
+class AgentModelProtocol(Protocol):
+    async def decide(self, request: AgentModelRequest) -> AgentDecision: ...
+
+
+def parse_agent_decision(value: str) -> AgentDecision:
+    try:
+        payload = json.loads(value)
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise AgentDecisionError("Agent decision must be valid JSON") from exc
+    if not isinstance(payload, dict):
+        raise AgentDecisionError("Agent decision must be a JSON object")
+
+    action = payload.get("action")
+    if action not in {"final", "tool_call"}:
+        raise AgentDecisionError("Agent decision action is invalid")
+    plan = _parse_display_plan(payload.get("plan", []))
+
+    if action == "final":
+        answer = payload.get("answer")
+        if not isinstance(answer, str) or not answer.strip():
+            raise AgentDecisionError("Final agent decision requires a non-empty answer")
+        if payload.get("tool_name") is not None or payload.get("arguments") is not None:
+            raise AgentDecisionError("Final agent decision must not request a tool")
+        return AgentDecision(
+            action="final",
+            plan=plan,
+            answer=answer.strip(),
+        )
+
+    if payload.get("answer") not in {None, ""}:
+        raise AgentDecisionError("Tool decision must not contain a final answer")
+    tool_name = payload.get("tool_name")
+    if not isinstance(tool_name, str) or not _TOOL_NAME_PATTERN.fullmatch(
+        tool_name.strip()
+    ):
+        raise AgentDecisionError("Tool decision requires a valid tool name")
+    arguments = payload.get("arguments")
+    if not isinstance(arguments, dict):
+        raise AgentDecisionError("Tool decision arguments must be an object")
+    return AgentDecision(
+        action="tool_call",
+        plan=plan,
+        tool_name=tool_name.strip(),
+        arguments=arguments,
+    )
+
+
+def build_agent_model_request(
+    run_input: AgentRunInput,
+    *,
+    tool_schemas: tuple[dict[str, Any], ...],
+    history: tuple[dict[str, Any], ...] = (),
+    sensitive_values: tuple[str | None, ...] = (),
+) -> AgentModelRequest:
+    plan = run_input.plan
+    context = run_input.context
+    system_payload = {
+        "profile": plan.profile_name,
+        "goal": plan.goal,
+        "default_plan_guidance": list(plan.steps),
+        "max_steps": plan.max_steps,
+        "timeout_seconds": plan.timeout_seconds,
+        "output_format": plan.output_format,
+        "memory_summary": context.memory_summary,
+        "skills": [
+            {"name": name, "instructions": instructions}
+            for name, instructions in zip(
+                context.skill_names,
+                context.skill_instructions,
+                strict=False,
+            )
+        ],
+        "capabilities": list(context.capability_summary),
+        "tools": list(tool_schemas),
+    }
+    system_text = (
+        "你是受控的个人 Agent Core。只能在给定目标、步数、超时和工具范围内工作。\n"
+        "每轮只输出一个 JSON 对象：\n"
+        '- 直接回答：{"action":"final","answer":"...","plan":["..."]}\n'
+        '- 调用工具：{"action":"tool_call","tool_name":"...",'
+        '"arguments":{},"plan":["..."]}\n'
+        "plan 仅是最多 5 条面向用户的简短说明，不能扩大工具权限或执行预算。"
+        "不要输出隐式思维链、凭据、配置或 JSON 之外的文本。\n"
+        f"运行上下文：{_safe_json(system_payload, sensitive_values)}"
+    )
+    messages: list[GatewayMessage] = [
+        GatewayMessage(
+            role="system",
+            content=sanitize_text(
+                system_text,
+                extra_sensitive_values=sensitive_values,
+            ),
+        ),
+        GatewayMessage(
+            role="user",
+            content=sanitize_text(
+                context.input_text,
+                extra_sensitive_values=sensitive_values,
+            ),
+        ),
+    ]
+    for item in history:
+        role = item.get("role")
+        name = item.get("name")
+        content = item.get("content")
+        if not isinstance(content, str) or not content:
+            continue
+        if role == "assistant":
+            message_role = "assistant"
+            message_content = content
+        else:
+            message_role = "user"
+            prefix = f"工具结果 {name}: " if isinstance(name, str) and name else "执行结果: "
+            message_content = f"{prefix}{content}"
+        messages.append(
+            GatewayMessage(
+                role=message_role,
+                content=sanitize_text(
+                    message_content,
+                    extra_sensitive_values=sensitive_values,
+                ),
+            )
+        )
+    return AgentModelRequest(
+        task_id=context.task_id,
+        user_id=context.user_id,
+        task_type=context.task_type,
+        messages=tuple(messages),
+    )
+
+
+def _parse_display_plan(value: object) -> tuple[str, ...]:
+    if not isinstance(value, list) or len(value) > _MAX_DISPLAY_PLAN_STEPS:
+        raise AgentDecisionError("Agent display plan is invalid")
+    steps: list[str] = []
+    for item in value:
+        if not isinstance(item, str):
+            raise AgentDecisionError("Agent display plan step must be text")
+        step = item.strip()
+        if not step or len(step) > _MAX_DISPLAY_PLAN_STEP_LENGTH:
+            raise AgentDecisionError("Agent display plan step is invalid")
+        steps.append(step)
+    return tuple(steps)
+
+
+def _safe_json(
+    payload: dict[str, Any],
+    sensitive_values: tuple[str | None, ...],
+) -> str:
+    return sanitize_text(
+        json.dumps(
+            payload,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+            default=str,
+        ),
+        extra_sensitive_values=sensitive_values,
+    )

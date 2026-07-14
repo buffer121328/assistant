@@ -1,11 +1,27 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
-from .models import ModelLog, PlatformAccount, ProcessedMessage, Task, TaskStatus, User
+from .models import (
+    Approval,
+    ApprovalStatus,
+    Memory,
+    ModelLog,
+    PlatformAccount,
+    ProcessedMessage,
+    ScheduledTaskRun,
+    SkillAuditLog,
+    Task,
+    TaskStatus,
+    ToolLog,
+    User,
+    utc_now,
+)
 
 
 @dataclass(frozen=True)
@@ -42,6 +58,28 @@ class TaskRepository:
     async def get_task(self, task_id: str) -> Task | None:
         return await self.session.get(Task, task_id)
 
+    async def get_task_by_user(self, *, task_id: str, user_id: str) -> Task | None:
+        return await self.session.scalar(
+            select(Task).where(Task.id == task_id, Task.user_id == user_id)
+        )
+
+    async def get_latest_non_status_task(
+        self,
+        *,
+        user_id: str,
+        exclude_task_id: str,
+    ) -> Task | None:
+        return await self.session.scalar(
+            select(Task)
+            .where(
+                Task.user_id == user_id,
+                Task.id != exclude_task_id,
+                Task.task_type != "status",
+            )
+            .order_by(Task.created_at.desc(), Task.id.desc())
+            .limit(1)
+        )
+
     async def list_tasks_by_user(self, user_id: str) -> list[Task]:
         result = await self.session.scalars(
             select(Task)
@@ -51,15 +89,72 @@ class TaskRepository:
         return list(result)
 
 
+class ApprovalRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def create_pending(self, *, task_id: str, tool_name: str) -> Approval:
+        approval = Approval(
+            task_id=task_id,
+            tool_name=tool_name,
+            status=ApprovalStatus.PENDING.value,
+        )
+        self.session.add(approval)
+        await self.session.flush()
+        return approval
+
+    async def get_active_for_tool(
+        self,
+        *,
+        task_id: str,
+        tool_name: str,
+    ) -> Approval | None:
+        return await self.session.scalar(
+            select(Approval).where(
+                Approval.task_id == task_id,
+                Approval.tool_name == tool_name,
+                Approval.status.in_(
+                    (
+                        ApprovalStatus.PENDING.value,
+                        ApprovalStatus.APPROVED.value,
+                    )
+                ),
+            )
+        )
+
+    async def get_by_task(
+        self,
+        *,
+        approval_id: str,
+        task_id: str,
+    ) -> Approval | None:
+        return await self.session.scalar(
+            select(Approval).where(
+                Approval.id == approval_id,
+                Approval.task_id == task_id,
+            )
+        )
+
+    async def list_by_task(self, task_id: str) -> list[Approval]:
+        result = await self.session.scalars(
+            select(Approval)
+            .where(Approval.task_id == task_id)
+            .order_by(Approval.created_at.asc(), Approval.id.asc())
+        )
+        return list(result)
+
+
 @dataclass(frozen=True)
 class ProcessedMessageCreate:
     platform: str
     message_id: str
     reason: str
+    chat_id: str | None = None
+    response_target: str | None = None
     task_id: str | None = None
 
 
-class FeishuWebhookRepository:
+class MessageRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
@@ -96,12 +191,25 @@ class FeishuWebhookRepository:
         processed_message = ProcessedMessage(
             platform=data.platform,
             message_id=data.message_id,
+            chat_id=data.chat_id,
+            response_target=data.response_target,
             reason=data.reason,
             task_id=data.task_id,
         )
         self.session.add(processed_message)
         await self.session.flush()
         return processed_message
+
+    async def get_task_dispatch_record(self, task_id: str) -> ProcessedMessage | None:
+        return await self.session.scalar(
+            select(ProcessedMessage)
+            .where(
+                ProcessedMessage.reason == "task_created",
+                ProcessedMessage.task_id == task_id,
+            )
+            .order_by(ProcessedMessage.created_at.asc(), ProcessedMessage.id.asc())
+            .limit(1)
+        )
 
 
 @dataclass(frozen=True)
@@ -128,3 +236,186 @@ class ModelLogRepository:
         self.session.add(model_log)
         await self.session.flush()
         return model_log
+
+
+@dataclass(frozen=True)
+class MemoryCreate:
+    user_id: str
+    content: str
+    memory_type: str = "preference"
+    importance_score: int = 5
+    expires_at: datetime | None = None
+
+
+class MemoryRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def create_memory(self, data: MemoryCreate) -> Memory:
+        memory = Memory(
+            user_id=data.user_id,
+            content=data.content,
+            memory_type=data.memory_type,
+            importance_score=data.importance_score,
+            expires_at=data.expires_at,
+            is_active=True,
+        )
+        self.session.add(memory)
+        await self.session.flush()
+        return memory
+
+    async def list_active_memories(
+        self,
+        user_id: str,
+        *,
+        now: datetime | None = None,
+    ) -> list[Memory]:
+        now = now or utc_now()
+        result = await self.session.scalars(
+            select(Memory)
+            .where(Memory.user_id == user_id, *eligible_memory_conditions(now))
+            .order_by(Memory.created_at.asc(), Memory.id.asc())
+        )
+        return list(result)
+
+    async def get_active_memory_by_user(
+        self,
+        *,
+        memory_id: str,
+        user_id: str,
+    ) -> Memory | None:
+        now = utc_now()
+        return await self.session.scalar(
+            select(Memory).where(
+                Memory.id == memory_id,
+                Memory.user_id == user_id,
+                *eligible_memory_conditions(now),
+            )
+        )
+
+
+def eligible_memory_conditions(now: datetime) -> tuple[ColumnElement[bool], ...]:
+    return (
+        Memory.is_active.is_(True),
+        Memory.deleted_at.is_(None),
+        Memory.archived_at.is_(None),
+        or_(Memory.expires_at.is_(None), Memory.expires_at > now),
+    )
+
+
+class ScheduledTaskRunRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def get_by_slot(
+        self,
+        *,
+        schedule_key: str,
+        scheduled_for: datetime,
+    ) -> ScheduledTaskRun | None:
+        return await self.session.scalar(
+            select(ScheduledTaskRun).where(
+                ScheduledTaskRun.schedule_key == schedule_key,
+                ScheduledTaskRun.scheduled_for == scheduled_for,
+            )
+        )
+
+    async def create(
+        self,
+        *,
+        schedule_key: str,
+        scheduled_for: datetime,
+        task_id: str,
+    ) -> ScheduledTaskRun:
+        run = ScheduledTaskRun(
+            schedule_key=schedule_key,
+            scheduled_for=scheduled_for,
+            task_id=task_id,
+        )
+        self.session.add(run)
+        await self.session.flush()
+        return run
+
+
+@dataclass(frozen=True)
+class ToolLogCreate:
+    task_id: str | None
+    tool_name: str
+    status: str
+    input_text: str | None = None
+    output_text: str | None = None
+    error_message: str | None = None
+
+
+class ToolLogRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def create_tool_log(self, data: ToolLogCreate) -> ToolLog:
+        tool_log = ToolLog(
+            task_id=data.task_id,
+            tool_name=data.tool_name,
+            status=data.status,
+            input_text=data.input_text,
+            output_text=data.output_text,
+            error_message=data.error_message,
+        )
+        self.session.add(tool_log)
+        await self.session.flush()
+        return tool_log
+
+    async def has_successful_tool_log(self, *, task_id: str, tool_name: str) -> bool:
+        existing = await self.session.scalar(
+            select(ToolLog.id)
+            .where(
+                ToolLog.task_id == task_id,
+                ToolLog.tool_name == tool_name,
+                ToolLog.status == "succeeded",
+            )
+            .limit(1)
+        )
+        return existing is not None
+
+
+class SkillAuditRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def user_exists(self, user_id: str) -> bool:
+        return await self.session.get(User, user_id) is not None
+
+    async def create_started(
+        self,
+        *,
+        actor_user_id: str,
+        skill_name: str | None,
+        action: str,
+    ) -> SkillAuditLog:
+        audit = SkillAuditLog(
+            actor_user_id=actor_user_id,
+            skill_name=skill_name,
+            action=action,
+            status="started",
+        )
+        self.session.add(audit)
+        await self.session.flush()
+        return audit
+
+    async def finish(
+        self,
+        audit_id: str,
+        *,
+        status: str,
+        skill_name: str | None,
+        version: str | None,
+        error_code: str | None,
+    ) -> SkillAuditLog:
+        audit = await self.session.get(SkillAuditLog, audit_id)
+        if audit is None:
+            raise RuntimeError("Skill audit record is unavailable")
+        audit.status = status
+        audit.skill_name = skill_name
+        audit.version = version
+        audit.error_code = error_code
+        await self.session.flush()
+        return audit

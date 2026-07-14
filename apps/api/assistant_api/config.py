@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -8,14 +10,27 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://placeholder"
     redis_url: str = "redis://placeholder"
     sentry_dsn: str | None = None
-    feishu_webhook_verification_token: str = "placeholder-feishu-verification-token"
-    feishu_webhook_signing_secret: str = "placeholder-feishu-signing-secret"
+    langfuse_public_key: str | None = None
+    langfuse_secret_key: str | None = None
+    langfuse_base_url: str | None = None
+    langbot_webhook_secret: str = "placeholder-langbot-webhook-secret"
+    langbot_api_base_url: str = "https://langbot.invalid"
+    langbot_api_key: str = "placeholder-langbot-api-key"
+    langbot_send_timeout_seconds: float = 10.0
     deepseek_api_key: str = "placeholder-deepseek-api-key"
     deepseek_base_url: str = "https://deepseek.invalid/v1"
     deepseek_light_model: str = "deepseek-light-placeholder"
     deepseek_standard_model: str = "deepseek-standard-placeholder"
     model_gateway_timeout_seconds: float = 10.0
     model_gateway_retry_attempts: int = 2
+    tavily_base_url: str = "https://tavily.invalid"
+    tavily_api_key: str = "placeholder-tavily-api-key"
+    tavily_timeout_seconds: float = 10.0
+    tavily_max_results: int = 5
+    running_task_timeout_seconds: float = 300.0
+    pending_task_compensation_delay_seconds: float = 120.0
+    scheduler_maintenance_interval_seconds: float = 300.0
+    managed_skills_root: Path = Path("var/skills")
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

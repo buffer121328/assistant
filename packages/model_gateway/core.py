@@ -38,9 +38,9 @@ SUPPORTED_MODEL_CLASSES = frozenset({MODEL_CLASS_LIGHT, MODEL_CLASS_STANDARD})
 
 _MAX_LOG_TEXT_LENGTH = 1000
 _SENSITIVE_PATTERNS = (
-    re.compile(r"Bearer\s+[A-Za-z0-9._~+/=-]+", re.IGNORECASE),
-    re.compile(r"(?i)(authorization|cookie)\s*[:=]\s*[^,\s}\"']+"),
-    re.compile(r"(?i)(api[_-]?key|token|secret)\s*[:=]\s*[^,\s}\"']+"),
+    re.compile(r"Bearer\s+(?:\[REDACTED\]|[A-Za-z0-9._~+/=-]+)", re.IGNORECASE),
+    re.compile(r"(?i)\"?(authorization|cookie)\"?\s*[:=]\s*\"?[^,}\"']+"),
+    re.compile(r"(?i)\"?(api[_-]?key|token|secret)\"?\s*[:=]\s*\"?[^,\s}\"']+"),
     re.compile(r"https?://private\.[^\s}\"')]+", re.IGNORECASE),
 )
 
