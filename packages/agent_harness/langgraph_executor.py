@@ -38,6 +38,7 @@ from .executors import (
     HumanApprovalRequest,
 )
 from .loop import ControlledLoop
+from .subagents import SubAgentCoordinator, SubAgentRequest
 
 
 _AGENT_CORE_VERSION = "v2"
@@ -59,6 +60,7 @@ class _ExecutionState(TypedDict, total=False):
     review_retry_count: int
     replan_count: int
     step_count: int
+    subagent_results: list[dict[str, Any]]
 
 
 class LangGraphExecutor:
@@ -72,6 +74,7 @@ class LangGraphExecutor:
         sensitive_values: tuple[str | None, ...] = (),
         tool_snapshot: ToolCatalogSnapshot | None = None,
         observability: Observability | None = None,
+        subagent_coordinator: SubAgentCoordinator | None = None,
     ) -> None:
         self.session = session
         self.tool_registry = tool_registry
@@ -80,6 +83,7 @@ class LangGraphExecutor:
         self.sensitive_values = sensitive_values
         self.tool_snapshot = tool_snapshot
         self.observability = observability or NoopObservability()
+        self.subagent_coordinator = subagent_coordinator
 
     async def execute(self, *, run_input: AgentRunInput) -> AgentRunResult:
         loop = ControlledLoop(
@@ -180,6 +184,12 @@ class LangGraphExecutor:
         async def tool(state: _ExecutionState) -> _ExecutionState:
             return await self._tool(state, run_input, loop)
 
+        async def tool_batch(state: _ExecutionState) -> _ExecutionState:
+            return await self._tool_batch(state, run_input, loop)
+
+        async def subagents(state: _ExecutionState) -> _ExecutionState:
+            return await self._subagents(state, run_input, loop)
+
         async def approval(state: _ExecutionState) -> _ExecutionState:
             return await self._approval(state, run_input, loop)
 
@@ -197,8 +207,13 @@ class LangGraphExecutor:
                 return "plan"
             return "model"
 
-        def route_after_plan(_state: _ExecutionState) -> str:
-            return "approval" if run_input.plan.require_plan_approval else "model"
+        def route_after_plan(state: _ExecutionState) -> str:
+            if run_input.plan.require_plan_approval:
+                return "approval"
+            return "subagents" if self._should_delegate(state, run_input) else "model"
+
+        def route_after_plan_approval(state: _ExecutionState) -> str:
+            return "subagents" if self._should_delegate(state, run_input) else "model"
 
         def route_after_review(state: _ExecutionState) -> str:
             return self._route_after_review(state)
@@ -211,6 +226,8 @@ class LangGraphExecutor:
         graph.add_node("finalize", finalize)
         graph.add_node("review_failure", fail)
         graph.add_node("tool", tool)
+        graph.add_node("tool_batch", tool_batch)
+        graph.add_node("subagents", subagents)
         graph.add_node("approval", approval)
         graph.add_node("plan_approval", plan_approval)
         graph.add_node("human_review", human_review)
@@ -223,14 +240,20 @@ class LangGraphExecutor:
         graph.add_conditional_edges(
             "plan",
             route_after_plan,
-            {"approval": "plan_approval", "model": "model"},
+            {"approval": "plan_approval", "subagents": "subagents", "model": "model"},
         )
-        graph.add_edge("plan_approval", "model")
+        graph.add_conditional_edges(
+            "plan_approval",
+            route_after_plan_approval,
+            {"subagents": "subagents", "model": "model"},
+        )
+        graph.add_edge("subagents", "model")
         graph.add_conditional_edges(
             "model",
             route_after_model,
             {
                 "tool": "tool",
+                "tool_batch": "tool_batch",
                 "approval": "approval",
                 "review": "review",
                 "final": END,
@@ -238,6 +261,7 @@ class LangGraphExecutor:
         )
         graph.add_edge("approval", "tool")
         graph.add_edge("tool", "model")
+        graph.add_edge("tool_batch", "model")
         graph.add_conditional_edges(
             "review",
             route_after_review,
@@ -311,7 +335,10 @@ class LangGraphExecutor:
         run_input: AgentRunInput,
     ) -> str:
         decision = state.get("decision", {})
-        if decision.get("action") != "tool_call":
+        action = decision.get("action")
+        if action == "tool_batch":
+            return "tool_batch"
+        if action != "tool_call":
             if run_input.plan.execution_mode == "plan_execute_review":
                 return "review"
             return "final"
@@ -319,6 +346,76 @@ class LangGraphExecutor:
         if tool_name in run_input.plan.approval_required_tools:
             return "approval"
         return "tool"
+
+    def _should_delegate(
+        self,
+        state: _ExecutionState,
+        run_input: AgentRunInput,
+    ) -> bool:
+        if self.subagent_coordinator is None or run_input.plan.max_subagents <= 0:
+            return False
+        work_plan = _work_plan_from_state(state)
+        return bool(
+            work_plan
+            and any(step.agent_role is not None for step in work_plan.steps)
+        )
+
+    async def _subagents(
+        self,
+        state: _ExecutionState,
+        run_input: AgentRunInput,
+        loop: ControlledLoop,
+    ) -> _ExecutionState:
+        async def delegate() -> _ExecutionState:
+            work_plan = _work_plan_from_state(state)
+            coordinator = self.subagent_coordinator
+            if work_plan is None or coordinator is None:
+                return {}
+            requests = tuple(
+                SubAgentRequest(
+                    step_index=index,
+                    role=step.agent_role,
+                    objective=step.objective,
+                    context=(
+                        f"goal={work_plan.goal}\n"
+                        f"input={run_input.context.input_text}\n"
+                        f"memory={run_input.context.memory_summary}"
+                    ),
+                )
+                for index, step in enumerate(work_plan.steps)
+                if step.agent_role is not None
+            )[: run_input.plan.max_subagents]
+            results = await coordinator.run(
+                task_id=run_input.context.task_id,
+                user_id=run_input.context.user_id,
+                requests=requests,
+            )
+            history = list(state.get("history", []))
+            payloads: list[dict[str, Any]] = []
+            for result in results:
+                payload = {
+                    "step_index": result.step_index,
+                    "role": result.role,
+                    "content": result.content,
+                    "error": result.error,
+                }
+                payloads.append(payload)
+                history.append(
+                    {
+                        "role": "subagent",
+                        "name": f"subagent.{result.role}",
+                        "content": self._safe_json(payload),
+                    }
+                )
+            return {"history": history, "subagent_results": payloads}
+
+        update = await self._run_observed_step(
+            "subagents",
+            run_input,
+            lambda: loop.run_step("subagents", delegate),
+        )
+        update["step_count"] = loop.steps_executed
+        return update
 
     async def _approval(
         self,
@@ -668,6 +765,67 @@ class LangGraphExecutor:
         update["step_count"] = loop.steps_executed
         return update
 
+    async def _tool_batch(
+        self,
+        state: _ExecutionState,
+        run_input: AgentRunInput,
+        loop: ControlledLoop,
+    ) -> _ExecutionState:
+        async def call_tools() -> _ExecutionState:
+            decision = state.get("decision", {})
+            raw_calls = decision.get("tool_calls")
+            if not isinstance(raw_calls, list):
+                raise RuntimeError("Agent tool batch decision is unavailable")
+            versions = dict(run_input.plan.tool_versions)
+            invocations: list[ToolInvocation] = []
+            names: list[str] = []
+            for item in raw_calls:
+                if not isinstance(item, dict):
+                    raise RuntimeError("Agent tool batch item is unavailable")
+                name = item.get("tool_name")
+                arguments = item.get("arguments")
+                if not isinstance(name, str) or not isinstance(arguments, dict):
+                    raise RuntimeError("Agent tool batch item is invalid")
+                names.append(name)
+                invocations.append(
+                    ToolInvocation(
+                        task_id=run_input.context.task_id,
+                        user_id=run_input.context.user_id,
+                        name=name,
+                        arguments=arguments,
+                        tool_snapshot_revision=(
+                            run_input.plan.tool_snapshot_revision or None
+                        ),
+                        tool_version=versions.get(name),
+                    )
+                )
+            results = await self.tool_registry.execute_batch(
+                tuple(invocations),
+                allowed_tools=run_input.plan.allowed_tools,
+                approval_required_tools=run_input.plan.approval_required_tools,
+            )
+            history = list(state.get("history", []))
+            for name, result in zip(names, results, strict=True):
+                history.append(
+                    {
+                        "role": "tool",
+                        "name": name,
+                        "content": self._safe_json(result),
+                    }
+                )
+            return {
+                "history": history,
+                "tool_calls": [*state.get("tool_calls", []), *names],
+            }
+
+        update = await self._run_observed_step(
+            "tool_batch",
+            run_input,
+            lambda: loop.run_step("tool_batch", call_tools),
+        )
+        update["step_count"] = loop.steps_executed
+        return update
+
     async def _run_observed_step(
         self,
         step_name: str,
@@ -749,6 +907,14 @@ def _decision_payload(decision: AgentDecision) -> dict[str, Any]:
         "tool_name": decision.tool_name,
         "arguments": decision.arguments,
         "plan": list(decision.plan),
+        "tool_calls": [
+            {
+                "id": call.call_id,
+                "tool_name": call.tool_name,
+                "arguments": call.arguments,
+            }
+            for call in decision.tool_calls
+        ],
     }
 
 
@@ -787,6 +953,7 @@ def _work_plan_payload(work_plan: WorkPlan) -> dict[str, Any]:
             {
                 "objective": step.objective,
                 "acceptance_criteria": list(step.acceptance_criteria),
+                "agent_role": step.agent_role,
             }
             for step in work_plan.steps
         ],
@@ -807,14 +974,18 @@ def _work_plan_from_state(state: _ExecutionState) -> WorkPlan | None:
             return None
         objective = item.get("objective")
         criteria = item.get("acceptance_criteria")
+        agent_role = item.get("agent_role")
         if not isinstance(objective, str) or not isinstance(criteria, list):
             return None
         if not all(isinstance(value, str) for value in criteria):
+            return None
+        if agent_role is not None and not isinstance(agent_role, str):
             return None
         steps.append(
             WorkPlanStep(
                 objective=objective,
                 acceptance_criteria=tuple(criteria),
+                agent_role=agent_role,
             )
         )
     return WorkPlan(goal=goal, steps=tuple(steps))

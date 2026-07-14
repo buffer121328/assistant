@@ -196,7 +196,9 @@ def test_profiles_select_hybrid_modes_and_bounded_review_policy() -> None:
         return planner.build_plan(task=task, profile=profile, context=context)
 
     assert build("plan").execution_mode == "react"
-    assert build("office").execution_mode == "react"
+    office = build("office")
+    assert office.execution_mode == "plan_execute_review"
+    assert office.max_subagents == 2
     learn = build("learn")
     daily = build("daily")
     assert learn.execution_mode == "plan_execute_review"

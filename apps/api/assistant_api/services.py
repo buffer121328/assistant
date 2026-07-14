@@ -8,6 +8,7 @@ from typing import Any, Protocol
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from packages.model_gateway import sanitize_text
+from packages.memory import NoopSemanticMemory, SemanticMemory
 
 from .models import (
     Approval,
@@ -338,10 +339,16 @@ class ApprovalService:
 
 
 class MemoryService:
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        *,
+        semantic_memory: SemanticMemory | None = None,
+    ) -> None:
         self.session = session
         self.repository = MemoryRepository(session)
         self.task_repository = TaskRepository(session)
+        self.semantic_memory = semantic_memory or NoopSemanticMemory()
 
     async def create_memory(
         self,
@@ -397,7 +404,9 @@ class MemoryService:
         if rest.startswith("记住"):
             content = rest.removeprefix("记住").strip()
             memory = await self.create_memory(user_id=task.user_id, content=content)
-            return f"已保存记忆：{memory.id}"
+            synced = await self._semantic_add(task=task, memory=memory)
+            status = "语义记忆已同步" if synced else "语义记忆不可用，已保留 SQL 记录"
+            return f"已保存记忆：{memory.id}；{status}"
 
         if rest == "查看":
             memories = await self.list_active_memories(task.user_id)
@@ -412,11 +421,40 @@ class MemoryService:
             if not memory_id:
                 raise InvalidMemoryCommandError("请提供要删除的 memory_id")
             await self.delete_memory(user_id=task.user_id, memory_id=memory_id)
-            return f"已删除记忆：{memory_id}"
+            synced = await self._semantic_delete(
+                user_id=task.user_id,
+                memory_id=memory_id,
+            )
+            status = "语义记忆已同步" if synced else "语义记忆不可用，SQL 删除已生效"
+            return f"已删除记忆：{memory_id}；{status}"
 
         raise InvalidMemoryCommandError(
             "不支持的 /memory 命令，请使用 /memory 记住、/memory 查看 或 /memory 删除"
         )
+
+    async def _semantic_add(self, *, task: Task, memory: Memory) -> bool:
+        if not self.semantic_memory.enabled:
+            return False
+        try:
+            return await self.semantic_memory.add(
+                user_id=task.user_id,
+                run_id=task.id,
+                memory_id=memory.id,
+                content=memory.content,
+            )
+        except Exception:
+            return False
+
+    async def _semantic_delete(self, *, user_id: str, memory_id: str) -> bool:
+        if not self.semantic_memory.enabled:
+            return False
+        try:
+            return await self.semantic_memory.delete(
+                user_id=user_id,
+                memory_id=memory_id,
+            )
+        except Exception:
+            return False
 
 
 class StatusService:

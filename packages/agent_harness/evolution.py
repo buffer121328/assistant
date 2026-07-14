@@ -7,7 +7,8 @@ import json
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from assistant_api.models import Task, TaskStatus, ToolLog, utc_now
+from assistant_api.models import EvolutionChange, Task, TaskStatus, ToolLog, utc_now
+from .governed_evolution import GovernedEvolutionService, TargetKind
 
 
 EVOLUTION_SUGGESTION_TOOL_NAME = "agent.evolution.suggestion"
@@ -72,6 +73,28 @@ class BehaviorEvolutionService:
         )
         await self.session.flush()
         return suggestion
+
+    async def evaluate_and_propose(
+        self,
+        *,
+        governed: GovernedEvolutionService,
+        task_id: str,
+        user_id: str,
+        target_kind: TargetKind,
+        target_name: str,
+        now: datetime | None = None,
+    ) -> EvolutionChange | None:
+        suggestion = await self.evaluate(now=now)
+        if suggestion is None:
+            return None
+        return await governed.propose_append(
+            task_id=task_id,
+            user_id=user_id,
+            target_kind=target_kind,
+            target_name=target_name,
+            guidance=suggestion.proposed_direction,
+            evidence=self._safe_evidence(suggestion.metrics),
+        )
 
     async def calculate_metrics(
         self,

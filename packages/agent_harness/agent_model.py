@@ -10,7 +10,7 @@ from packages.model_gateway import GatewayMessage, sanitize_text
 from .executors import AgentRunInput
 
 
-AgentAction = Literal["final", "tool_call"]
+AgentAction = Literal["final", "tool_call", "tool_batch"]
 ReviewStatus = Literal["pass", "retry", "replan", "escalate", "fail"]
 _TOOL_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 _MAX_DISPLAY_PLAN_STEPS = 5
@@ -18,10 +18,19 @@ _MAX_DISPLAY_PLAN_STEP_LENGTH = 200
 _MAX_WORK_PLAN_STEPS = 5
 _MAX_ACCEPTANCE_CRITERIA = 5
 _MAX_REVIEW_FEEDBACK_LENGTH = 500
+_MAX_TOOL_BATCH_SIZE = 3
+_ROLE_PATTERN = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 
 
 class AgentDecisionError(ValueError):
     pass
+
+
+@dataclass(frozen=True)
+class AgentToolCall:
+    call_id: str
+    tool_name: str
+    arguments: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -31,12 +40,14 @@ class AgentDecision:
     answer: str | None = None
     tool_name: str | None = None
     arguments: dict[str, Any] = field(default_factory=dict)
+    tool_calls: tuple[AgentToolCall, ...] = ()
 
 
 @dataclass(frozen=True)
 class WorkPlanStep:
     objective: str
     acceptance_criteria: tuple[str, ...]
+    agent_role: str | None = None
 
 
 @dataclass(frozen=True)
@@ -76,7 +87,7 @@ def parse_agent_decision(value: str) -> AgentDecision:
         raise AgentDecisionError("Agent decision must be a JSON object")
 
     action = payload.get("action")
-    if action not in {"final", "tool_call"}:
+    if action not in {"final", "tool_call", "tool_batch"}:
         raise AgentDecisionError("Agent decision action is invalid")
     plan = _parse_display_plan(payload.get("plan", []))
 
@@ -84,7 +95,11 @@ def parse_agent_decision(value: str) -> AgentDecision:
         answer = payload.get("answer")
         if not isinstance(answer, str) or not answer.strip():
             raise AgentDecisionError("Final agent decision requires a non-empty answer")
-        if payload.get("tool_name") is not None or payload.get("arguments") is not None:
+        if (
+            payload.get("tool_name") is not None
+            or payload.get("arguments") is not None
+            or payload.get("tool_calls") is not None
+        ):
             raise AgentDecisionError("Final agent decision must not request a tool")
         return AgentDecision(
             action="final",
@@ -94,6 +109,37 @@ def parse_agent_decision(value: str) -> AgentDecision:
 
     if payload.get("answer") not in {None, ""}:
         raise AgentDecisionError("Tool decision must not contain a final answer")
+    if action == "tool_batch":
+        if payload.get("tool_name") is not None or payload.get("arguments") is not None:
+            raise AgentDecisionError("Tool batch must not contain a single tool call")
+        raw_calls = payload.get("tool_calls")
+        if (
+            not isinstance(raw_calls, list)
+            or not raw_calls
+            or len(raw_calls) > _MAX_TOOL_BATCH_SIZE
+        ):
+            raise AgentDecisionError("Tool batch size is invalid")
+        calls: list[AgentToolCall] = []
+        call_ids: set[str] = set()
+        for raw_call in raw_calls:
+            if not isinstance(raw_call, dict):
+                raise AgentDecisionError("Tool batch item must be an object")
+            call_id = raw_call.get("id")
+            tool_name = raw_call.get("tool_name")
+            arguments = raw_call.get("arguments")
+            if not isinstance(call_id, str) or not _TOOL_NAME_PATTERN.fullmatch(call_id.strip()):
+                raise AgentDecisionError("Tool batch item requires a valid id")
+            if call_id.strip() in call_ids:
+                raise AgentDecisionError("Tool batch call ids must be unique")
+            if not isinstance(tool_name, str) or not _TOOL_NAME_PATTERN.fullmatch(tool_name.strip()):
+                raise AgentDecisionError("Tool batch item requires a valid tool name")
+            if not isinstance(arguments, dict):
+                raise AgentDecisionError("Tool batch arguments must be an object")
+            call_ids.add(call_id.strip())
+            calls.append(AgentToolCall(call_id.strip(), tool_name.strip(), arguments))
+        return AgentDecision(action="tool_batch", plan=plan, tool_calls=tuple(calls))
+    if payload.get("tool_calls") is not None:
+        raise AgentDecisionError("Single tool decision must not contain a tool batch")
     tool_name = payload.get("tool_name")
     if not isinstance(tool_name, str) or not _TOOL_NAME_PATTERN.fullmatch(
         tool_name.strip()
@@ -139,10 +185,17 @@ def parse_work_plan(value: str) -> WorkPlan:
             _bounded_text(item, "Work plan acceptance criterion")
             for item in raw_criteria
         )
+        raw_role = raw_step.get("agent_role")
+        if raw_role is not None and (
+            not isinstance(raw_role, str)
+            or not _ROLE_PATTERN.fullmatch(raw_role.strip())
+        ):
+            raise AgentDecisionError("Work plan agent role is invalid")
         steps.append(
             WorkPlanStep(
                 objective=objective,
                 acceptance_criteria=criteria,
+                agent_role=(raw_role.strip() if isinstance(raw_role, str) else None),
             )
         )
     return WorkPlan(goal=goal, steps=tuple(steps))
@@ -197,6 +250,9 @@ def build_agent_model_request(
         '- 直接回答：{"action":"final","answer":"...","plan":["..."]}\n'
         '- 调用工具：{"action":"tool_call","tool_name":"...",'
         '"arguments":{},"plan":["..."]}\n'
+        '- 并行工具：{"action":"tool_batch","tool_calls":['
+        '{"id":"call-1","tool_name":"...","arguments":{}}],'
+        '"plan":["..."]}\n'
         "plan 仅是最多 5 条面向用户的简短说明，不能扩大工具权限或执行预算。"
         "不要输出隐式思维链、凭据、配置或 JSON 之外的文本。\n"
         f"运行上下文：{_safe_json(system_payload, sensitive_values)}"
@@ -269,8 +325,9 @@ def build_work_plan_request(
     system_text = (
         "为受控个人 Agent 生成面向用户的工作计划。只输出 JSON："
         '{"goal":"...","steps":[{"objective":"...",'
-        '"acceptance_criteria":["..."]}]}。'
+        '"acceptance_criteria":["..."],"agent_role":"researcher"}]}。'
         "步骤最多 5 条；计划仅提供指导，不能扩大工具、审批、步数或超时权限。"
+        "agent_role 可省略，只能表示受限认知分工，不能授予工具或审批权限。"
         "不要输出隐式思维链、凭据或 JSON 之外的文本。\n"
         f"安全包络：{_safe_json(payload, sensitive_values)}"
     )
@@ -345,6 +402,7 @@ def _work_plan_payload(work_plan: WorkPlan) -> dict[str, Any]:
             {
                 "objective": step.objective,
                 "acceptance_criteria": list(step.acceptance_criteria),
+                "agent_role": step.agent_role,
             }
             for step in work_plan.steps
         ],

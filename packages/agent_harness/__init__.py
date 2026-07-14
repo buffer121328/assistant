@@ -3,6 +3,7 @@ from .agent_model import (
     AgentDecisionError,
     AgentModelProtocol,
     AgentModelRequest,
+    AgentToolCall,
     ReviewDecision,
     WorkPlan,
     WorkPlanStep,
@@ -28,6 +29,13 @@ from .evolution import (
     EvolutionSuggestion,
 )
 from .langgraph_executor import LangGraphExecutor
+from .governed_evolution import (
+    EvolutionApprovalError,
+    EvolutionError,
+    EvolutionStaleError,
+    EvolutionValidationError,
+    GovernedEvolutionService,
+)
 from .loop import ControlledLoop, LoopStepLimitError
 from .core import (
     AgentHarness,
@@ -68,12 +76,19 @@ from .skill_store import (
     ManagedSkillStore,
     ManagedSkillStoreError,
 )
+from .subagents import (
+    SubAgentCoordinator,
+    SubAgentRequest,
+    SubAgentResult,
+    SubAgentRunner,
+)
 
 __all__ = [
     "AgentDecision",
     "AgentDecisionError",
     "AgentModelProtocol",
     "AgentModelRequest",
+    "AgentToolCall",
     "AgentHarness",
     "AgentHarnessError",
     "AgentExecutorProtocol",
@@ -98,6 +113,11 @@ __all__ = [
     "ExecutionPlan",
     "EVOLUTION_SUGGESTION_TOOL_NAME",
     "EvolutionSuggestion",
+    "EvolutionApprovalError",
+    "EvolutionError",
+    "EvolutionStaleError",
+    "EvolutionValidationError",
+    "GovernedEvolutionService",
     "LangGraphExecutionResult",
     "LangGraphExecutor",
     "LoopStepLimitError",
@@ -107,6 +127,10 @@ __all__ = [
     "SkillDefinition",
     "SkillLoadError",
     "SkillsLoader",
+    "SubAgentCoordinator",
+    "SubAgentRequest",
+    "SubAgentResult",
+    "SubAgentRunner",
     "TaskContext",
     "ToolCapability",
     "UnsupportedModelClassError",

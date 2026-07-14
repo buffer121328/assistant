@@ -20,6 +20,15 @@ from .mcp import (
     MCPToolDescription,
     MCPToolSource,
 )
+from .artifacts import Artifact, ArtifactPathError, ArtifactStore, ProductivityTools
+from .browser import (
+    BrowserDestinationError,
+    BrowserReadResult,
+    PlaywrightBrowserReader,
+    PublicUrlPolicy,
+)
+from .personal import build_personal_tool_descriptors, build_personal_tool_specs
+from .providers import CalendarProvider, EmailProvider
 from .registry import (
     ToolApprovalRequiredError,
     ToolExecutionError,
@@ -44,8 +53,22 @@ from .search import (
     build_tavily_config,
     normalize_tavily_sources,
 )
+from .sandbox import (
+    DockerSandboxConfig,
+    DockerSandboxRunner,
+    SandboxResult,
+)
 
 __all__ = [
+    "Artifact",
+    "ArtifactPathError",
+    "ArtifactStore",
+    "BrowserDestinationError",
+    "BrowserReadResult",
+    "CalendarProvider",
+    "DockerSandboxConfig",
+    "DockerSandboxRunner",
+    "EmailProvider",
     "MCPClientProtocol",
     "MCPClientUnavailableError",
     "MCPDiscoveryClientProtocol",
@@ -53,6 +76,10 @@ __all__ = [
     "MCPToolDescription",
     "MCPToolSource",
     "NormalizedSearchSource",
+    "PlaywrightBrowserReader",
+    "ProductivityTools",
+    "PublicUrlPolicy",
+    "SandboxResult",
     "SearchWebResult",
     "SearchWebTool",
     "SearchWebToolError",
@@ -82,6 +109,8 @@ __all__ = [
     "build_planned_tool_schemas",
     "build_search_tool_descriptor",
     "build_search_tool_spec",
+    "build_personal_tool_descriptors",
+    "build_personal_tool_specs",
     "build_tavily_config",
     "normalize_tavily_sources",
 ]

@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from langgraph.checkpoint.base import BaseCheckpointSaver
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from packages.agent_harness import (
@@ -11,18 +12,31 @@ from packages.agent_harness import (
     AgentModelProtocol,
     ExecutionBoundary,
     LangGraphExecutor,
+    GovernedEvolutionService,
+    ManagedSkillStore,
+    SubAgentCoordinator,
 )
 from packages.model_gateway import sanitize_text
+from packages.memory import Mem0MemoryAdapter
 from packages.observability import Observability
+from packages.quality import JudgeModel, QualityEvaluator, SamplingPolicy
 from packages.capabilities import CapabilityRegistry, build_default_registry
 from packages.tools import (
+    ArtifactStore,
+    DockerSandboxConfig,
+    DockerSandboxRunner,
+    PlaywrightBrowserReader,
+    ProductivityTools,
     SearchWebTool,
     StaticToolSource,
     TavilyApiClient,
     ToolCatalog,
     ToolRegistry,
+    ToolSpec,
     build_search_tool_descriptor,
     build_search_tool_spec,
+    build_personal_tool_descriptors,
+    build_personal_tool_specs,
     build_tavily_config,
 )
 
@@ -31,9 +45,11 @@ from .agent_model import AgentGatewayModel
 from .checkpoints import open_agent_checkpointer
 from .agent_routing import CapabilityRoutingService, RoutingModelAdapter
 from .langbot import LangBotResultClient
-from .models import Task, TaskStatus
+from .models import EvolutionChange, Task, TaskStatus
 from .observability import build_observability
+from .quality import GatewayJudgeModel
 from .services import DISPATCHABLE_TASK_STATUSES, ResultDispatcher
+from .subagents import GatewaySubAgentRunner
 
 
 async def execute_task_by_id(
@@ -49,6 +65,7 @@ async def execute_task_by_id(
     agent_model: AgentModelProtocol | None = None,
     checkpointer: BaseCheckpointSaver | None = None,
     observability: Observability | None = None,
+    judge_model: JudgeModel | None = None,
 ) -> Task:
     sensitive_values = _sensitive_values(settings)
     runtime_observability = observability or build_observability(settings)
@@ -79,12 +96,31 @@ async def execute_task_by_id(
                         agent_model=agent_model,
                         checkpointer=checkpointer,
                         observability=runtime_observability,
+                        sessionmaker=sessionmaker,
                     )
                     task = await _sanitize_failed_task(
                         session,
                         task=task,
                         sensitive_values=sensitive_values,
                     )
+                    if (
+                        task.status == TaskStatus.SUCCESS.value
+                        and 0.0 < settings.quality_judge_sample_rate <= 1.0
+                    ):
+                        await QualityEvaluator(
+                            sampling=SamplingPolicy(
+                                rate=settings.quality_judge_sample_rate,
+                                version=settings.quality_judge_policy_version,
+                            ),
+                            judge=judge_model
+                            or GatewayJudgeModel(
+                                session=session,
+                                settings=settings,
+                            ),
+                            observability=runtime_observability,
+                            threshold=settings.quality_judge_threshold,
+                        ).evaluate_task(session=session, task=task)
+                        await session.refresh(task)
                 except Exception as exc:
                     task = await _record_worker_failure(
                         session,
@@ -129,6 +165,7 @@ async def _execute_with_runtime_dependencies(
     agent_model: AgentModelProtocol | None,
     checkpointer: BaseCheckpointSaver | None,
     observability: Observability,
+    sessionmaker: async_sessionmaker[AsyncSession],
 ) -> Task:
     if langgraph_executor is not None:
         return await _execute_with_harness(
@@ -143,6 +180,7 @@ async def _execute_with_runtime_dependencies(
             agent_model=agent_model,
             checkpointer=None,
             observability=observability,
+            sessionmaker=sessionmaker,
         )
     if checkpointer is not None:
         return await _execute_with_harness(
@@ -157,6 +195,7 @@ async def _execute_with_runtime_dependencies(
             agent_model=agent_model,
             checkpointer=checkpointer,
             observability=observability,
+            sessionmaker=sessionmaker,
         )
     async with open_agent_checkpointer(settings.database_url) as runtime_checkpointer:
         return await _execute_with_harness(
@@ -171,6 +210,7 @@ async def _execute_with_runtime_dependencies(
             agent_model=agent_model,
             checkpointer=runtime_checkpointer,
             observability=observability,
+            sessionmaker=sessionmaker,
         )
 
 
@@ -187,7 +227,32 @@ async def _execute_with_harness(
     agent_model: AgentModelProtocol | None,
     checkpointer: BaseCheckpointSaver | None,
     observability: Observability,
+    sessionmaker: async_sessionmaker[AsyncSession],
 ) -> Task:
+    pending_changes = list(
+        await session.scalars(
+            select(EvolutionChange).where(
+                EvolutionChange.task_id == task_id,
+                EvolutionChange.status == "pending",
+            )
+        )
+    )
+    if pending_changes:
+        governed = GovernedEvolutionService(
+            session=session,
+            prompt_root=settings.managed_prompts_root,
+            skill_root=settings.managed_skills_root,
+            skill_store=ManagedSkillStore(
+                builtin_root=(
+                    Path(__file__).resolve().parents[3] / "prompts" / "skills"
+                ),
+                managed_root=settings.managed_skills_root,
+            ),
+            skill_package_root=settings.skill_packages_root,
+        )
+        for change in pending_changes:
+            await governed.apply(change_id=change.id, user_id=change.user_id)
+
     task = await session.get(Task, task_id)
     if task is not None and task.task_type == "agent":
         registry = capability_registry or build_default_registry(
@@ -208,8 +273,25 @@ async def _execute_with_harness(
         sensitive_values=sensitive_values,
     )
     search_descriptor = build_search_tool_descriptor(enabled=True)
+    sandbox = DockerSandboxRunner(
+        config=DockerSandboxConfig(
+            enabled=settings.sandbox_enabled,
+            image=settings.sandbox_image,
+            allowed_images=tuple(
+                item.strip()
+                for item in settings.sandbox_allowed_images.split(",")
+                if item.strip()
+            ),
+            timeout_seconds=settings.sandbox_timeout_seconds,
+        ),
+        workspace_root=settings.sandbox_workspace_root,
+    )
+    personal_descriptors = build_personal_tool_descriptors(
+        browser_available=settings.browser_enabled,
+        sandbox_available=sandbox.available,
+    )
     tool_catalog = ToolCatalog(
-        (StaticToolSource("builtin", (search_descriptor,)),),
+        (StaticToolSource("builtin", (search_descriptor, *personal_descriptors)),),
         sensitive_values=sensitive_values,
     )
     tool_snapshot = await tool_catalog.refresh()
@@ -226,6 +308,38 @@ async def _execute_with_harness(
             source_available=tool_snapshot.is_available(search_descriptor),
         )
     )
+    productivity = ProductivityTools(ArtifactStore(settings.artifacts_root))
+    browser = (
+        PlaywrightBrowserReader(
+            timeout_seconds=settings.browser_timeout_seconds,
+            max_text_chars=settings.browser_max_text_chars,
+        )
+        if settings.browser_enabled
+        else None
+    )
+    for spec in build_personal_tool_specs(
+        productivity=productivity,
+        browser=browser,
+        sandbox=sandbox,
+    ):
+        descriptor = tool_snapshot.get(spec.name)
+        if descriptor is None or not descriptor.enabled:
+            continue
+        tool_registry.register(
+            ToolSpec(
+                name=spec.name,
+                description=spec.description,
+                risk_level=spec.risk_level,
+                handler=spec.handler,
+                enabled=spec.enabled,
+                handler_records_log=spec.handler_records_log,
+                input_schema=spec.input_schema,
+                version=descriptor.version,
+                source_id=descriptor.source_id,
+                source_available=tool_snapshot.is_available(descriptor),
+                parallel_safe=spec.parallel_safe,
+            )
+        )
     runtime_executor = langgraph_executor
     if runtime_executor is None:
         if checkpointer is None:
@@ -243,6 +357,20 @@ async def _execute_with_harness(
             sensitive_values=sensitive_values,
             tool_snapshot=tool_snapshot,
             observability=observability,
+            subagent_coordinator=(
+                SubAgentCoordinator(
+                    runner=GatewaySubAgentRunner(
+                        sessionmaker=sessionmaker,
+                        settings=settings,
+                        observability=observability,
+                    ),
+                    max_subagents=settings.subagent_max_count,
+                    concurrency=settings.subagent_concurrency,
+                    timeout_seconds=settings.subagent_timeout_seconds,
+                )
+                if settings.subagent_enabled
+                else None
+            ),
         )
     executor = ExecutionBoundary(
         session=session,
@@ -254,6 +382,8 @@ async def _execute_with_harness(
         executor=executor,
         search_tool=search_tool,
         tool_snapshot=tool_snapshot,
+        semantic_memory=Mem0MemoryAdapter(settings.mem0_config_path),
+        semantic_memory_limit=settings.mem0_search_limit,
     ).execute_task(task_id)
 
 

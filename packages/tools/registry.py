@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 import json
@@ -79,6 +80,7 @@ class ToolSpec:
     version: str = "static"
     source_id: str = "builtin"
     source_available: bool = True
+    parallel_safe: bool = False
 
 
 class ToolRegistry:
@@ -219,6 +221,89 @@ class ToolRegistry:
                 error=None,
             )
         return result
+
+    async def execute_batch(
+        self,
+        invocations: tuple[ToolInvocation, ...],
+        *,
+        allowed_tools: tuple[str, ...],
+        approval_required_tools: tuple[str, ...],
+    ) -> tuple[Any, ...]:
+        if not invocations or len(invocations) > 3:
+            raise ToolNotAllowedError("Tool batch size is invalid")
+
+        specs: list[ToolSpec] = []
+        for invocation in invocations:
+            try:
+                spec = self._validate_batch_invocation(
+                    invocation,
+                    allowed_tools=allowed_tools,
+                    approval_required_tools=approval_required_tools,
+                )
+            except ToolNotAllowedError as exc:
+                await self._record(
+                    invocation=invocation,
+                    status="failed",
+                    output=None,
+                    error=str(exc),
+                )
+                raise
+            specs.append(spec)
+
+        results = await asyncio.gather(
+            *(spec.handler(invocation) for spec, invocation in zip(specs, invocations, strict=True)),
+            return_exceptions=True,
+        )
+        safe_results: list[Any] = []
+        first_error: str | None = None
+        for invocation, result in zip(invocations, results, strict=True):
+            if isinstance(result, BaseException):
+                safe_error = self._safe_text(result)
+                first_error = first_error or safe_error
+                await self._record(
+                    invocation=invocation,
+                    status="failed",
+                    output=None,
+                    error=safe_error,
+                )
+                safe_results.append({"error": safe_error})
+            else:
+                await self._record(
+                    invocation=invocation,
+                    status="succeeded",
+                    output=result,
+                    error=None,
+                )
+                safe_results.append(result)
+        if first_error is not None:
+            raise ToolExecutionError(f"Tool batch failed: {first_error}")
+        return tuple(safe_results)
+
+    def _validate_batch_invocation(
+        self,
+        invocation: ToolInvocation,
+        *,
+        allowed_tools: tuple[str, ...],
+        approval_required_tools: tuple[str, ...],
+    ) -> ToolSpec:
+        spec = self._tools.get(invocation.name)
+        if spec is None or not spec.enabled:
+            raise ToolNotAllowedError(f"Tool is not enabled: {invocation.name}")
+        if not spec.source_available:
+            raise ToolNotAllowedError(f"Tool source is unavailable: {invocation.name}")
+        if invocation.name not in allowed_tools or invocation.name in approval_required_tools:
+            raise ToolNotAllowedError(f"Tool is not allowed in a parallel batch: {invocation.name}")
+        if spec.risk_level == "L3" or not spec.parallel_safe or spec.handler_records_log:
+            raise ToolNotAllowedError(f"Tool is not parallel safe: {invocation.name}")
+        if (
+            invocation.tool_snapshot_revision is not None
+            and self.snapshot_revision is not None
+            and invocation.tool_snapshot_revision != self.snapshot_revision
+        ):
+            raise ToolNotAllowedError(f"Tool snapshot is stale: {invocation.name}")
+        if invocation.tool_version is not None and invocation.tool_version != spec.version:
+            raise ToolNotAllowedError(f"Tool version is stale: {invocation.name}")
+        return spec
 
     async def _is_approved(self, invocation: ToolInvocation) -> bool:
         approval_id = await self.session.scalar(

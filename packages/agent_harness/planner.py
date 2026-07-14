@@ -32,6 +32,9 @@ class ExecutionPlan:
     require_plan_approval: bool = False
     max_review_retries: int = 0
     max_replans: int = 0
+    max_subagents: int = 0
+    subagent_concurrency: int = 1
+    subagent_timeout_seconds: float = 30.0
 
 
 class PlanningLayerProtocol(Protocol):
@@ -99,6 +102,12 @@ class DefaultPlanningLayer:
             require_plan_approval=profile.require_plan_approval,
             max_review_retries=max(0, min(profile.max_review_retries, 2)),
             max_replans=max(0, min(profile.max_replans, 2)),
+            max_subagents=max(0, min(profile.max_subagents, 3)),
+            subagent_concurrency=max(1, min(profile.subagent_concurrency, 3)),
+            subagent_timeout_seconds=max(
+                1.0,
+                min(profile.subagent_timeout_seconds, 60.0),
+            ),
         )
 
 

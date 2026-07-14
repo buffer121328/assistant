@@ -2,7 +2,7 @@
 
 个人 Agent 助手系统。当前产品入口只保留两类：LangBot 作为主消息通道和响应通道，PySide6 原生小窗口作为本机 GUI；FastAPI 提供二者共用的内部 API。旧网页控制台、项目 CLI 和其他直连消息通道已经移除。
 
-项目已完成 MVP 阶段 09、V2-01 至 V2-06，以及 V3-00 至 V3-09。当前能力包括任务管理、模型驱动 Agent 路由与 Agent Core、分层规划、混合 ReAct/Plan-Execute-Review LangGraph、PostgreSQL checkpoint 审批恢复、可选 Langfuse Trace、动态工具快照与按需注入、计划/工具/复核审批、记忆与状态、周期维护、离线评测、桌面交互、轻量能力目录和本地 Skill 生命周期管理。
+项目已完成 MVP 阶段 09、V2-01 至 V2-06、V3-00 至 V3-09，并进入 V4-00。当前新增真实 EML/ICS/Office artifacts、受限 Playwright 浏览、可选 Docker Shell、有界子 Agent 与安全工具并行、Mem0 语义记忆、受治理 Prompt/Skill 演进，以及 Langfuse LLM Judge/Prometheus 质量策略。
 
 ## 项目介绍
 
@@ -15,7 +15,7 @@
 - Capability Registry 统一索引代码、Agent Profile、Skill 和 Tool；目录查询只读取元数据，不加载具体实现。
 - Model Gateway 统一承载 DeepSeek 兼容模型调用，Tavily 提供 `search.web`。
 
-方案文档见 `docs/个人Agent助手系统完整方案.md`，MVP 文档见 `docs/mvp/index.md`，V2 文档见 `docs/v2/index.md`，V3 文档见 `docs/v3/index.md`。
+方案文档见 `docs/个人Agent助手系统完整方案.md`，MVP 文档见 `docs/mvp/index.md`，V2 文档见 `docs/v2/index.md`，V3 文档见 `docs/v3/index.md`，V4 文档见 `docs/v4/index.md`。
 
 ## 启动方式
 
@@ -75,6 +75,13 @@ curl http://127.0.0.1:8000/health
 - `PENDING_TASK_COMPENSATION_DELAY_SECONDS`：逾期 `pending` 任务补偿阈值。
 - `SCHEDULER_MAINTENANCE_INTERVAL_SECONDS`：单实例 Celery Beat 的维护投递周期。
 - `MANAGED_SKILLS_ROOT`：托管 Skill 的可写根目录，本地默认 `var/skills`；Compose 容器固定使用持久卷中的 `/app/data/skills`。
+- `MANAGED_PROMPTS_ROOT`、`SKILL_PACKAGES_ROOT`：受治理 Prompt 和待审批本地 Skill ZIP 的根目录；后者只接受已校验、无脚本的本地包。
+- `ARTIFACTS_ROOT`：按 task 隔离的 EML/ICS/Office 文件根目录。
+- `BROWSER_ENABLED`：是否启用受限 Playwright 公网页面读取；需先显式安装 Chromium。
+- `SANDBOX_*`：Docker 隔离 Shell 开关、workspace、镜像 allowlist 与超时；默认关闭且不回退宿主执行。
+- `SUBAGENT_*`：子 Agent 总数、并发和超时硬上限。
+- `MEM0_CONFIG_PATH`、`MEM0_SEARCH_LIMIT`：可选 Mem0/pgvector 本地配置与语义检索上限；无配置使用 SQL。
+- `QUALITY_JUDGE_*`：稳定采样、策略版本和低分阈值；采样率默认 0。
 
 真实 LangBot 联调还需要创建平台绑定：`platform = langbot`，`platform_user_id = <adapter>:<sender_id>`。默认占位配置不会在服务启动时连接 LangBot、DeepSeek、Tavily、Langfuse 或 MCP Server。
 
@@ -91,14 +98,15 @@ assistant/
 │   ├── capabilities/            # V3 统一能力目录与懒解析
 │   ├── model_gateway/           # 模型适配与脱敏
 │   ├── observability/           # 框架无关的 Trace/Score 协议与 No-op
-│   ├── tools/                   # 工具快照、候选选择、执行注册、搜索与 MCP 适配
-│   ├── memory/                  # 记忆维护
+│   ├── tools/                   # 搜索、真实 artifacts、受限浏览、Docker 沙箱与 provider 协议
+│   ├── memory/                  # SQL 生命周期、Mem0 语义适配与上下文合并
+│   ├── quality/                 # Judge 采样、分数、指标和阈值策略
 │   └── evaluation/              # 离线评测
 ├── prompts/skills/              # 只读内置 Skills
 ├── var/skills/                  # 本地托管 Skills（运行时生成，不提交）
 ├── migrations/                  # Alembic 迁移
 ├── openspec/                    # 当前规范与变更归档
-├── docs/                        # MVP、V2、V3 文档
+├── docs/                        # MVP、V2、V3、V4 文档
 ├── tests/                       # 验收、集成、单元和评测数据
 ├── Dockerfile
 └── docker-compose.yml
@@ -123,10 +131,11 @@ assistant/
 - V3-07 增加严格 AgentDecision 和真实 `model → tool → model` 循环。模型可生成最多五条展示计划并逐轮选择一个计划内工具；结果来自模型 final 决策，不再由固定模板渲染，展示计划不能扩大 ExecutionPlan 权限。
 - 默认 worker 继续只通过内部 Model Gateway 调用模型并写 `model_logs`。生产图使用严格序列化的 `AsyncPostgresSaver`，以 task ID 关联 checkpoint；审批 interrupt 后按同一任务恢复，并由 ToolRegistry 二次校验批准记录。
 - V3-08 用 task ID 关联可选的 `agent.task` 根 observation、模型 generation、LangGraph step 和工具调用。所有载荷先递归脱敏和裁剪；Langfuse 初始化、上报、flush 或 shutdown 失败不改变任务结果，数据库审计仍是权威记录。
-- V3-09 使用混合图：`plan/office` 保持现有 ReAct；`learn/daily` 先生成严格 WorkPlan，再复用受控 `model ↔ tool` 执行，候选答案必须经 Review `pass` 或精确人工复核批准后才能发布。Review 的 retry/replan 各有独立硬上限，并同时受总步数与超时约束。
+- V4-00 让 `office` 也进入 Plan-Execute-Review；复杂 WorkPlan 可有界 fan-out 给无工具权限的子 Agent，主 Agent 可请求最多 3 个全量预授权的并行安全工具，候选答案仍必须 Review 后发布。
 - `/learn` 通过 `search.web` 获取资料，`/daily` 通过 `search.web` 获取来源，`/office` 默认不执行搜索。
 - 计划、工具和复核 gate 都会进入 `waiting_approval`；批准后从相同 task checkpoint 精确恢复，拒绝后任务取消。ToolRegistry 只接受精确 `tool` 类型批准，计划或复核批准不能授予工具权限。
-- 当前动态快照只接入受信任的内置 `search.web`。MCP 提供显式 `list_tools` 发现协议，但没有 MCP Server 配置，默认不启用且未配置时零连接；新发现外部工具默认禁用。完整 MCP Gateway、深度浏览、真实 Office 文件生成、邮件/日历接入仍是后续能力。
+- 当前动态快照接入 `search.web`、本地 EML/ICS/Office artifacts，以及显式启用后的 `browser.read`/`shell.exec`。邮件发送和日历账号写入只有 provider 注入后才出现；完整 MCP Gateway 仍未配置，MCP 工具默认不启用且未配置时零连接，新发现外部工具默认禁用。
+- V4 已完成受限页面读取与真实 Office 文件生成；带登录态和任意交互的深度浏览、真实第三方邮件/日历接入仍属于后续扩展。
 
 ### V3 能力目录与扩展边界
 
@@ -149,10 +158,10 @@ assistant/
 
 ### 记忆、监控与演进
 
-- `/memory` 支持记住、查看与软删除，按用户隔离；有效记忆会进入规划上下文。
+- `/memory` 支持记住、查看与软删除，SQL 保留用户隔离的审计与生命周期；可选 Mem0 以当前输入做有界语义检索并与 SQL preference 去重合并，失败回退 SQL。
 - `/status` 查询本人最近任务或指定任务，不泄露其他用户信息。
 - V2-04 使用 `TaskService` 幂等创建周期任务，由单实例 Celery Beat 投递、既有 worker 执行。
-- 记忆包含 `access_count`、重要性、过期和归档元数据；行为服务只生成建议，不会自动修改 prompt、skill、配置或工具开关。
+- 记忆包含 `access_count`、重要性、过期和归档元数据；行为服务可把建议转为 managed Prompt/Skill proposal，但在精确 `change` 审批前不会自动修改任何文件，批准后才能原子应用并可回滚，且不能修改代码、依赖或工具权限。
 - 维护流程包括超时 `running` 任务失败与逾期 `pending` 任务补偿。
 
 ### 评测与质量
@@ -160,6 +169,7 @@ assistant/
 - V2-05 评测与回归阶段已完成，数据集与基线继续保存在 `tests/evals/datasets/core_commands.json` 和 `tests/evals/baselines/v2-05.json`。V3-08 已移除 Deepeval；确定性关键词、禁词、长度、安全和基线规则现在由普通 Python/pytest 执行。
 - 本地或 CI 可运行 `uv run python scripts/run_evaluation.py` 获取机器可读 JSON 报告；失败、缺失基线或回归返回非零退出码。该命令不读取 Langfuse 配置、不调用外部模型、不发送遥测。
 - `packages.evaluation.run_langfuse_experiment` 只提供可注入的实验边界，调用方必须传入真实 task callable；静态 golden `actual_output` 不代表真实 Agent 质量。离线评测和 Langfuse 都不替代功能、安全、集成测试及人工发布检查。
+- V4-00 提供默认关闭的 Gateway LLM Judge，对成功 Agent 输出做稳定 hash 抽样，将三维分数写入 Langfuse Score 和 Prometheus 指标；远端 Dashboard、Evaluator Rule 与外部告警按 `docs/v4/00-personal-agent-capability-completion.md` 在部署时显式配置。
 
 ## 验证
 
@@ -170,4 +180,4 @@ uv run ruff check .
 uv run mypy .
 ```
 
-V3 阶段遵循 OpenSpec + ATDD：每个 phase 先同步验收标准，再实现和验证，完成后同步主规范并归档变更。
+项目遵循 OpenSpec + ATDD：每个 phase 先同步验收标准，再实现和验证，完成后同步主规范并归档变更。

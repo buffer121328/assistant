@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from assistant_api.models import Task, TaskStatus, ToolLog, User
 from assistant_api.services import MemoryService, StatusService, TaskService
-from packages.memory import load_memory_summary
+from packages.memory import SemanticMemory, load_memory_summary
 from packages.model_gateway import sanitize_text
 from packages.tools import ToolCandidateSelector, ToolCatalogSnapshot
 
@@ -219,6 +219,8 @@ class AgentHarness:
         tool_candidate_selector: ToolCandidateSelector | None = None,
         core_tools: tuple[str, ...] = (),
         tool_count_budget: int = 15,
+        semantic_memory: SemanticMemory | None = None,
+        semantic_memory_limit: int = 5,
     ) -> None:
         self.session = session
         self.executor = executor
@@ -248,17 +250,25 @@ class AgentHarness:
         )
         self.core_tools = core_tools
         self.tool_count_budget = max(0, min(tool_count_budget, 15))
+        self.semantic_memory = semantic_memory
+        self.semantic_memory_limit = max(1, min(semantic_memory_limit, 20))
 
     async def execute_task(self, task_id: str) -> Task:
         task = await self._load_pending_task(task_id)
         if task.task_type == "memory":
-            return await MemoryService(self.session).execute_task(task.id)
+            return await MemoryService(
+                self.session,
+                semantic_memory=self.semantic_memory,
+            ).execute_task(task.id)
         if task.task_type == "status":
             return await StatusService(self.session).execute_task(task.id)
 
         user = await self._load_user(task.user_id)
         profile = self.profile_selector.select(task)
-        memory_summary = await self._memory_summary(user.id)
+        memory_summary = await self._memory_summary(
+            user.id,
+            query=str(task.input_text),
+        )
         skills = self.skills_loader.load(profile.skill_names)
         if self.tool_snapshot is None:
             capabilities = self.capabilities_builder.build(
@@ -374,8 +384,14 @@ class AgentHarness:
             raise AgentHarnessError(f"User not found: {user_id}")
         return user
 
-    async def _memory_summary(self, user_id: str) -> str:
-        return await load_memory_summary(session=self.session, user_id=user_id)
+    async def _memory_summary(self, user_id: str, *, query: str) -> str:
+        return await load_memory_summary(
+            session=self.session,
+            user_id=user_id,
+            query=query,
+            semantic_memory=self.semantic_memory,
+            semantic_limit=self.semantic_memory_limit,
+        )
 
 
 def _default_skills_root() -> Path:

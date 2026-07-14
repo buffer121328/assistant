@@ -1,0 +1,286 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime
+from email.message import EmailMessage
+import os
+from pathlib import Path
+import re
+import tempfile
+from typing import Callable, TypeVar
+
+from docx import Document
+from openpyxl import Workbook  # type: ignore[import-untyped]
+from pptx import Presentation
+
+
+_SAFE_TASK_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
+_SAFE_FILENAME = re.compile(r"^[^/\\\x00]{1,128}$")
+_T = TypeVar("_T")
+
+
+class ArtifactPathError(ValueError):
+    pass
+
+
+@dataclass(frozen=True)
+class Artifact:
+    reference: str
+    media_type: str
+    size_bytes: int
+
+
+class ArtifactStore:
+    def __init__(self, root: Path) -> None:
+        self.root = root.expanduser().resolve()
+        self.root.mkdir(parents=True, exist_ok=True)
+
+    def reserve(self, *, task_id: str, filename: str, suffix: str) -> Path:
+        safe_task_id = task_id.strip()
+        safe_filename = filename.strip()
+        if not _SAFE_TASK_ID.fullmatch(safe_task_id):
+            raise ArtifactPathError("Invalid task id")
+        if (
+            not _SAFE_FILENAME.fullmatch(safe_filename)
+            or Path(safe_filename).is_absolute()
+            or Path(safe_filename).name != safe_filename
+            or safe_filename in {".", ".."}
+        ):
+            raise ArtifactPathError("Invalid artifact filename")
+        if not suffix.startswith(".") or Path(safe_filename).suffix.lower() != suffix.lower():
+            raise ArtifactPathError(f"Artifact filename must end with {suffix}")
+
+        task_root = self.root / safe_task_id
+        if task_root.is_symlink():
+            raise ArtifactPathError("Task artifact directory must not be a symlink")
+        task_root.mkdir(mode=0o700, parents=False, exist_ok=True)
+        resolved_task_root = task_root.resolve(strict=True)
+        if resolved_task_root.parent != self.root:
+            raise ArtifactPathError("Task artifact directory escaped root")
+
+        target = resolved_task_root / safe_filename
+        if target.is_symlink() or target.parent != resolved_task_root:
+            raise ArtifactPathError("Artifact path escaped task directory")
+        return target
+
+    def atomic_write_bytes(self, target: Path, data: bytes) -> None:
+        self._assert_target(target)
+        descriptor, temporary_name = tempfile.mkstemp(
+            dir=target.parent,
+            prefix=f".{target.name}.",
+            suffix=".tmp",
+        )
+        temporary = Path(temporary_name)
+        try:
+            with os.fdopen(descriptor, "wb") as stream:
+                stream.write(data)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, target)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+    def atomic_save(self, target: Path, save: Callable[[str], _T]) -> _T:
+        self._assert_target(target)
+        descriptor, temporary_name = tempfile.mkstemp(
+            dir=target.parent,
+            prefix=f".{target.name}.",
+            suffix=target.suffix,
+        )
+        os.close(descriptor)
+        temporary = Path(temporary_name)
+        try:
+            result = save(str(temporary))
+            os.replace(temporary, target)
+            return result
+        finally:
+            temporary.unlink(missing_ok=True)
+
+    def describe(self, target: Path, *, media_type: str) -> Artifact:
+        self._assert_target(target)
+        relative = target.relative_to(self.root).as_posix()
+        return Artifact(
+            reference=relative,
+            media_type=media_type,
+            size_bytes=target.stat().st_size,
+        )
+
+    def absolute_path(self, *, task_id: str, reference: str) -> Path:
+        if not _SAFE_TASK_ID.fullmatch(task_id.strip()):
+            raise ArtifactPathError("Invalid task id")
+        candidate = self.root / reference
+        resolved = candidate.resolve(strict=True)
+        task_root = (self.root / task_id.strip()).resolve(strict=True)
+        if not resolved.is_relative_to(task_root) or resolved.parent != task_root:
+            raise ArtifactPathError("Artifact reference escaped task directory")
+        return resolved
+
+    def read_bytes(self, *, task_id: str, reference: str) -> bytes:
+        return self.absolute_path(task_id=task_id, reference=reference).read_bytes()
+
+    def read_text(self, *, task_id: str, reference: str) -> str:
+        return self.absolute_path(task_id=task_id, reference=reference).read_text(
+            encoding="utf-8"
+        )
+
+    def _assert_target(self, target: Path) -> None:
+        resolved_parent = target.parent.resolve(strict=True)
+        if resolved_parent.parent != self.root or target.name != target.name.strip():
+            raise ArtifactPathError("Artifact target escaped task directory")
+        if target.is_symlink():
+            raise ArtifactPathError("Artifact target must not be a symlink")
+
+
+class ProductivityTools:
+    def __init__(self, store: ArtifactStore) -> None:
+        self.store = store
+
+    def create_email_draft(
+        self,
+        *,
+        task_id: str,
+        filename: str,
+        subject: str,
+        body: str,
+        to: tuple[str, ...] = (),
+    ) -> Artifact:
+        message = EmailMessage()
+        message["Subject"] = _bounded_text(subject, "subject", 300)
+        if to:
+            message["To"] = ", ".join(_bounded_text(item, "recipient", 320) for item in to[:20])
+        message.set_content(_bounded_text(body, "body", 100_000))
+        target = self.store.reserve(task_id=task_id, filename=filename, suffix=".eml")
+        self.store.atomic_write_bytes(target, message.as_bytes())
+        return self.store.describe(target, media_type="message/rfc822")
+
+    def create_calendar_event(
+        self,
+        *,
+        task_id: str,
+        filename: str,
+        title: str,
+        start: str,
+        end: str,
+        description: str = "",
+    ) -> Artifact:
+        start_at = datetime.fromisoformat(start)
+        end_at = datetime.fromisoformat(end)
+        if end_at <= start_at:
+            raise ValueError("Calendar event end must be after start")
+        content = "\r\n".join(
+            (
+                "BEGIN:VCALENDAR",
+                "VERSION:2.0",
+                "PRODID:-//Personal Agent//EN",
+                "BEGIN:VEVENT",
+                f"SUMMARY:{_ics_escape(_bounded_text(title, 'title', 500))}",
+                f"DTSTART:{_ics_datetime(start_at)}",
+                f"DTEND:{_ics_datetime(end_at)}",
+                f"DESCRIPTION:{_ics_escape(_optional_bounded_text(description, 'description', 10_000))}",
+                "END:VEVENT",
+                "END:VCALENDAR",
+                "",
+            )
+        )
+        target = self.store.reserve(task_id=task_id, filename=filename, suffix=".ics")
+        self.store.atomic_write_bytes(target, content.encode("utf-8"))
+        return self.store.describe(target, media_type="text/calendar")
+
+    def create_docx(
+        self,
+        *,
+        task_id: str,
+        filename: str,
+        title: str,
+        paragraphs: tuple[str, ...],
+    ) -> Artifact:
+        document = Document()
+        document.add_heading(_bounded_text(title, "title", 500), level=0)
+        for paragraph in paragraphs[:100]:
+            document.add_paragraph(_bounded_text(paragraph, "paragraph", 10_000))
+        target = self.store.reserve(task_id=task_id, filename=filename, suffix=".docx")
+        self.store.atomic_save(target, document.save)
+        return self.store.describe(
+            target,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+
+    def create_xlsx(
+        self,
+        *,
+        task_id: str,
+        filename: str,
+        sheet_name: str,
+        rows: tuple[tuple[object, ...], ...],
+    ) -> Artifact:
+        workbook = Workbook()
+        worksheet = workbook.active
+        worksheet.title = _bounded_text(sheet_name, "sheet name", 31)
+        for row in rows[:10_000]:
+            worksheet.append(tuple(_cell_value(item) for item in row[:100]))
+        target = self.store.reserve(task_id=task_id, filename=filename, suffix=".xlsx")
+        self.store.atomic_save(target, workbook.save)
+        return self.store.describe(
+            target,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    def create_pptx(
+        self,
+        *,
+        task_id: str,
+        filename: str,
+        title: str,
+        slides: tuple[tuple[str, tuple[str, ...]], ...],
+    ) -> Artifact:
+        presentation = Presentation()
+        title_slide = presentation.slides.add_slide(presentation.slide_layouts[0])
+        title_slide.shapes.title.text = _bounded_text(title, "title", 500)
+        for heading, bullets in slides[:50]:
+            slide = presentation.slides.add_slide(presentation.slide_layouts[1])
+            slide.shapes.title.text = _bounded_text(heading, "heading", 500)
+            frame = slide.placeholders[1].text_frame
+            frame.clear()
+            for index, bullet in enumerate(bullets[:50]):
+                paragraph = frame.paragraphs[0] if index == 0 else frame.add_paragraph()
+                paragraph.text = _bounded_text(bullet, "bullet", 2_000)
+        target = self.store.reserve(task_id=task_id, filename=filename, suffix=".pptx")
+        self.store.atomic_save(target, presentation.save)
+        return self.store.describe(
+            target,
+            media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        )
+
+
+def _bounded_text(value: object, name: str, maximum: int) -> str:
+    if not isinstance(value, str):
+        raise ValueError(f"{name} must be text")
+    normalized = value.strip()
+    if not normalized or len(normalized) > maximum:
+        raise ValueError(f"{name} is empty or too long")
+    return normalized
+
+
+def _optional_bounded_text(value: object, name: str, maximum: int) -> str:
+    if not isinstance(value, str):
+        raise ValueError(f"{name} must be text")
+    normalized = value.strip()
+    if len(normalized) > maximum:
+        raise ValueError(f"{name} is too long")
+    return normalized
+
+
+def _cell_value(value: object) -> str | int | float | bool | None:
+    if value is None or isinstance(value, str | int | float | bool):
+        return value
+    return str(value)[:10_000]
+
+
+def _ics_escape(value: str) -> str:
+    return value.replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
+
+
+def _ics_datetime(value: datetime) -> str:
+    if value.tzinfo is not None:
+        return value.astimezone().strftime("%Y%m%dT%H%M%SZ")
+    return value.strftime("%Y%m%dT%H%M%S")

@@ -13,7 +13,7 @@ class AgentRunInput:
     context: TaskContext
 
 
-ApprovalTypeName = Literal["tool", "plan", "review"]
+ApprovalTypeName = Literal["tool", "plan", "review", "change"]
 
 
 @dataclass(frozen=True)

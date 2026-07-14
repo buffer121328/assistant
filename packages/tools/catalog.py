@@ -41,6 +41,7 @@ class ToolDescriptor:
     requires_approval: bool
     tags: tuple[str, ...] = ()
     always_available: bool = False
+    parallel_safe: bool = False
 
     def __post_init__(self) -> None:
         name = self.name.strip()
@@ -92,6 +93,7 @@ class ToolDescriptor:
             "requires_approval": self.requires_approval,
             "tags": self.tags,
             "always_available": self.always_available,
+            "parallel_safe": self.parallel_safe,
         }
         return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
@@ -407,6 +409,7 @@ def build_search_tool_descriptor(*, enabled: bool = True) -> ToolDescriptor:
         risk_level="L2",
         requires_approval=False,
         tags=("learn", "daily", "v2.researcher", "v2.daily_reporter"),
+        parallel_safe=False,
     )
 
 

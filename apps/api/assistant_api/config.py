@@ -31,6 +31,26 @@ class Settings(BaseSettings):
     pending_task_compensation_delay_seconds: float = 120.0
     scheduler_maintenance_interval_seconds: float = 300.0
     managed_skills_root: Path = Path("var/skills")
+    managed_prompts_root: Path = Path("var/prompts")
+    skill_packages_root: Path = Path("var/skill-packages")
+    artifacts_root: Path = Path("var/artifacts")
+    browser_enabled: bool = False
+    browser_timeout_seconds: float = 20.0
+    browser_max_text_chars: int = 50_000
+    sandbox_enabled: bool = False
+    sandbox_workspace_root: Path = Path("var/sandbox")
+    sandbox_image: str = ""
+    sandbox_allowed_images: str = ""
+    sandbox_timeout_seconds: float = 30.0
+    subagent_enabled: bool = True
+    subagent_max_count: int = 3
+    subagent_concurrency: int = 2
+    subagent_timeout_seconds: float = 30.0
+    mem0_config_path: Path | None = None
+    mem0_search_limit: int = 5
+    quality_judge_sample_rate: float = 0.0
+    quality_judge_policy_version: str = "judge-v1"
+    quality_judge_threshold: float = 0.6
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
