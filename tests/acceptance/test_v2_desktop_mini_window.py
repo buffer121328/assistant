@@ -16,6 +16,7 @@ from sqlalchemy.pool import NullPool
 from assistant_api.main import create_app
 from assistant_api.models import Approval, Base, Task, TaskStatus, ToolLog, User
 from assistant_api.services import TaskService
+from packages.agent_harness import HumanApprovalRequest
 from packages.tools import (
     ToolApprovalRequiredError,
     ToolInvocation,
@@ -200,6 +201,9 @@ async def test_approval_is_owned_audited_idempotent_and_resumes_once(
     assert denied_decision.status_code == 404
     assert visible.status_code == 200
     assert visible.json()["items"][0]["tool_name"] == "email.send"
+    assert visible.json()["items"][0]["approval_type"] == "tool"
+    assert visible.json()["items"][0]["subject"] == "email.send"
+    assert "email.send" in visible.json()["items"][0]["request_summary"]
     assert approved.status_code == 200
     assert approved.json()["approval"]["status"] == "approved"
     assert approved.json()["approval"]["decided_by_user_id"] == owner_id
@@ -210,6 +214,43 @@ async def test_approval_is_owned_audited_idempotent_and_resumes_once(
     assert repeated.json()["queued"] is False
     assert conflict.status_code == 409
     assert queued_task_ids == [task.id]
+
+
+@pytest.mark.asyncio
+async def test_plan_approval_api_exposes_type_subject_summary_and_compatibility(
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    owner_id = await create_user(sessionmaker)
+    task = await create_task(
+        sessionmaker,
+        user_id=owner_id,
+        status=TaskStatus.RUNNING,
+    )
+    async with sessionmaker() as session:
+        await TaskService(session).save_waiting_approval(
+            task.id,
+            "计划需要审批。",
+            approval_requests=(
+                HumanApprovalRequest(
+                    approval_type="plan",
+                    subject="plan:0",
+                    summary="核对来源；形成回答",
+                ),
+            ),
+        )
+
+    with create_test_client(sessionmaker) as client:
+        response = client.get(
+            f"/api/tasks/{task.id}/approvals",
+            params={"user_id": owner_id},
+        )
+
+    assert response.status_code == 200
+    item = response.json()["items"][0]
+    assert item["approval_type"] == "plan"
+    assert item["subject"] == "plan:0"
+    assert item["request_summary"] == "核对来源；形成回答"
+    assert item["tool_name"] == "agent.plan"
 
 
 @pytest.mark.asyncio
@@ -398,6 +439,21 @@ def test_pyside_window_is_compact_native_and_contains_required_controls(
     assert window.findChild(QWidget, "recent_tasks") is not None
     assert window.findChild(QWidget, "approval_list") is not None
     assert isinstance(window.tray_icon, QSystemTrayIcon)
+
+    window._approvals_refreshed(  # noqa: SLF001 - verify user-visible approval label
+        [
+            {
+                "approval_id": "approval-plan",
+                "approval_type": "plan",
+                "subject": "plan:0",
+                "request_summary": "核对来源；形成回答",
+                "status": "pending",
+            }
+        ]
+    )
+    assert window.approval_list.item(0).text() == (
+        "[计划] plan:0 — 核对来源；形成回答"
+    )
 
     window.show()
     application.processEvents()

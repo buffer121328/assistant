@@ -10,6 +10,7 @@ from sqlalchemy.sql.elements import ColumnElement
 from .models import (
     Approval,
     ApprovalStatus,
+    ApprovalType,
     Memory,
     ModelLog,
     PlatformAccount,
@@ -94,9 +95,29 @@ class ApprovalRepository:
         self.session = session
 
     async def create_pending(self, *, task_id: str, tool_name: str) -> Approval:
+        return await self.create_pending_request(
+            task_id=task_id,
+            approval_type=ApprovalType.TOOL.value,
+            subject=tool_name,
+            tool_name=tool_name,
+            request_summary=f"工具调用：{tool_name}",
+        )
+
+    async def create_pending_request(
+        self,
+        *,
+        task_id: str,
+        approval_type: str,
+        subject: str,
+        tool_name: str,
+        request_summary: str | None,
+    ) -> Approval:
         approval = Approval(
             task_id=task_id,
             tool_name=tool_name,
+            approval_type=approval_type,
+            subject=subject,
+            request_summary=request_summary,
             status=ApprovalStatus.PENDING.value,
         )
         self.session.add(approval)
@@ -113,6 +134,29 @@ class ApprovalRepository:
             select(Approval).where(
                 Approval.task_id == task_id,
                 Approval.tool_name == tool_name,
+                Approval.approval_type == ApprovalType.TOOL.value,
+                Approval.subject == tool_name,
+                Approval.status.in_(
+                    (
+                        ApprovalStatus.PENDING.value,
+                        ApprovalStatus.APPROVED.value,
+                    )
+                ),
+            )
+        )
+
+    async def get_active_for_request(
+        self,
+        *,
+        task_id: str,
+        approval_type: str,
+        subject: str,
+    ) -> Approval | None:
+        return await self.session.scalar(
+            select(Approval).where(
+                Approval.task_id == task_id,
+                Approval.approval_type == approval_type,
+                Approval.subject == subject,
                 Approval.status.in_(
                     (
                         ApprovalStatus.PENDING.value,

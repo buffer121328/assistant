@@ -1,13 +1,18 @@
 from __future__ import annotations
 
-from typing import Protocol
+from collections.abc import Callable
+from typing import Protocol, TypeVar
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from packages.agent_harness import (
     AgentDecision,
     AgentModelRequest,
+    ReviewDecision,
+    WorkPlan,
     parse_agent_decision,
+    parse_review_decision,
+    parse_work_plan,
 )
 from packages.model_gateway import (
     DeepSeekAdapter,
@@ -33,6 +38,9 @@ class AgentModelGatewayError(RuntimeError):
     pass
 
 
+_ModelOutput = TypeVar("_ModelOutput")
+
+
 class AgentGatewayModel:
     def __init__(
         self,
@@ -50,6 +58,33 @@ class AgentGatewayModel:
         self.observability = observability or NoopObservability()
 
     async def decide(self, request: AgentModelRequest) -> AgentDecision:
+        return await self._complete(
+            request,
+            phase="decision",
+            parser=parse_agent_decision,
+        )
+
+    async def create_plan(self, request: AgentModelRequest) -> WorkPlan:
+        return await self._complete(
+            request,
+            phase="plan",
+            parser=parse_work_plan,
+        )
+
+    async def review(self, request: AgentModelRequest) -> ReviewDecision:
+        return await self._complete(
+            request,
+            phase="review",
+            parser=parse_review_decision,
+        )
+
+    async def _complete(
+        self,
+        request: AgentModelRequest,
+        *,
+        phase: str,
+        parser: Callable[[str], _ModelOutput],
+    ) -> _ModelOutput:
         gateway_request = GatewayRequest(
             user_id=request.user_id,
             task_id=request.task_id,
@@ -70,7 +105,7 @@ class AgentGatewayModel:
         )
 
         with self.observability.observe(
-            "agent.model.decision",
+            f"agent.model.{phase}",
             as_type="generation",
             input={
                 "task_id": request.task_id,
@@ -97,7 +132,7 @@ class AgentGatewayModel:
                 raise error from exc
 
             try:
-                decision = parse_agent_decision(result.content)
+                parsed = parser(result.content)
             except Exception as exc:
                 await self._record_failure(
                     task_id=request.task_id,
@@ -122,8 +157,7 @@ class AgentGatewayModel:
             await self.session.flush()
             observation.update(
                 output={
-                    "action": decision.action,
-                    "tool_name": decision.tool_name,
+                    "phase": phase,
                 },
                 metadata={
                     "input_tokens": result.usage.input_tokens,
@@ -133,7 +167,7 @@ class AgentGatewayModel:
                     ),
                 },
             )
-            return decision
+            return parsed
 
     async def _record_failure(
         self,

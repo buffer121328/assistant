@@ -407,8 +407,22 @@ class TaskWindow(QMainWindow):
         for approval in value:
             if not isinstance(approval, dict) or approval.get("status") != "pending":
                 continue
-            tool_name = str(approval.get("tool_name") or "未知工具")
-            item = QListWidgetItem(tool_name)
+            approval_type = str(approval.get("approval_type") or "tool")
+            type_label = {
+                "tool": "工具",
+                "plan": "计划",
+                "review": "复核",
+            }.get(approval_type, "审批")
+            subject = str(
+                approval.get("subject")
+                or approval.get("tool_name")
+                or "未知对象"
+            )
+            summary = str(approval.get("request_summary") or "").strip()
+            label = f"[{type_label}] {subject}"
+            if summary:
+                label = f"{label} — {summary}"
+            item = QListWidgetItem(label)
             item.setData(Qt.ItemDataRole.UserRole, approval)
             self.approval_list.addItem(item)
         if self.approval_list.count():

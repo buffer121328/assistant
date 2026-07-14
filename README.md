@@ -2,12 +2,12 @@
 
 个人 Agent 助手系统。当前产品入口只保留两类：LangBot 作为主消息通道和响应通道，PySide6 原生小窗口作为本机 GUI；FastAPI 提供二者共用的内部 API。旧网页控制台、项目 CLI 和其他直连消息通道已经移除。
 
-项目已完成 MVP 阶段 09、V2-01 至 V2-06，以及 V3-00 至 V3-08。当前能力包括任务管理、模型驱动 Agent 路由与 Agent Core、分层规划、受控 LangGraph 工具循环、PostgreSQL checkpoint 审批恢复、可选 Langfuse Trace、动态工具快照与按需注入、工具审批、记忆与状态、周期维护、离线评测、桌面交互、轻量能力目录和本地 Skill 生命周期管理。
+项目已完成 MVP 阶段 09、V2-01 至 V2-06，以及 V3-00 至 V3-09。当前能力包括任务管理、模型驱动 Agent 路由与 Agent Core、分层规划、混合 ReAct/Plan-Execute-Review LangGraph、PostgreSQL checkpoint 审批恢复、可选 Langfuse Trace、动态工具快照与按需注入、计划/工具/复核审批、记忆与状态、周期维护、离线评测、桌面交互、轻量能力目录和本地 Skill 生命周期管理。
 
 ## 项目介绍
 
 - LangBot 接收多平台消息并把结果推回原会话。
-- PySide6 GUI 提交任务、查看结果、处理工具审批、管理本地 Skills 并驻留系统托盘。
+- PySide6 GUI 提交任务、查看结果、处理计划/工具/复核审批、管理本地 Skills 并驻留系统托盘。
 - FastAPI、PostgreSQL、Redis 与 Celery 组成后端运行层。
 - `/plan`、`/learn`、`/daily`、`/office` 使用 Agent Profile、Planning Layer、模型驱动 LangGraph Agent Core 与 ToolRegistry。
 - `/memory`、`/status` 使用确定性的本地服务，不调用外部模型。
@@ -110,7 +110,7 @@ assistant/
 
 - `POST /api/webhooks/langbot` 校验 `x-langbot-secret`，归一化消息，将已知斜杠命令映射到固定类型、将无斜杠自由文本映射到 `agent`，校验用户绑定，按 `platform + message_id` 去重并轻量投递任务；未知斜杠命令仍拒绝。
 - Result Dispatcher 保存 LangBot 的 `adapter`、`conversation_id`、`conversation_type`，对 `success`、`failed`、`cancelled` 和 `waiting_approval` 结果进行幂等回推。
-- PySide6 GUI 默认提供“智能路由”，同时保留六类固定任务，支持最近任务、结果查看、待审批工具、批准/拒绝、Skill 管理与系统托盘常驻。
+- PySide6 GUI 默认提供“智能路由”，同时保留六类固定任务，支持最近任务、结果查看、三类待审批请求、批准/拒绝、Skill 管理与系统托盘常驻。
 - `GET /app` 和旧直连消息路由不再提供；后端 API 是 LangBot 与 GUI 的内部边界，不作为网页产品入口。
 
 ### Agent、Skills 与工具路径
@@ -123,8 +123,9 @@ assistant/
 - V3-07 增加严格 AgentDecision 和真实 `model → tool → model` 循环。模型可生成最多五条展示计划并逐轮选择一个计划内工具；结果来自模型 final 决策，不再由固定模板渲染，展示计划不能扩大 ExecutionPlan 权限。
 - 默认 worker 继续只通过内部 Model Gateway 调用模型并写 `model_logs`。生产图使用严格序列化的 `AsyncPostgresSaver`，以 task ID 关联 checkpoint；审批 interrupt 后按同一任务恢复，并由 ToolRegistry 二次校验批准记录。
 - V3-08 用 task ID 关联可选的 `agent.task` 根 observation、模型 generation、LangGraph step 和工具调用。所有载荷先递归脱敏和裁剪；Langfuse 初始化、上报、flush 或 shutdown 失败不改变任务结果，数据库审计仍是权威记录。
+- V3-09 使用混合图：`plan/office` 保持现有 ReAct；`learn/daily` 先生成严格 WorkPlan，再复用受控 `model ↔ tool` 执行，候选答案必须经 Review `pass` 或精确人工复核批准后才能发布。Review 的 retry/replan 各有独立硬上限，并同时受总步数与超时约束。
 - `/learn` 通过 `search.web` 获取资料，`/daily` 通过 `search.web` 获取来源，`/office` 默认不执行搜索。
-- 高风险工具进入 `waiting_approval`；批准后精确授权并幂等恢复，拒绝后任务取消。
+- 计划、工具和复核 gate 都会进入 `waiting_approval`；批准后从相同 task checkpoint 精确恢复，拒绝后任务取消。ToolRegistry 只接受精确 `tool` 类型批准，计划或复核批准不能授予工具权限。
 - 当前动态快照只接入受信任的内置 `search.web`。MCP 提供显式 `list_tools` 发现协议，但没有 MCP Server 配置，默认不启用且未配置时零连接；新发现外部工具默认禁用。完整 MCP Gateway、深度浏览、真实 Office 文件生成、邮件/日历接入仍是后续能力。
 
 ### V3 能力目录与扩展边界
@@ -144,6 +145,7 @@ assistant/
 - V3-06 让 Capability Registry 从一个完整工具快照 revision 投影元数据；目录可见、工具启用、计划允许和最终执行是四个独立边界。系统不扫描或热加载任意 Python 插件，不以全目录工具注入作为兜底。
 - V3-07 参考 FinchBot 的 Agent 循环、动态上下文和 checkpoint 机制，但没有迁入其文件工作区、自修改、shell、后台任务或 MCP 自配置能力。详见 `docs/v3/07-agent-core-runtime.md`。
 - V3-08 使用项目自有 Observability 协议隔离 Langfuse v4 SDK；默认 No-op，完整配置后才启用。Langfuse 负责运行 Trace、实验和可选评分，pytest 继续负责确定性安全与发布硬门禁。详见 `docs/v3/08-langfuse-observability-evaluation.md`。
+- V3-09 增加结构化 WorkPlan、ReviewDecision、有界 retry/replan 和三类 Human-in-the-loop；模型输出始终从属于 Planning Layer 与 ToolRegistry 安全包络。详见 `docs/v3/09-plan-execute-review-hitl.md`。
 
 ### 记忆、监控与演进
 

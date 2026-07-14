@@ -18,6 +18,7 @@ from packages.agent_harness import (
     DefaultPlanningLayer,
     ExecutionBoundary,
     ExecutionPlan,
+    HumanApprovalRequest,
     LangGraphExecutionResult,
     TaskContext,
     UnsupportedWorkflowTaskTypeError,
@@ -293,6 +294,13 @@ async def test_05_execution_boundary_rejects_unauthorized_tool_request_safely(
         LangGraphExecutionResult(
             result_text="尝试直接执行 shell",
             requested_tools=("shell.exec",),
+            approval_requests=(
+                HumanApprovalRequest(
+                    approval_type="tool",
+                    subject="shell.exec",
+                    summary="请求执行计划外工具",
+                ),
+            ),
         )
     )
     planner = FixedPlanningLayer(

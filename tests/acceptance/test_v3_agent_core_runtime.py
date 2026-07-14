@@ -36,7 +36,9 @@ from packages.agent_harness import (
     ExecutionPlan,
     LangGraphExecutor,
     LoopStepLimitError,
+    ReviewDecision,
     TaskContext,
+    WorkPlan,
 )
 from packages.agent_harness.agent_model import (
     AgentDecisionError,
@@ -147,6 +149,12 @@ class SequenceAgentModel:
         if self.repeat_last and self.decisions:
             return self.decisions[-1]
         raise AssertionError("Unexpected Agent model call")
+
+    async def create_plan(self, request: AgentModelRequest) -> WorkPlan:
+        raise AssertionError("ReAct test must not call plan model")
+
+    async def review(self, request: AgentModelRequest) -> ReviewDecision:
+        raise AssertionError("ReAct test must not call review model")
 
 
 class FakeGatewayAdapter:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Literal, Protocol
 
 from .context import TaskContext
 from .planner import ExecutionPlan
@@ -13,6 +13,16 @@ class AgentRunInput:
     context: TaskContext
 
 
+ApprovalTypeName = Literal["tool", "plan", "review"]
+
+
+@dataclass(frozen=True)
+class HumanApprovalRequest:
+    approval_type: ApprovalTypeName
+    subject: str
+    summary: str
+
+
 @dataclass(frozen=True)
 class AgentRunResult:
     result_text: str
@@ -21,6 +31,7 @@ class AgentRunResult:
     requested_tools: tuple[str, ...] = ()
     loop_steps: int = 1
     checkpoint_id: str | None = None
+    approval_requests: tuple[HumanApprovalRequest, ...] = ()
 
 
 class AgentExecutorProtocol(Protocol):

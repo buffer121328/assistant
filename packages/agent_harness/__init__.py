@@ -3,12 +3,24 @@ from .agent_model import (
     AgentDecisionError,
     AgentModelProtocol,
     AgentModelRequest,
+    ReviewDecision,
+    WorkPlan,
+    WorkPlanStep,
     build_agent_model_request,
+    build_review_model_request,
+    build_work_plan_request,
     parse_agent_decision,
+    parse_review_decision,
+    parse_work_plan,
 )
 from .capabilities import CapabilitiesBuilder, CapabilitySnapshot, ToolCapability
 from .context import ContextBuilder, TaskContext
-from .executors import AgentExecutorProtocol, AgentRunInput, AgentRunResult
+from .executors import (
+    AgentExecutorProtocol,
+    AgentRunInput,
+    AgentRunResult,
+    HumanApprovalRequest,
+)
 from .evolution import (
     EVOLUTION_SUGGESTION_TOOL_NAME,
     BehaviorEvolutionService,
@@ -72,6 +84,7 @@ __all__ = [
     "AgentRoutingError",
     "AgentRunInput",
     "AgentRunResult",
+    "HumanApprovalRequest",
     "BehaviorEvolutionService",
     "BehaviorMetrics",
     "CapabilitiesBuilder",
@@ -110,7 +123,14 @@ __all__ = [
     "build_agent_route_candidates",
     "build_agent_route_messages",
     "build_agent_model_request",
+    "build_review_model_request",
+    "build_work_plan_request",
     "AGENT_PROFILE_TASK_TYPES",
     "parse_agent_decision",
+    "parse_review_decision",
+    "parse_work_plan",
     "parse_agent_route_decision",
+    "ReviewDecision",
+    "WorkPlan",
+    "WorkPlanStep",
 ]

@@ -44,6 +44,12 @@ class ApprovalStatus(str, Enum):
     REJECTED = "rejected"
 
 
+class ApprovalType(str, Enum):
+    TOOL = "tool"
+    PLAN = "plan"
+    REVIEW = "review"
+
+
 class TimestampMixin:
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -228,12 +234,32 @@ class Approval(TimestampMixin, Base):
     __tablename__ = "approvals"
     __table_args__ = (
         Index("ix_approvals_task_status", "task_id", "status"),
+        Index(
+            "ix_approvals_task_type_subject_status",
+            "task_id",
+            "approval_type",
+            "subject",
+            "status",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     task_id: Mapped[str] = mapped_column(ForeignKey("tasks.id"), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     tool_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    approval_type: Mapped[str] = mapped_column(
+        String(32),
+        default=ApprovalType.TOOL.value,
+        server_default=ApprovalType.TOOL.value,
+        nullable=False,
+    )
+    subject: Mapped[str] = mapped_column(
+        String(128),
+        default="legacy.unknown",
+        server_default="legacy.unknown",
+        nullable=False,
+    )
+    request_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     decided_by_user_id: Mapped[str | None] = mapped_column(
         ForeignKey("users.id"),
         nullable=True,

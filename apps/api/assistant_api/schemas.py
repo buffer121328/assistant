@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal
+from typing import Literal, cast
 
 from pydantic import BaseModel, Field
 
@@ -148,6 +148,9 @@ class ApprovalResponse(BaseModel):
     approval_id: str
     task_id: str
     tool_name: str
+    approval_type: Literal["tool", "plan", "review"]
+    subject: str
+    request_summary: str | None
     status: str
     decided_by_user_id: str | None
     decided_at: datetime | None
@@ -217,6 +220,12 @@ def approval_response(approval: Approval) -> ApprovalResponse:
         approval_id=approval.id,
         task_id=approval.task_id,
         tool_name=approval.tool_name,
+        approval_type=cast(
+            Literal["tool", "plan", "review"],
+            approval.approval_type,
+        ),
+        subject=approval.subject,
+        request_summary=approval.request_summary,
         status=approval.status,
         decided_by_user_id=approval.decided_by_user_id,
         decided_at=approval.decided_at,

@@ -5,10 +5,16 @@ from dataclasses import dataclass, field
 import json
 from typing import Any, Literal, Protocol
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from assistant_api.models import Approval, ApprovalStatus, Task, ToolLog
+from assistant_api.models import (
+    Approval,
+    ApprovalStatus,
+    ApprovalType,
+    Task,
+    ToolLog,
+)
 from packages.model_gateway import sanitize_text
 
 
@@ -221,6 +227,11 @@ class ToolRegistry:
             .where(
                 Approval.task_id == invocation.task_id,
                 Approval.tool_name == invocation.name,
+                Approval.approval_type == ApprovalType.TOOL.value,
+                or_(
+                    Approval.subject == invocation.name,
+                    Approval.subject == "legacy.unknown",
+                ),
                 Approval.status == ApprovalStatus.APPROVED.value,
                 Task.user_id == invocation.user_id,
             )

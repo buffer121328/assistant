@@ -20,6 +20,9 @@ from packages.agent_harness import (
     AgentModelRequest,
     AgentRunInput,
     AgentRunResult,
+    ReviewDecision,
+    WorkPlan,
+    WorkPlanStep,
 )
 from packages.tools import (
     MCPToolAdapter,
@@ -132,6 +135,21 @@ class SearchThenAnswerModel:
     def __init__(self) -> None:
         self.requests: list[AgentModelRequest] = []
 
+    async def create_plan(self, request: AgentModelRequest) -> WorkPlan:
+        return WorkPlan(
+            goal=request.messages[1].content,
+            steps=(
+                WorkPlanStep(
+                    objective="搜索资料",
+                    acceptance_criteria=("获得可核验来源",),
+                ),
+                WorkPlanStep(
+                    objective="形成答案",
+                    acceptance_criteria=("回答任务目标",),
+                ),
+            ),
+        )
+
     async def decide(self, request: AgentModelRequest) -> AgentDecision:
         self.requests.append(request)
         if len(self.requests) == 1:
@@ -144,6 +162,9 @@ class SearchThenAnswerModel:
             action="final",
             answer="LangGraph official guide 提供了 StateGraph 执行资料。",
         )
+
+    async def review(self, request: AgentModelRequest) -> ReviewDecision:
+        return ReviewDecision(status="pass", feedback="满足验收标准")
 
 
 def memory_saver() -> InMemorySaver:
@@ -206,12 +227,15 @@ async def test_02_real_langgraph_search_is_bounded_and_every_step_is_audited(
     assert len(tavily.calls) == 1
     assert [log.tool_name for log in step_logs] == [
         "langgraph.step.prepare",
+        "langgraph.step.plan",
         "langgraph.step.model",
         "langgraph.step.tool",
         "langgraph.step.model",
+        "langgraph.step.review",
+        "langgraph.step.finalize",
     ]
     assert all(log.status == "succeeded" for log in step_logs)
-    assert len(step_logs) <= 4
+    assert len(step_logs) <= 12
     assert len(search_logs) == 1
     assert search_logs[0].status == "succeeded"
 

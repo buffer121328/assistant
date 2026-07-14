@@ -17,7 +17,13 @@ from assistant_api.config import Settings
 from assistant_api.main import create_app
 from assistant_api.models import Base, Memory, Task, TaskStatus, ToolLog, User
 from assistant_api.worker_runtime import execute_task_by_id
-from packages.agent_harness import AgentDecision, AgentModelRequest
+from packages.agent_harness import (
+    AgentDecision,
+    AgentModelRequest,
+    ReviewDecision,
+    WorkPlan,
+    WorkPlanStep,
+)
 from packages.model_gateway.deepseek import DeepSeekAdapter
 from packages.tools import (
     NormalizedSearchSource,
@@ -134,6 +140,21 @@ class FakeTavilyClient:
 
 
 class ContentAgentModel:
+    async def create_plan(self, request: AgentModelRequest) -> WorkPlan:
+        return WorkPlan(
+            goal=request.messages[1].content,
+            steps=(
+                WorkPlanStep(
+                    objective="检索并核对来源",
+                    acceptance_criteria=("来源可核验",),
+                ),
+                WorkPlanStep(
+                    objective="整理结论",
+                    acceptance_criteria=("回答任务目标",),
+                ),
+            ),
+        )
+
     async def decide(self, request: AgentModelRequest) -> AgentDecision:
         combined = "\n".join(message.content for message in request.messages)
         if request.task_type in {"learn", "daily"}:
@@ -160,6 +181,9 @@ class ContentAgentModel:
             action="final",
             answer="已整理会议纪要。",
         )
+
+    async def review(self, request: AgentModelRequest) -> ReviewDecision:
+        return ReviewDecision(status="pass", feedback="满足验收标准")
 
 
 def memory_saver() -> InMemorySaver:

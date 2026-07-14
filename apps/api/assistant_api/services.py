@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 import json
 from typing import Any, Protocol
@@ -12,6 +12,7 @@ from packages.model_gateway import sanitize_text
 from .models import (
     Approval,
     ApprovalStatus,
+    ApprovalType,
     Memory,
     ProcessedMessage,
     Task,
@@ -94,6 +95,33 @@ TERMINAL_TASK_STATUSES = {
 DISPATCHABLE_TASK_STATUSES = TERMINAL_TASK_STATUSES | {TaskStatus.WAITING_APPROVAL.value}
 
 
+def _normalize_approval_requests(
+    requests: Iterable[object],
+) -> tuple[tuple[str, str, str], ...]:
+    normalized: list[tuple[str, str, str]] = []
+    for request in requests:
+        if isinstance(request, Mapping):
+            approval_type = request.get("approval_type")
+            subject = request.get("subject")
+            summary = request.get("summary")
+        else:
+            approval_type = getattr(request, "approval_type", None)
+            subject = getattr(request, "subject", None)
+            summary = getattr(request, "summary", None)
+        if not isinstance(approval_type, str) or approval_type not in {
+            item.value for item in ApprovalType
+        }:
+            continue
+        if not isinstance(subject, str) or not subject.strip():
+            continue
+        safe_subject = sanitize_text(subject).strip()[:128]
+        safe_summary = sanitize_text(summary or "需要人工审批。").strip()[:1000]
+        item = (approval_type, safe_subject, safe_summary)
+        if item not in normalized:
+            normalized.append(item)
+    return tuple(normalized)
+
+
 class TaskService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -173,6 +201,7 @@ class TaskService:
         message: str,
         *,
         requested_tools: Iterable[str] = (),
+        approval_requests: Iterable[object] = (),
     ) -> Task:
         task = await self.get_task(task_id)
         self._validate_transition(task, TaskStatus.WAITING_APPROVAL)
@@ -192,6 +221,26 @@ class TaskService:
                 await approval_repository.create_pending(
                     task_id=task.id,
                     tool_name=tool_name,
+                )
+        normalized_requests = _normalize_approval_requests(approval_requests)
+        for approval_type, subject, summary in normalized_requests:
+            existing = await approval_repository.get_active_for_request(
+                task_id=task.id,
+                approval_type=approval_type,
+                subject=subject,
+            )
+            if existing is None:
+                tool_name = (
+                    subject
+                    if approval_type == ApprovalType.TOOL.value
+                    else f"agent.{approval_type}"
+                )
+                await approval_repository.create_pending_request(
+                    task_id=task.id,
+                    approval_type=approval_type,
+                    subject=subject,
+                    tool_name=tool_name,
+                    request_summary=summary,
                 )
         await self.session.commit()
         await self.session.refresh(task)

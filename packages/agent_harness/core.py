@@ -106,11 +106,19 @@ class ExecutionBoundary:
                 workflow_key=plan.workflow_key,
             )
 
-        policy_outcome = _tool_policy_outcome(plan, result.requested_tools)
+        approval_requests = tuple(getattr(result, "approval_requests", ()))
+        policy_outcome = _tool_policy_outcome(
+            plan,
+            result.requested_tools,
+            approval_requests=approval_requests,
+        )
         if policy_outcome is not None:
             payload = {
                 "message": policy_outcome.result_text or policy_outcome.error_message,
                 "requested_tools": list(result.requested_tools),
+                "approval_requests": [
+                    asdict(request) for request in approval_requests
+                ],
             }
             await self._record_trace(
                 task_id=context.task_id,
@@ -133,6 +141,9 @@ class ExecutionBoundary:
             "display_plan": list(result.display_plan),
             "tool_calls": list(result.tool_calls),
             "requested_tools": list(result.requested_tools),
+            "approval_requests": [
+                asdict(request) for request in approval_requests
+            ],
             "loop_steps": result.loop_steps,
             "checkpoint_id": result.checkpoint_id,
         }
@@ -326,11 +337,17 @@ class AgentHarness:
                 or "任务需要审批后才能继续。"
             )
             requested_tools = outcome.metadata.get("requested_tools", [])
+            approval_requests = outcome.metadata.get("approval_requests", [])
             return await task_service.save_waiting_approval(
                 task_id,
                 message,
                 requested_tools=(
                     tool for tool in requested_tools if isinstance(tool, str)
+                ),
+                approval_requests=(
+                    request
+                    for request in approval_requests
+                    if isinstance(request, dict)
                 ),
             )
         if outcome.status == TaskStatus.FAILED.value:
@@ -386,11 +403,10 @@ def _build_langgraph_result(plan: ExecutionPlan, context: TaskContext) -> str:
 def _tool_policy_outcome(
     plan: ExecutionPlan,
     requested_tools: tuple[str, ...],
+    *,
+    approval_requests: tuple[Any, ...] = (),
 ) -> ExecutionOutcome | None:
     requested = tuple(dict.fromkeys(tool for tool in requested_tools if tool))
-    if not requested:
-        return None
-
     unauthorized = [
         tool
         for tool in requested
@@ -404,6 +420,19 @@ def _tool_policy_outcome(
             metadata={"requested_tools": list(requested)},
             workflow_key=plan.workflow_key,
         )
+
+    if approval_requests:
+        return ExecutionOutcome(
+            status=TaskStatus.WAITING_APPROVAL.value,
+            result_text="任务需要人工审批后才能继续。",
+            metadata={
+                "requested_tools": list(requested),
+                "approval_requests": [asdict(request) for request in approval_requests],
+            },
+            workflow_key=plan.workflow_key,
+        )
+    if not requested:
+        return None
 
     gated = [tool for tool in requested if tool in plan.approval_required_tools]
     if gated:

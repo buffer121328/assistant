@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from .context import TaskContext
-from .profiles import AgentProfile, ExecutorKind
+from .profiles import AgentProfile, ExecutionMode, ExecutorKind
 
 
 MAX_PLAN_STEPS = 12
@@ -28,6 +28,10 @@ class ExecutionPlan:
     tool_snapshot_revision: int = 0
     tool_count_budget: int = MAX_PLAN_TOOLS
     tool_versions: tuple[tuple[str, str], ...] = ()
+    execution_mode: ExecutionMode = "react"
+    require_plan_approval: bool = False
+    max_review_retries: int = 0
+    max_replans: int = 0
 
 
 class PlanningLayerProtocol(Protocol):
@@ -91,6 +95,10 @@ class DefaultPlanningLayer:
                 for name, version in context.tool_versions
                 if name in selected_names
             ),
+            execution_mode=profile.execution_mode,
+            require_plan_approval=profile.require_plan_approval,
+            max_review_retries=max(0, min(profile.max_review_retries, 2)),
+            max_replans=max(0, min(profile.max_replans, 2)),
         )
 
 

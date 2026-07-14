@@ -8,6 +8,7 @@ from packages.model_gateway import SUPPORTED_MODEL_CLASSES
 
 ExecutorKind = Literal["langgraph"]
 RiskLevel = Literal["low", "medium", "high"]
+ExecutionMode = Literal["react", "plan_execute_review"]
 
 SUPPORTED_PLANNING_TASK_TYPES = frozenset({"plan", "learn", "daily", "office"})
 
@@ -32,6 +33,10 @@ class AgentProfile:
     timeout_seconds: float = 60.0
     risk_level: RiskLevel = "low"
     output_format: str = "markdown"
+    execution_mode: ExecutionMode = "react"
+    require_plan_approval: bool = False
+    max_review_retries: int = 0
+    max_replans: int = 0
 
 
 _PROFILE_DEFAULTS: dict[str, dict[str, Any]] = {
@@ -57,9 +62,12 @@ _PROFILE_DEFAULTS: dict[str, dict[str, Any]] = {
             "检索并核对来源",
             "提炼学习结论",
         ),
-        "max_steps": 4,
+        "max_steps": 12,
         "timeout_seconds": 90.0,
         "risk_level": "medium",
+        "execution_mode": "plan_execute_review",
+        "max_review_retries": 1,
+        "max_replans": 1,
     },
     "daily": {
         "name": "v2.daily_reporter",
@@ -70,9 +78,12 @@ _PROFILE_DEFAULTS: dict[str, dict[str, Any]] = {
             "检索并整理当日线索",
             "输出日报摘要",
         ),
-        "max_steps": 4,
+        "max_steps": 12,
         "timeout_seconds": 90.0,
         "risk_level": "medium",
+        "execution_mode": "plan_execute_review",
+        "max_review_retries": 1,
+        "max_replans": 1,
     },
     "office": {
         "name": "v2.office_writer",
