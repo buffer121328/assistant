@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 from packages.capabilities import CapabilityKind, CapabilityMetadata
 
-from .models import Approval, Task
+from .models import AccountConnection, Approval, Task
 from .skill_lifecycle import SkillInventoryItem
 
 MODEL_GATEWAY_VALIDATION_ERROR = "model_gateway_validation_error"
@@ -144,6 +144,105 @@ class SkillActorRequest(BaseModel):
     user_id: str = Field(min_length=1)
 
 
+class AccountConnectionCreateRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=36)
+    provider: Literal["smtp", "caldav", "browser"]
+    display_name: str = Field(min_length=1, max_length=255)
+    credentials: dict[str, str]
+
+
+class AccountConnectionActorRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=36)
+
+
+class AccountConnectionResponse(BaseModel):
+    connection_id: str
+    user_id: str
+    provider: str
+    display_name: str
+    status: str
+    last_checked_at: datetime | None
+    last_error_code: str | None
+
+
+class AccountConnectionListResponse(BaseModel):
+    items: list[AccountConnectionResponse]
+
+
+class KnowledgeImportResponse(BaseModel):
+    document_id: str
+    source_label: str
+    status: str
+    chunk_count: int
+    unchanged: bool
+
+
+class KnowledgeDocumentResponse(BaseModel):
+    document_id: str
+    source_label: str
+    media_type: str
+    status: str
+    chunk_count: int
+    last_error_code: str | None
+
+
+class KnowledgeDocumentListResponse(BaseModel):
+    items: list[KnowledgeDocumentResponse]
+
+
+class KnowledgeSearchItem(BaseModel):
+    document_id: str
+    source_label: str
+    ordinal: int
+    content: str
+    score: int
+
+
+class KnowledgeSearchResponse(BaseModel):
+    items: list[KnowledgeSearchItem]
+
+
+class ReminderCreateRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=36)
+    title: str = Field(min_length=1, max_length=255)
+    message: str = Field(min_length=1, max_length=10_000)
+    due_at: datetime
+    channel: Literal["desktop", "langbot"]
+
+
+class ReminderActorRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=36)
+
+
+class ReminderResponse(BaseModel):
+    reminder_id: str
+    user_id: str
+    title: str
+    message: str
+    due_at: datetime
+    channel: str
+    status: str
+    cancelled_at: datetime | None
+    delivery_status: str | None = None
+    last_error_code: str | None = None
+
+
+class ReminderListResponse(BaseModel):
+    items: list[ReminderResponse]
+
+
+class DesktopNotificationResponse(BaseModel):
+    outbox_id: str
+    reminder_id: str
+    title: str
+    message: str
+    due_at: datetime
+
+
+class DesktopNotificationListResponse(BaseModel):
+    items: list[DesktopNotificationResponse]
+
+
 class ApprovalResponse(BaseModel):
     approval_id: str
     task_id: str
@@ -187,6 +286,18 @@ def task_response(task: Task) -> TaskResponse:
         error_message=task.error_message,
         created_at=task.created_at,
         updated_at=task.updated_at,
+    )
+
+
+def account_connection_response(item: AccountConnection) -> AccountConnectionResponse:
+    return AccountConnectionResponse(
+        connection_id=item.id,
+        user_id=item.user_id,
+        provider=item.provider,
+        display_name=item.display_name,
+        status=item.status,
+        last_checked_at=item.last_checked_at,
+        last_error_code=item.last_error_code,
     )
 
 

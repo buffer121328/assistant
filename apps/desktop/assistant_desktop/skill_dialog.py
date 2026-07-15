@@ -37,12 +37,14 @@ class SkillManagerDialog(QDialog):
         parent: object | None = None,
         thread_pool: QThreadPool | None = None,
         client_factory: ClientFactory = DesktopApiClient,
+        api_token: str = "",
     ) -> None:
         super().__init__(parent)  # type: ignore[arg-type]
         self.base_url = base_url
         self.user_id = user_id
         self.thread_pool = thread_pool or QThreadPool.globalInstance()
         self.client_factory = client_factory
+        self.api_token = api_token
         self._workers: set[ApiWorker] = set()
         self._busy_operations: set[str] = set()
 
@@ -204,7 +206,10 @@ class SkillManagerDialog(QDialog):
         )
 
     def _with_client(self, operation: Callable[[DesktopApiClient], Any]) -> Any:
-        client = self.client_factory(base_url=self.base_url, user_id=self.user_id)
+        kwargs = {"base_url": self.base_url, "user_id": self.user_id}
+        if self.api_token:
+            kwargs["api_token"] = self.api_token
+        client = self.client_factory(**kwargs)
         try:
             return operation(client)
         finally:

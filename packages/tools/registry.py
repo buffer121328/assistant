@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 import json
 from typing import Any, Literal, Protocol
 
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from assistant_api.models import (
@@ -17,6 +17,8 @@ from assistant_api.models import (
     ToolLog,
 )
 from packages.model_gateway import sanitize_text
+
+from .approval import EXACT_APPROVAL_TOOLS, external_approval_binding, external_audit_arguments
 
 
 ToolRiskLevel = Literal["L1", "L2", "L3"]
@@ -306,6 +308,11 @@ class ToolRegistry:
         return spec
 
     async def _is_approved(self, invocation: ToolInvocation) -> bool:
+        subjects = (
+            (external_approval_binding(invocation.name, invocation.arguments).subject,)
+            if invocation.name in EXACT_APPROVAL_TOOLS
+            else (invocation.name, "legacy.unknown")
+        )
         approval_id = await self.session.scalar(
             select(Approval.id)
             .join(Task, Task.id == Approval.task_id)
@@ -313,10 +320,7 @@ class ToolRegistry:
                 Approval.task_id == invocation.task_id,
                 Approval.tool_name == invocation.name,
                 Approval.approval_type == ApprovalType.TOOL.value,
-                or_(
-                    Approval.subject == invocation.name,
-                    Approval.subject == "legacy.unknown",
-                ),
+                Approval.subject.in_(subjects),
                 Approval.status == ApprovalStatus.APPROVED.value,
                 Task.user_id == invocation.user_id,
             )
@@ -332,6 +336,11 @@ class ToolRegistry:
         output: Any,
         error: str | None,
     ) -> None:
+        arguments = (
+            external_audit_arguments(invocation.name, invocation.arguments)
+            if invocation.name in EXACT_APPROVAL_TOOLS
+            else invocation.arguments
+        )
         self.session.add(
             ToolLog(
                 task_id=invocation.task_id,
@@ -342,7 +351,7 @@ class ToolRegistry:
                         "tool": invocation.name,
                         "task_id": invocation.task_id,
                         "user_id": invocation.user_id,
-                        "arguments": invocation.arguments,
+                        "arguments": arguments,
                         "tool_snapshot_revision": invocation.tool_snapshot_revision,
                         "tool_version": invocation.tool_version,
                     }

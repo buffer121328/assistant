@@ -15,4 +15,4 @@ __pycache__/
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
-var/skills/
+var/

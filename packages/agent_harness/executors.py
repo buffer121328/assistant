@@ -21,6 +21,7 @@ class HumanApprovalRequest:
     approval_type: ApprovalTypeName
     subject: str
     summary: str
+    tool_name: str | None = None
 
 
 @dataclass(frozen=True)

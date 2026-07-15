@@ -1,6 +1,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, Query, Request, Response, UploadFile, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from packages.agent_harness.skill_store import MAX_ARCHIVE_BYTES
@@ -9,17 +10,36 @@ from packages.capabilities import (
     CapabilityRegistry,
     build_default_registry,
 )
+from packages.integrations import CredentialCipher, CredentialError
+from packages.knowledge import KnowledgeError, KnowledgeService, MAX_IMPORT_BYTES
+from packages.notifications import NotificationError, ReminderService
 
+from .account_connections import AccountConnectionError, AccountConnectionService
 from .database import get_session
 from .errors import AppError
 from .langbot import handle_langbot_webhook
 from .model_gateway import handle_model_chat
 from .schemas import (
+    AccountConnectionActorRequest,
+    AccountConnectionCreateRequest,
+    AccountConnectionListResponse,
+    AccountConnectionResponse,
     ApprovalDecisionRequest,
     ApprovalDecisionResponse,
     ApprovalListResponse,
     CapabilityCatalogResponse,
     LangBotWebhookRequest,
+    KnowledgeDocumentListResponse,
+    KnowledgeDocumentResponse,
+    KnowledgeImportResponse,
+    KnowledgeSearchItem,
+    KnowledgeSearchResponse,
+    ReminderActorRequest,
+    ReminderCreateRequest,
+    ReminderListResponse,
+    ReminderResponse,
+    DesktopNotificationListResponse,
+    DesktopNotificationResponse,
     ModelChatRequest,
     ModelChatResponse,
     SkillActorRequest,
@@ -30,17 +50,58 @@ from .schemas import (
     TaskListResponse,
     TaskResponse,
     TaskSubmissionResponse,
+    account_connection_response,
     approval_response,
     capability_response,
     skill_response,
     task_response,
 )
-from .models import ApprovalStatus
+from .models import ApprovalStatus, NotificationOutbox
 from .services import ApprovalService, TaskService, TaskServiceError
 from .skill_lifecycle import SkillLifecycleError, SkillLifecycleService
 from .worker import enqueue_task_execution
 
 router = APIRouter()
+
+
+def raise_knowledge_error(exc: KnowledgeError) -> None:
+    raise AppError(
+        code=exc.code,
+        message="Knowledge operation failed.",
+        status_code=404 if exc.code == "knowledge_user_not_found" else 400,
+    ) from exc
+
+
+def raise_notification_error(exc: NotificationError) -> None:
+    raise AppError(
+        code=exc.code,
+        message="Notification operation failed.",
+        status_code=404 if exc.code.endswith("not_found") else 409,
+    ) from exc
+
+
+def account_service(request: Request, session: AsyncSession) -> AccountConnectionService:
+    try:
+        cipher = CredentialCipher(request.app.state.settings.credential_master_key.get_secret_value())
+    except CredentialError as exc:
+        raise AppError(
+            code="credential_master_key_unavailable",
+            message="Credential storage is not configured.",
+            status_code=503,
+        ) from exc
+    return AccountConnectionService(
+        session,
+        cipher=cipher,
+        tester=getattr(request.app.state, "connection_tester", None),
+    )
+
+
+def raise_account_error(exc: AccountConnectionError) -> None:
+    raise AppError(
+        code=exc.code,
+        message="Account connection operation failed.",
+        status_code=exc.status_code,
+    ) from exc
 
 
 @router.get("/health")
@@ -49,6 +110,163 @@ def health_check(request: Request) -> dict[str, str]:
         "service_name": request.app.state.settings.service_name,
         "status": "ok",
     }
+
+
+def reminder_response(item: object) -> ReminderResponse:
+    return ReminderResponse(
+        reminder_id=str(getattr(item, "id")),
+        user_id=str(getattr(item, "user_id")),
+        title=str(getattr(item, "title")),
+        message=str(getattr(item, "message")),
+        due_at=getattr(item, "due_at"),
+        channel=str(getattr(item, "channel")),
+        status=str(getattr(item, "status")),
+        cancelled_at=getattr(item, "cancelled_at"),
+    )
+
+
+@router.post(
+    "/api/reminders",
+    response_model=ReminderResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_reminder(
+    payload: ReminderCreateRequest,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> ReminderResponse:
+    try:
+        reminder = await ReminderService(session).create(
+            user_id=payload.user_id,
+            title=payload.title,
+            message=payload.message,
+            due_at=payload.due_at,
+            channel=payload.channel,
+        )
+    except NotificationError as exc:
+        raise_notification_error(exc)
+    return reminder_response(reminder)
+
+
+@router.get("/api/reminders", response_model=ReminderListResponse)
+async def list_reminders(
+    user_id: Annotated[str, Query(min_length=1)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> ReminderListResponse:
+    reminders = await ReminderService(session).list(user_id=user_id)
+    items: list[ReminderResponse] = []
+    for reminder in reminders:
+        outcome = await session.scalar(
+            select(NotificationOutbox)
+            .where(NotificationOutbox.reminder_id == reminder.id)
+            .order_by(NotificationOutbox.updated_at.desc(), NotificationOutbox.id.desc())
+            .limit(1)
+        )
+        response = reminder_response(reminder)
+        if outcome is not None:
+            response.delivery_status = outcome.status
+            response.last_error_code = outcome.last_error_code
+        items.append(response)
+    return ReminderListResponse(items=items)
+
+
+@router.post("/api/reminders/{reminder_id}/cancel", response_model=ReminderResponse)
+async def cancel_reminder(
+    reminder_id: str,
+    payload: ReminderActorRequest,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> ReminderResponse:
+    try:
+        reminder = await ReminderService(session).cancel(
+            user_id=payload.user_id, reminder_id=reminder_id
+        )
+    except NotificationError as exc:
+        raise_notification_error(exc)
+    return reminder_response(reminder)
+
+
+@router.get("/api/notifications/poll", response_model=DesktopNotificationListResponse)
+async def poll_notifications(
+    user_id: Annotated[str, Query(min_length=1)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> DesktopNotificationListResponse:
+    items = await ReminderService(session).poll_desktop(user_id=user_id)
+    return DesktopNotificationListResponse(
+        items=[DesktopNotificationResponse(**item.__dict__) for item in items]
+    )
+
+
+@router.post("/api/notifications/{outbox_id}/ack", status_code=status.HTTP_204_NO_CONTENT)
+async def acknowledge_notification(
+    outbox_id: str,
+    payload: ReminderActorRequest,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> Response:
+    try:
+        await ReminderService(session).acknowledge_desktop(
+            user_id=payload.user_id, outbox_id=outbox_id
+        )
+    except NotificationError as exc:
+        raise_notification_error(exc)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/api/knowledge/import",
+    response_model=KnowledgeImportResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def import_knowledge(
+    request: Request,
+    user_id: Annotated[str, Form(min_length=1)],
+    document: Annotated[UploadFile, File()],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> KnowledgeImportResponse:
+    content = await document.read(MAX_IMPORT_BYTES + 1)
+    await document.close()
+    try:
+        result = await KnowledgeService(
+            session, import_root=request.app.state.settings.knowledge_root
+        ).store_upload(
+            user_id=user_id,
+            filename=document.filename or "",
+            content=content,
+        )
+    except KnowledgeError as exc:
+        raise_knowledge_error(exc)
+    return KnowledgeImportResponse(**result.__dict__)
+
+
+@router.get("/api/knowledge/documents", response_model=KnowledgeDocumentListResponse)
+async def list_knowledge_documents(
+    request: Request,
+    user_id: Annotated[str, Query(min_length=1)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> KnowledgeDocumentListResponse:
+    items = await KnowledgeService(
+        session, import_root=request.app.state.settings.knowledge_root
+    ).list_documents(user_id=user_id)
+    return KnowledgeDocumentListResponse(
+        items=[KnowledgeDocumentResponse(**item.__dict__) for item in items]
+    )
+
+
+@router.get("/api/knowledge/search", response_model=KnowledgeSearchResponse)
+async def search_knowledge(
+    request: Request,
+    user_id: Annotated[str, Query(min_length=1)],
+    query: Annotated[str, Query(min_length=1, max_length=200)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    limit: Annotated[int, Query(ge=1, le=20)] = 5,
+) -> KnowledgeSearchResponse:
+    try:
+        results = await KnowledgeService(
+            session, import_root=request.app.state.settings.knowledge_root
+        ).search(user_id=user_id, query=query, limit=limit)
+    except KnowledgeError as exc:
+        raise_knowledge_error(exc)
+    return KnowledgeSearchResponse(
+        items=[KnowledgeSearchItem(**item.__dict__) for item in results]
+    )
 
 
 @router.get("/api/capabilities", response_model=CapabilityCatalogResponse)
@@ -64,6 +282,112 @@ def list_capabilities(
             capability_response(metadata)
             for metadata in registry.list(kind=kind, enabled=enabled)
         ],
+    )
+
+
+@router.get("/api/connections", response_model=AccountConnectionListResponse)
+async def list_connections(
+    request: Request,
+    user_id: Annotated[str, Query(min_length=1)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> AccountConnectionListResponse:
+    items = await account_service(request, session).list(user_id)
+    return AccountConnectionListResponse(
+        items=[account_connection_response(item) for item in items]
+    )
+
+
+@router.post(
+    "/api/connections",
+    response_model=AccountConnectionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_connection(
+    payload: AccountConnectionCreateRequest,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> AccountConnectionResponse:
+    try:
+        item = await account_service(request, session).create(
+            user_id=payload.user_id,
+            provider=payload.provider,
+            display_name=payload.display_name,
+            credentials=payload.credentials,
+        )
+    except AccountConnectionError as exc:
+        raise_account_error(exc)
+    return account_connection_response(item)
+
+
+async def update_connection_status(
+    *,
+    request: Request,
+    session: AsyncSession,
+    connection_id: str,
+    user_id: str,
+    new_status: str,
+) -> AccountConnectionResponse:
+    try:
+        item = await account_service(request, session).set_status(
+            connection_id, user_id, new_status
+        )
+    except AccountConnectionError as exc:
+        raise_account_error(exc)
+    return account_connection_response(item)
+
+
+@router.post(
+    "/api/connections/{connection_id}/test",
+    response_model=AccountConnectionResponse,
+)
+async def test_connection(
+    connection_id: str,
+    payload: AccountConnectionActorRequest,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> AccountConnectionResponse:
+    try:
+        item = await account_service(request, session).test(connection_id, payload.user_id)
+    except AccountConnectionError as exc:
+        raise_account_error(exc)
+    return account_connection_response(item)
+
+
+@router.post(
+    "/api/connections/{connection_id}/disable",
+    response_model=AccountConnectionResponse,
+)
+async def disable_connection(
+    connection_id: str,
+    payload: AccountConnectionActorRequest,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> AccountConnectionResponse:
+    return await update_connection_status(
+        request=request,
+        session=session,
+        connection_id=connection_id,
+        user_id=payload.user_id,
+        new_status="disabled",
+    )
+
+
+@router.delete(
+    "/api/connections/{connection_id}",
+    response_model=AccountConnectionResponse,
+)
+async def revoke_connection(
+    connection_id: str,
+    request: Request,
+    user_id: Annotated[str, Query(min_length=1)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> AccountConnectionResponse:
+    return await update_connection_status(
+        request=request,
+        session=session,
+        connection_id=connection_id,
+        user_id=user_id,
+        new_status="revoked",
     )
 
 

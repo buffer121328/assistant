@@ -13,6 +13,7 @@ JsonObject = dict[str, Any]
 ApprovalDecision = Literal["approved", "rejected"]
 DEFAULT_API_BASE_URL = "http://127.0.0.1:8000"
 MAX_SKILL_PACKAGE_BYTES = 1024 * 1024
+MAX_KNOWLEDGE_DOCUMENT_BYTES = 20 * 1024 * 1024
 SKILL_NAME_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
@@ -50,12 +51,15 @@ class DesktopApiClient:
         *,
         base_url: str,
         user_id: str,
+        api_token: str = "",
         transport: httpx.BaseTransport | None = None,
         timeout_seconds: float = 10.0,
     ) -> None:
         self.base_url, self.user_id = normalize_connection_settings(base_url, user_id)
+        headers = {"authorization": f"Bearer {api_token.strip()}"} if api_token.strip() else None
         self._client = httpx.Client(
             base_url=self.base_url,
+            headers=headers,
             transport=transport,
             timeout=timeout_seconds,
         )
@@ -115,6 +119,139 @@ class DesktopApiClient:
     def list_skills(self) -> list[JsonObject]:
         payload = self._request("GET", "/api/skills")
         return self._object_list(payload, "items")
+
+    def list_connections(self) -> list[JsonObject]:
+        payload = self._request(
+            "GET",
+            "/api/connections",
+            params={"user_id": self.user_id},
+        )
+        return self._object_list(payload, "items")
+
+    def create_connection(
+        self,
+        *,
+        provider: str,
+        display_name: str,
+        credentials: dict[str, str],
+    ) -> JsonObject:
+        return self._request(
+            "POST",
+            "/api/connections",
+            json={
+                "user_id": self.user_id,
+                "provider": provider,
+                "display_name": display_name,
+                "credentials": credentials,
+            },
+        )
+
+    def test_connection(self, connection_id: str) -> JsonObject:
+        return self._request(
+            "POST",
+            f"/api/connections/{connection_id}/test",
+            json={"user_id": self.user_id},
+        )
+
+    def disable_connection(self, connection_id: str) -> JsonObject:
+        return self._request(
+            "POST",
+            f"/api/connections/{connection_id}/disable",
+            json={"user_id": self.user_id},
+        )
+
+    def revoke_connection(self, connection_id: str) -> JsonObject:
+        return self._request(
+            "DELETE",
+            f"/api/connections/{connection_id}",
+            params={"user_id": self.user_id},
+        )
+
+    def import_knowledge(self, document_path: Path) -> JsonObject:
+        try:
+            size = document_path.stat().st_size
+        except OSError as exc:
+            raise DesktopApiError("无法读取知识库文件。") from exc
+        if not 0 < size <= MAX_KNOWLEDGE_DOCUMENT_BYTES:
+            raise DesktopApiError("知识库文件必须小于等于 20 MiB。")
+        try:
+            with document_path.open("rb") as document:
+                return self._request(
+                    "POST",
+                    "/api/knowledge/import",
+                    data={"user_id": self.user_id},
+                    files={
+                        "document": (
+                            document_path.name,
+                            document,
+                            "application/octet-stream",
+                        )
+                    },
+                )
+        except OSError as exc:
+            raise DesktopApiError("无法读取知识库文件。") from exc
+
+    def list_knowledge_documents(self) -> list[JsonObject]:
+        payload = self._request(
+            "GET",
+            "/api/knowledge/documents",
+            params={"user_id": self.user_id},
+        )
+        return self._object_list(payload, "items")
+
+    def search_knowledge(self, query: str, *, limit: int = 5) -> list[JsonObject]:
+        payload = self._request(
+            "GET",
+            "/api/knowledge/search",
+            params={"user_id": self.user_id, "query": query, "limit": limit},
+        )
+        return self._object_list(payload, "items")
+
+    def create_reminder(
+        self,
+        *,
+        title: str,
+        message: str,
+        due_at: str,
+        channel: str,
+    ) -> JsonObject:
+        return self._request(
+            "POST",
+            "/api/reminders",
+            json={
+                "user_id": self.user_id,
+                "title": title,
+                "message": message,
+                "due_at": due_at,
+                "channel": channel,
+            },
+        )
+
+    def list_reminders(self) -> list[JsonObject]:
+        payload = self._request(
+            "GET", "/api/reminders", params={"user_id": self.user_id}
+        )
+        return self._object_list(payload, "items")
+
+    def cancel_reminder(self, reminder_id: str) -> JsonObject:
+        return self._request(
+            "POST",
+            f"/api/reminders/{reminder_id}/cancel",
+            json={"user_id": self.user_id},
+        )
+
+    def poll_notifications(self) -> list[JsonObject]:
+        payload = self._request(
+            "GET", "/api/notifications/poll", params={"user_id": self.user_id}
+        )
+        return self._object_list(payload, "items")
+
+    def acknowledge_notification(self, outbox_id: str) -> None:
+        self._request_no_content(
+            "POST",
+            f"/api/notifications/{outbox_id}/ack",
+            json={"user_id": self.user_id},
+        )
 
     def create_skill(
         self,

@@ -9,8 +9,10 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from packages.capabilities import build_default_registry
 from packages.agent_harness import ManagedSkillStore
 from packages.observability import Observability
+from packages.integrations import DefaultConnectionTester
 
 from .config import Settings, load_settings
+from .auth import LocalApiAuthMiddleware
 from .database import create_database_sessionmaker
 from .errors import (
     AppError,
@@ -44,6 +46,7 @@ def create_app(
     app.state.logger = logger
     app.state.observability = runtime_observability
     app.state.db_sessionmaker = create_database_sessionmaker(settings.database_url)
+    app.state.connection_tester = DefaultConnectionTester()
     builtin_skills_root = Path(__file__).resolve().parents[3] / "prompts" / "skills"
     app.state.managed_skill_store = ManagedSkillStore(
         builtin_root=builtin_skills_root,
@@ -53,6 +56,7 @@ def create_app(
         builtin_skills_root,
         managed_store=app.state.managed_skill_store,
     )
+    app.add_middleware(LocalApiAuthMiddleware)
     app.include_router(router)
     app.add_exception_handler(AppError, app_error_handler)
     app.add_exception_handler(RequestValidationError, request_validation_error_handler)

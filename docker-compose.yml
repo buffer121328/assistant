@@ -1,4 +1,30 @@
 services:
+  ops:
+    profiles: ["ops"]
+    build:
+      context: .
+      dockerfile: Dockerfile.ops
+    image: assistant-ops:local
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://assistant:assistant@postgres:5432/assistant}
+    volumes:
+      - ./var/backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  migrate:
+    build:
+      context: .
+    image: assistant-api:local
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://assistant:assistant@postgres:5432/assistant}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   assistant-api:
     build:
       context: .
@@ -16,7 +42,15 @@ services:
       APP_ENV: ${APP_ENV:-local}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       SERVICE_NAME: ${SERVICE_NAME:-assistant-api}
+      LOCAL_API_AUTH_REQUIRED: ${LOCAL_API_AUTH_REQUIRED:-true}
+      LOCAL_API_TOKEN: ${LOCAL_API_TOKEN:-}
+      CREDENTIAL_MASTER_KEY: ${CREDENTIAL_MASTER_KEY:-}
       MANAGED_SKILLS_ROOT: /app/data/skills
+      MANAGED_PROMPTS_ROOT: /app/data/prompts
+      SKILL_PACKAGES_ROOT: /app/data/skill-packages
+      ARTIFACTS_ROOT: /app/data/artifacts
+      KNOWLEDGE_ROOT: /app/data/knowledge
+      BROWSER_STATE_ROOT: /app/data/browser
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://assistant:assistant@postgres:5432/assistant}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       SENTRY_DSN: ${SENTRY_DSN:-}
@@ -37,15 +71,44 @@ services:
       RUNNING_TASK_TIMEOUT_SECONDS: ${RUNNING_TASK_TIMEOUT_SECONDS:-300}
       PENDING_TASK_COMPENSATION_DELAY_SECONDS: ${PENDING_TASK_COMPENSATION_DELAY_SECONDS:-120}
       SCHEDULER_MAINTENANCE_INTERVAL_SECONDS: ${SCHEDULER_MAINTENANCE_INTERVAL_SECONDS:-300}
+      BROWSER_ENABLED: ${BROWSER_ENABLED:-false}
+      BROWSER_TIMEOUT_SECONDS: ${BROWSER_TIMEOUT_SECONDS:-20}
+      BROWSER_MAX_TEXT_CHARS: ${BROWSER_MAX_TEXT_CHARS:-50000}
+      SANDBOX_ENABLED: ${SANDBOX_ENABLED:-false}
+      SANDBOX_WORKSPACE_ROOT: /app/data/sandbox
+      SANDBOX_IMAGE: ${SANDBOX_IMAGE:-}
+      SANDBOX_ALLOWED_IMAGES: ${SANDBOX_ALLOWED_IMAGES:-}
+      SANDBOX_TIMEOUT_SECONDS: ${SANDBOX_TIMEOUT_SECONDS:-30}
+      SUBAGENT_ENABLED: ${SUBAGENT_ENABLED:-true}
+      SUBAGENT_MAX_COUNT: ${SUBAGENT_MAX_COUNT:-3}
+      SUBAGENT_CONCURRENCY: ${SUBAGENT_CONCURRENCY:-2}
+      SUBAGENT_TIMEOUT_SECONDS: ${SUBAGENT_TIMEOUT_SECONDS:-30}
+      MEM0_CONFIG_PATH: ${MEM0_CONFIG_PATH:-}
+      MEM0_SEARCH_LIMIT: ${MEM0_SEARCH_LIMIT:-5}
+      QUALITY_JUDGE_SAMPLE_RATE: ${QUALITY_JUDGE_SAMPLE_RATE:-0}
+      QUALITY_JUDGE_POLICY_VERSION: ${QUALITY_JUDGE_POLICY_VERSION:-judge-v1}
+      QUALITY_JUDGE_THRESHOLD: ${QUALITY_JUDGE_THRESHOLD:-0.6}
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - skills-data:/app/data/skills
+      - prompts-data:/app/data/prompts
+      - skill-packages-data:/app/data/skill-packages
+      - artifacts-data:/app/data/artifacts
+      - knowledge-data:/app/data/knowledge
+      - browser-data:/app/data/browser
+      - sandbox-data:/app/data/sandbox
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
 
   celery-worker:
     build:
@@ -61,6 +124,13 @@ services:
       APP_ENV: ${APP_ENV:-local}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       SERVICE_NAME: ${SERVICE_NAME:-assistant-api}
+      CREDENTIAL_MASTER_KEY: ${CREDENTIAL_MASTER_KEY:-}
+      MANAGED_SKILLS_ROOT: /app/data/skills
+      MANAGED_PROMPTS_ROOT: /app/data/prompts
+      SKILL_PACKAGES_ROOT: /app/data/skill-packages
+      ARTIFACTS_ROOT: /app/data/artifacts
+      KNOWLEDGE_ROOT: /app/data/knowledge
+      BROWSER_STATE_ROOT: /app/data/browser
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://assistant:assistant@postgres:5432/assistant}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       LANGBOT_API_BASE_URL: ${LANGBOT_API_BASE_URL:-https://langbot.invalid}
@@ -79,11 +149,45 @@ services:
       RUNNING_TASK_TIMEOUT_SECONDS: ${RUNNING_TASK_TIMEOUT_SECONDS:-300}
       PENDING_TASK_COMPENSATION_DELAY_SECONDS: ${PENDING_TASK_COMPENSATION_DELAY_SECONDS:-120}
       SCHEDULER_MAINTENANCE_INTERVAL_SECONDS: ${SCHEDULER_MAINTENANCE_INTERVAL_SECONDS:-300}
+      BROWSER_ENABLED: ${BROWSER_ENABLED:-false}
+      BROWSER_TIMEOUT_SECONDS: ${BROWSER_TIMEOUT_SECONDS:-20}
+      BROWSER_MAX_TEXT_CHARS: ${BROWSER_MAX_TEXT_CHARS:-50000}
+      SANDBOX_ENABLED: ${SANDBOX_ENABLED:-false}
+      SANDBOX_WORKSPACE_ROOT: /app/data/sandbox
+      SANDBOX_IMAGE: ${SANDBOX_IMAGE:-}
+      SANDBOX_ALLOWED_IMAGES: ${SANDBOX_ALLOWED_IMAGES:-}
+      SANDBOX_TIMEOUT_SECONDS: ${SANDBOX_TIMEOUT_SECONDS:-30}
+      SUBAGENT_ENABLED: ${SUBAGENT_ENABLED:-true}
+      SUBAGENT_MAX_COUNT: ${SUBAGENT_MAX_COUNT:-3}
+      SUBAGENT_CONCURRENCY: ${SUBAGENT_CONCURRENCY:-2}
+      SUBAGENT_TIMEOUT_SECONDS: ${SUBAGENT_TIMEOUT_SECONDS:-30}
+      MEM0_CONFIG_PATH: ${MEM0_CONFIG_PATH:-}
+      MEM0_SEARCH_LIMIT: ${MEM0_SEARCH_LIMIT:-5}
+      QUALITY_JUDGE_SAMPLE_RATE: ${QUALITY_JUDGE_SAMPLE_RATE:-0}
+      QUALITY_JUDGE_POLICY_VERSION: ${QUALITY_JUDGE_POLICY_VERSION:-judge-v1}
+      QUALITY_JUDGE_THRESHOLD: ${QUALITY_JUDGE_THRESHOLD:-0.6}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-}
+    volumes:
+      - skills-data:/app/data/skills
+      - prompts-data:/app/data/prompts
+      - skill-packages-data:/app/data/skill-packages
+      - artifacts-data:/app/data/artifacts
+      - knowledge-data:/app/data/knowledge
+      - browser-data:/app/data/browser
+      - sandbox-data:/app/data/sandbox
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "celery", "-A", "assistant_api.worker:celery_app", "inspect", "ping", "--timeout", "5"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
 
   celery-beat:
     build:
@@ -95,6 +199,7 @@ services:
       - assistant_api.worker:celery_app
       - beat
       - --loglevel=INFO
+      - --schedule=/app/run/celerybeat-schedule
     environment:
       APP_ENV: ${APP_ENV:-local}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
@@ -108,10 +213,18 @@ services:
       PENDING_TASK_COMPENSATION_DELAY_SECONDS: ${PENDING_TASK_COMPENSATION_DELAY_SECONDS:-120}
       SCHEDULER_MAINTENANCE_INTERVAL_SECONDS: ${SCHEDULER_MAINTENANCE_INTERVAL_SECONDS:-300}
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os; os.kill(1, 0)"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    volumes:
+      - beat-run:/app/run
 
   postgres:
     image: postgres:16
@@ -122,10 +235,11 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U assistant -d assistant"]
+      test: ["CMD-SHELL", 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
 
   redis:
     image: redis:7
@@ -134,7 +248,15 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
 
 volumes:
   postgres-data:
   skills-data:
+  prompts-data:
+  skill-packages-data:
+  artifacts-data:
+  knowledge-data:
+  browser-data:
+  sandbox-data:
+  beat-run:

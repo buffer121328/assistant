@@ -652,14 +652,17 @@ async def test_approval_interrupt_resumes_same_task_and_revalidates_registry(
         await session.commit()
 
         assert waiting.requested_tools == ("email.send",)
+        assert len(waiting.approval_requests) == 1
+        assert waiting.approval_requests[0].subject.startswith("email.send:")
         assert waiting.checkpoint_id
         assert calls == []
 
         session.add(
-            Approval(
-                task_id=task.id,
-                tool_name="email.send",
-                status="approved",
+                Approval(
+                    task_id=task.id,
+                    tool_name="email.send",
+                    subject=waiting.approval_requests[0].subject,
+                    status="approved",
                 decided_by_user_id=task.user_id,
             )
         )

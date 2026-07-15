@@ -342,6 +342,8 @@ async def test_06_worker_heartbeat_composes_bounded_v2_maintenance(
         "compensated_task_ids": [],
         "archived_memory_ids": [],
         "evolution_suggestion_created": False,
+        "created_notification_outbox_ids": [],
+        "delivered_notification_outbox_ids": [],
     }
     assert [log.tool_name for log in logs] == ["memory.maintenance"]
     assert not any(

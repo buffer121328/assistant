@@ -19,6 +19,14 @@ from packages.agent_harness import (
 from packages.model_gateway import sanitize_text
 from packages.memory import Mem0MemoryAdapter
 from packages.observability import Observability
+from packages.knowledge import KnowledgeService
+from packages.integrations import (
+    AccountBackedProviders,
+    AccountBackedBrowserSessions,
+    CredentialCipher,
+    CredentialError,
+    active_connection_providers,
+)
 from packages.quality import JudgeModel, QualityEvaluator, SamplingPolicy
 from packages.capabilities import CapabilityRegistry, build_default_registry
 from packages.tools import (
@@ -37,6 +45,11 @@ from packages.tools import (
     build_search_tool_spec,
     build_personal_tool_descriptors,
     build_personal_tool_specs,
+    build_knowledge_tool_descriptor,
+    build_knowledge_tool_spec,
+    BrowserInteractor,
+    build_browser_tool_descriptors,
+    build_browser_tool_specs,
     build_tavily_config,
 )
 
@@ -273,6 +286,7 @@ async def _execute_with_harness(
         sensitive_values=sensitive_values,
     )
     search_descriptor = build_search_tool_descriptor(enabled=True)
+    knowledge_descriptor = build_knowledge_tool_descriptor()
     sandbox = DockerSandboxRunner(
         config=DockerSandboxConfig(
             enabled=settings.sandbox_enabled,
@@ -286,12 +300,43 @@ async def _execute_with_harness(
         ),
         workspace_root=settings.sandbox_workspace_root,
     )
+    external_providers: AccountBackedProviders | None = None
+    credential_cipher: CredentialCipher | None = None
+    active_providers: frozenset[str] = frozenset()
+    if task is not None:
+        try:
+            cipher = CredentialCipher(settings.credential_master_key.get_secret_value())
+        except CredentialError:
+            pass
+        else:
+            credential_cipher = cipher
+            active_providers = await active_connection_providers(session, task.user_id)
+            external_providers = AccountBackedProviders(session, cipher=cipher)
     personal_descriptors = build_personal_tool_descriptors(
         browser_available=settings.browser_enabled,
         sandbox_available=sandbox.available,
+        email_provider_available="smtp" in active_providers,
+        calendar_provider_available="caldav" in active_providers,
+    )
+    browser_interaction_descriptors = build_browser_tool_descriptors(
+        enabled=(
+            settings.browser_enabled
+            and "browser" in active_providers
+            and credential_cipher is not None
+        )
     )
     tool_catalog = ToolCatalog(
-        (StaticToolSource("builtin", (search_descriptor, *personal_descriptors)),),
+        (
+            StaticToolSource(
+                "builtin",
+                (
+                    search_descriptor,
+                    knowledge_descriptor,
+                    *personal_descriptors,
+                    *browser_interaction_descriptors,
+                ),
+            ),
+        ),
         sensitive_values=sensitive_values,
     )
     tool_snapshot = await tool_catalog.refresh()
@@ -308,6 +353,11 @@ async def _execute_with_harness(
             source_available=tool_snapshot.is_available(search_descriptor),
         )
     )
+    tool_registry.register(
+        build_knowledge_tool_spec(
+            KnowledgeService(session, import_root=settings.knowledge_root)
+        )
+    )
     productivity = ProductivityTools(ArtifactStore(settings.artifacts_root))
     browser = (
         PlaywrightBrowserReader(
@@ -317,11 +367,32 @@ async def _execute_with_harness(
         if settings.browser_enabled
         else None
     )
-    for spec in build_personal_tool_specs(
+    browser_interactor = (
+        BrowserInteractor(
+            sessions=AccountBackedBrowserSessions(session, cipher=credential_cipher),
+            timeout_seconds=settings.browser_timeout_seconds,
+            max_text_chars=settings.browser_max_text_chars,
+        )
+        if (
+            settings.browser_enabled
+            and "browser" in active_providers
+            and credential_cipher is not None
+        )
+        else None
+    )
+    personal_specs = build_personal_tool_specs(
         productivity=productivity,
         browser=browser,
         sandbox=sandbox,
-    ):
+        email_provider=(external_providers if "smtp" in active_providers else None),
+        calendar_provider=(external_providers if "caldav" in active_providers else None),
+    )
+    browser_specs = (
+        build_browser_tool_specs(browser_interactor)
+        if browser_interactor is not None
+        else ()
+    )
+    for spec in (*personal_specs, *browser_specs):
         descriptor = tool_snapshot.get(spec.name)
         if descriptor is None or not descriptor.enabled:
             continue
@@ -460,4 +531,6 @@ def _sensitive_values(settings: Settings) -> tuple[str | None, ...]:
         settings.tavily_base_url,
         settings.tavily_api_key,
         settings.deepseek_api_key,
+        settings.credential_master_key.get_secret_value(),
+        settings.local_api_token.get_secret_value(),
     )

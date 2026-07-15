@@ -11,6 +11,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from assistant_api.models import Approval, ApprovalStatus, Task
+from packages.tools.approval import (
+    EXACT_APPROVAL_TOOLS,
+    external_approval_binding,
+    external_audit_arguments,
+)
 from packages.model_gateway import sanitize_text
 from packages.observability import NoopObservability, Observability
 from packages.tools import (
@@ -132,7 +137,7 @@ class LangGraphExecutor:
                 snapshot.interrupts
             )
             requested_tools = tuple(
-                request.subject
+                request.tool_name or request.subject
                 for request in approval_requests
                 if request.approval_type == "tool"
             )
@@ -429,15 +434,21 @@ class LangGraphExecutor:
         async def wait_for_approval() -> _ExecutionState:
             decision = state.get("decision", {})
             tool_name = decision.get("tool_name")
-            if not isinstance(tool_name, str):
+            arguments = decision.get("arguments")
+            if not isinstance(tool_name, str) or not isinstance(arguments, dict):
                 raise RuntimeError("Approval tool decision is unavailable")
+            binding = (
+                external_approval_binding(tool_name, arguments)
+                if tool_name in EXACT_APPROVAL_TOOLS
+                else None
+            )
             interrupt(
                 {
                     "type": "tool_approval",
                     "tool_name": tool_name,
                     "approval_type": "tool",
-                    "subject": tool_name,
-                    "summary": f"工具调用：{tool_name}",
+                    "subject": binding.subject if binding else tool_name,
+                    "summary": binding.summary if binding else f"工具调用：{tool_name}",
                 }
             )
             return {"requested_tools": []}
@@ -727,7 +738,14 @@ class LangGraphExecutor:
             with self.observability.observe(
                 "agent.tool.call",
                 as_type="tool",
-                input={"tool_name": tool_name, "arguments": arguments},
+                input={
+                    "tool_name": tool_name,
+                    "arguments": (
+                        external_audit_arguments(tool_name, arguments)
+                        if tool_name in EXACT_APPROVAL_TOOLS
+                        else arguments
+                    ),
+                },
                 metadata={
                     "task_id": run_input.context.task_id,
                     "tool_name": tool_name,
@@ -940,6 +958,11 @@ def _approval_requests_from_interrupts(
                 approval_type=cast(ApprovalTypeName, approval_type),
                 subject=subject[:128],
                 summary=summary[:1000],
+                tool_name=(
+                    value.get("tool_name")
+                    if isinstance(value.get("tool_name"), str)
+                    else None
+                ),
             )
             if request not in requests:
                 requests.append(request)

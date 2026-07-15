@@ -22,6 +22,7 @@ from packages.tools import (
     ToolInvocation,
     ToolRegistry,
     ToolSpec,
+    external_approval_binding,
 )
 
 
@@ -305,10 +306,12 @@ async def test_registry_executes_only_exact_approved_task_and_tool(
         return {"sent": True}
 
     async with sessionmaker() as session:
+        approval_subject = external_approval_binding("email.send", {}).subject
         session.add(
             Approval(
                 task_id=approved_task.id,
                 tool_name="email.send",
+                subject=approval_subject,
                 status="approved",
                 decided_by_user_id=user_id,
             )

@@ -21,13 +21,25 @@ from .mcp import (
     MCPToolSource,
 )
 from .artifacts import Artifact, ArtifactPathError, ArtifactStore, ProductivityTools
+from .approval import (
+    EXACT_APPROVAL_TOOLS,
+    ExternalApprovalBinding,
+    external_approval_binding,
+)
 from .browser import (
     BrowserDestinationError,
     BrowserReadResult,
     PlaywrightBrowserReader,
     PublicUrlPolicy,
 )
+from .browser_interact import (
+    BrowserInteractionResult,
+    BrowserInteractor,
+    build_browser_tool_descriptors,
+    build_browser_tool_specs,
+)
 from .personal import build_personal_tool_descriptors, build_personal_tool_specs
+from .knowledge import build_knowledge_tool_descriptor, build_knowledge_tool_spec
 from .providers import CalendarProvider, EmailProvider
 from .registry import (
     ToolApprovalRequiredError,
@@ -65,10 +77,14 @@ __all__ = [
     "ArtifactStore",
     "BrowserDestinationError",
     "BrowserReadResult",
+    "BrowserInteractionResult",
+    "BrowserInteractor",
     "CalendarProvider",
     "DockerSandboxConfig",
     "DockerSandboxRunner",
     "EmailProvider",
+    "EXACT_APPROVAL_TOOLS",
+    "ExternalApprovalBinding",
     "MCPClientProtocol",
     "MCPClientUnavailableError",
     "MCPDiscoveryClientProtocol",
@@ -106,11 +122,16 @@ __all__ = [
     "ToolSourceStatus",
     "ToolSourceUnavailableError",
     "ToolSpec",
+    "external_approval_binding",
     "build_planned_tool_schemas",
     "build_search_tool_descriptor",
     "build_search_tool_spec",
     "build_personal_tool_descriptors",
     "build_personal_tool_specs",
+    "build_knowledge_tool_descriptor",
+    "build_knowledge_tool_spec",
+    "build_browser_tool_descriptors",
+    "build_browser_tool_specs",
     "build_tavily_config",
     "normalize_tavily_sources",
 ]

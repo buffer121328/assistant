@@ -8,6 +8,7 @@ from .artifacts import ProductivityTools
 from .browser import PlaywrightBrowserReader
 from .catalog import ToolDescriptor
 from .providers import CalendarProvider, EmailProvider
+from .approval import external_approval_binding
 from .registry import ToolHandler, ToolInvocation, ToolRiskLevel, ToolSpec
 from .sandbox import DockerSandboxRunner
 
@@ -128,6 +129,7 @@ def build_personal_tool_specs(
             args = invocation.arguments
             provider_id = await email_provider.send(
                 user_id=invocation.user_id,
+                connection_id=str(args["connection_id"]),
                 recipients=tuple(str(item) for item in args["to"]),
                 subject=str(args["subject"]),
                 body=str(args["body"]),
@@ -140,10 +142,15 @@ def build_personal_tool_specs(
             args = invocation.arguments
             provider_id = await calendar_provider.create_event(
                 user_id=invocation.user_id,
+                connection_id=str(args["connection_id"]),
                 title=str(args["title"]),
                 start=str(args["start"]),
                 end=str(args["end"]),
                 description=str(args.get("description", "")),
+                idempotency_key=(
+                    f"{invocation.task_id}:"
+                    f"{external_approval_binding(invocation.name, args).fingerprint}"
+                ),
             )
             return {"provider_id": provider_id}
 
@@ -168,7 +175,7 @@ def _descriptor(
         input_schema=schema,
         source_id="builtin",
         source_kind="builtin",
-        version="personal-v1",
+        version="personal-v2",
         enabled=enabled,
         risk_level=risk_level,
         requires_approval=requires_approval,
@@ -192,7 +199,7 @@ def _spec(
         risk_level=risk_level,
         handler=handler,
         input_schema=schema,
-        version="personal-v1",
+        version="personal-v2",
         parallel_safe=parallel_safe,
     )
 
@@ -210,11 +217,17 @@ def _email_schema() -> dict[str, Any]:
 
 
 def _send_email_schema() -> dict[str, Any]:
-    return _object({"to": {"type": "array", "items": _text(320), "minItems": 1, "maxItems": 20}, "subject": _text(300), "body": _text(100_000)}, ("to", "subject", "body"))
+    return _object({"connection_id": _text(36), "to": {"type": "array", "items": _text(320), "minItems": 1, "maxItems": 20}, "subject": _text(300), "body": _text(100_000)}, ("connection_id", "to", "subject", "body"))
 
 
 def _calendar_fields(*, include_filename: bool) -> dict[str, Any]:
-    fields: dict[str, Any] = {"title": _text(500), "start": _text(64), "end": _text(64), "description": _text(10_000, allow_empty=True)}
+    date_time = {"type": "string", "format": "date-time", "maxLength": 64}
+    fields: dict[str, Any] = {
+        "title": _text(500),
+        "start": date_time,
+        "end": date_time,
+        "description": _text(10_000, allow_empty=True),
+    }
     if include_filename:
         fields = {"filename": _text(128), **fields}
     return fields
@@ -225,7 +238,10 @@ def _calendar_schema() -> dict[str, Any]:
 
 
 def _calendar_provider_schema() -> dict[str, Any]:
-    return _object(_calendar_fields(include_filename=False), ("title", "start", "end"))
+    return _object(
+        {"connection_id": _text(36), **_calendar_fields(include_filename=False)},
+        ("connection_id", "title", "start", "end"),
+    )
 
 
 def _docx_schema() -> dict[str, Any]:

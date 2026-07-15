@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -7,6 +8,9 @@ class Settings(BaseSettings):
     app_env: str = "local"
     log_level: str = "INFO"
     service_name: str = "assistant-api"
+    local_api_auth_required: bool = False
+    local_api_token: SecretStr = SecretStr("")
+    credential_master_key: SecretStr = SecretStr("")
     database_url: str = "postgresql+asyncpg://placeholder"
     redis_url: str = "redis://placeholder"
     sentry_dsn: str | None = None
@@ -34,6 +38,8 @@ class Settings(BaseSettings):
     managed_prompts_root: Path = Path("var/prompts")
     skill_packages_root: Path = Path("var/skill-packages")
     artifacts_root: Path = Path("var/artifacts")
+    knowledge_root: Path = Path("var/knowledge")
+    browser_state_root: Path = Path("var/browser")
     browser_enabled: bool = False
     browser_timeout_seconds: float = 20.0
     browser_max_text_chars: int = 50_000

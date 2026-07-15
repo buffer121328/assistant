@@ -2,7 +2,7 @@
 
 个人 Agent 助手系统。当前产品入口只保留两类：LangBot 作为主消息通道和响应通道，PySide6 原生小窗口作为本机 GUI；FastAPI 提供二者共用的内部 API。旧网页控制台、项目 CLI 和其他直连消息通道已经移除。
 
-项目已完成 MVP 阶段 09、V2-01 至 V2-06、V3-00 至 V3-09，并进入 V4-00。当前新增真实 EML/ICS/Office artifacts、受限 Playwright 浏览、可选 Docker Shell、有界子 Agent 与安全工具并行、Mem0 语义记忆、受治理 Prompt/Skill 演进，以及 Langfuse LLM Judge/Prometheus 质量策略。
+项目已完成 MVP 阶段 09、V2、V3 与 V4，并进入 V5-00 工程验收。当前代码已具备本机 API 认证、加密账号连接、真实 SMTP/CalDAV 动作、受限登录态浏览器、个人知识库、持久提醒通知、Compose/CI 和备份恢复入口。真实第三方账号联调与长时间连续运行仍需在用户提供测试账号和本地授权后完成，未配置项不会被标记为通过。
 
 ## 项目介绍
 
@@ -14,8 +14,11 @@
 - LangBot 无斜杠自由文本和 GUI“智能路由”创建 `agent` 任务，由 worker 中的轻量模型从四个已注册 Agent Profile 里选择；固定模式不调用路由模型。
 - Capability Registry 统一索引代码、Agent Profile、Skill 和 Tool；目录查询只读取元数据，不加载具体实现。
 - Model Gateway 统一承载 DeepSeek 兼容模型调用，Tavily 提供 `search.web`。
+- 个人知识库按用户、内容 checksum 和 parser version 去重，重复上传不重复创建文档与 chunks。
+- 提醒通知使用持久 outbox、原子发送租约和稳定幂等键；LangBot endpoint 需识别 payload/header 中的同一键以去重不确定重试。
+- CalDAV 事件要求带时区时间，provider 会统一转换为 UTC RFC 5545 格式并拒绝无效时间区间。
 
-方案文档见 `docs/个人Agent助手系统完整方案.md`，MVP 文档见 `docs/mvp/index.md`，V2 文档见 `docs/v2/index.md`，V3 文档见 `docs/v3/index.md`，V4 文档见 `docs/v4/index.md`。
+方案文档见 `docs/个人Agent助手系统完整方案.md`，MVP 文档见 `docs/mvp/index.md`，V2 文档见 `docs/v2/index.md`，V3 文档见 `docs/v3/index.md`，V4 文档见 `docs/v4/index.md`，V5 文档与运维入口见 `docs/v5/index.md`。
 
 ## 启动方式
 
@@ -31,10 +34,11 @@ uv sync
 
 ```bash
 cp .env.example .env
-docker compose up -d postgres redis
-docker compose run --rm assistant-api alembic upgrade head
-docker compose up --build -d assistant-api celery-worker celery-beat
+# 先填写 LOCAL_API_TOKEN、CREDENTIAL_MASTER_KEY 和需要启用的 provider 配置
+docker compose up --build -d
 ```
+
+Compose 的 `migrate` 一次性服务会在 API、worker 和 Beat 启动前执行 `alembic upgrade head`。API 默认只映射到 `127.0.0.1:8000`。已有数据库中的逾期 pending 任务可能在 worker 启动后被补偿，恢复旧数据后应先检查任务状态再启动 worker。
 
 本地分别启动 API、worker 与单实例 Beat：
 
@@ -50,7 +54,7 @@ PYTHONPATH=apps/api:. uv run celery -A assistant_api.worker:celery_app beat --lo
 uv run assistant-desktop
 ```
 
-桌面端不会自动启动后端。使用前必须完成数据库迁移，启动 API、Redis、PostgreSQL 和 `celery-worker`，并在数据库中准备用户。GUI 的 API 地址和用户 ID 保存在操作系统 `QSettings` 中，不保存密钥。
+桌面端不会自动启动后端。使用前必须完成数据库迁移，启动 API、Redis、PostgreSQL 和 `celery-worker`，并在数据库中准备用户。GUI 的 API 地址和用户 ID 保存在 `QSettings`，本机 API token 存入系统 keyring；账号密码、Token 和浏览器 storage state 不回显。
 
 健康检查：
 
@@ -64,6 +68,8 @@ curl http://127.0.0.1:8000/health
 
 主要配置：
 
+- `LOCAL_API_AUTH_REQUIRED`、`LOCAL_API_TOKEN`：本机受保护 API 的 Bearer token 边界；Compose 默认要求配置。
+- `CREDENTIAL_MASTER_KEY`：账号连接密文主密钥，至少 32 个字符；缺失时真实账号能力 fail-closed，不回退明文。
 - `DATABASE_URL`：PostgreSQL asyncpg URL，同时供 LangGraph 官方 PostgreSQL checkpoint saver 使用；默认 Agent worker 不对其他数据库伪回退。
 - `REDIS_URL`：Celery broker 与 result backend。
 - `LANGBOT_WEBHOOK_SECRET`：`POST /api/webhooks/langbot` 的请求校验密钥。
@@ -77,7 +83,8 @@ curl http://127.0.0.1:8000/health
 - `MANAGED_SKILLS_ROOT`：托管 Skill 的可写根目录，本地默认 `var/skills`；Compose 容器固定使用持久卷中的 `/app/data/skills`。
 - `MANAGED_PROMPTS_ROOT`、`SKILL_PACKAGES_ROOT`：受治理 Prompt 和待审批本地 Skill ZIP 的根目录；后者只接受已校验、无脚本的本地包。
 - `ARTIFACTS_ROOT`：按 task 隔离的 EML/ICS/Office 文件根目录。
-- `BROWSER_ENABLED`：是否启用受限 Playwright 公网页面读取；需先显式安装 Chromium。
+- `KNOWLEDGE_ROOT`：显式导入文件、索引元数据和用户隔离知识内容的受管根目录。
+- `BROWSER_STATE_ROOT`、`BROWSER_ENABLED`：加密浏览器状态根和受限交互开关；需显式安装 Chromium，不读取宿主默认浏览器 profile。
 - `SANDBOX_*`：Docker 隔离 Shell 开关、workspace、镜像 allowlist 与超时；默认关闭且不回退宿主执行。
 - `SUBAGENT_*`：子 Agent 总数、并发和超时硬上限。
 - `MEM0_CONFIG_PATH`、`MEM0_SEARCH_LIMIT`：可选 Mem0/pgvector 本地配置与语义检索上限；无配置使用 SQL。
@@ -96,9 +103,12 @@ assistant/
 ├── packages/
 │   ├── agent_harness/           # Agent 模型协议、规划与有界 LangGraph 执行边界
 │   ├── capabilities/            # V3 统一能力目录与懒解析
+│   ├── integrations/            # 加密账号解析、SMTP、CalDAV 与浏览器会话 provider
+│   ├── knowledge/               # 文件校验、解析、分块、索引与用户隔离检索
 │   ├── model_gateway/           # 模型适配与脱敏
+│   ├── notifications/           # 提醒状态机、通知 outbox、重试与投递 adapter
 │   ├── observability/           # 框架无关的 Trace/Score 协议与 No-op
-│   ├── tools/                   # 搜索、真实 artifacts、受限浏览、Docker 沙箱与 provider 协议
+│   ├── tools/                   # Agent-facing 工具描述、精确审批和安全 handler
 │   ├── memory/                  # SQL 生命周期、Mem0 语义适配与上下文合并
 │   ├── quality/                 # Judge 采样、分数、指标和阈值策略
 │   └── evaluation/              # 离线评测
@@ -106,11 +116,17 @@ assistant/
 ├── var/skills/                  # 本地托管 Skills（运行时生成，不提交）
 ├── migrations/                  # Alembic 迁移
 ├── openspec/                    # 当前规范与变更归档
-├── docs/                        # MVP、V2、V3、V4 文档
-├── tests/                       # 验收、集成、单元和评测数据
+├── scripts/ops/                 # Compose smoke、provider smoke、soak、备份与空库恢复
+├── docs/                        # MVP、V2、V3、V4、V5 文档与运维手册
+├── tests/
+│   ├── acceptance/              # 确定性用户行为与安全边界
+│   └── integration/             # 本地协议服务器和隔离 PostgreSQL/Redis/Celery 栈
 ├── Dockerfile
+├── Dockerfile.ops
 └── docker-compose.yml
 ```
+
+仓库不保留空目录表达未来规划：无实现的目录直接删除；职责相同才合并；需要保留的 Python 包必须包含真实模块或 `__init__.py`。运行时目录统一放在已忽略的 `var/`，不会提交备份、Cookie、知识文件或报告。
 
 ## 核心功能
 
@@ -134,8 +150,22 @@ assistant/
 - V4-00 让 `office` 也进入 Plan-Execute-Review；复杂 WorkPlan 可有界 fan-out 给无工具权限的子 Agent，主 Agent 可请求最多 3 个全量预授权的并行安全工具，候选答案仍必须 Review 后发布。
 - `/learn` 通过 `search.web` 获取资料，`/daily` 通过 `search.web` 获取来源，`/office` 默认不执行搜索。
 - 计划、工具和复核 gate 都会进入 `waiting_approval`；批准后从相同 task checkpoint 精确恢复，拒绝后任务取消。ToolRegistry 只接受精确 `tool` 类型批准，计划或复核批准不能授予工具权限。
-- 当前动态快照接入 `search.web`、本地 EML/ICS/Office artifacts，以及显式启用后的 `browser.read`/`shell.exec`。邮件发送和日历账号写入只有 provider 注入后才出现；完整 MCP Gateway 仍未配置，MCP 工具默认不启用且未配置时零连接，新发现外部工具默认禁用。
-- V4 已完成受限页面读取与真实 Office 文件生成；带登录态和任意交互的深度浏览、真实第三方邮件/日历接入仍属于后续扩展。
+- 当前动态快照接入 `search.web`、本地 EML/ICS/Office artifacts、`knowledge.search`，以及显式启用后的 `browser.read`/`browser.interact`/`browser.save_state` 和 `shell.exec`。只有任务所有者存在活动连接时才发布 `email.send` 与 `calendar.sync_event`。
+- 邮件、日历和浏览器外部动作绑定 task、tool、connection、目标、内容摘要与参数指纹，必须经 L3 精确审批；连接存在本身不授予执行权限。
+- 完整 MCP Gateway 尚未配置，MCP Server 默认不启用；未配置时零连接，新发现外部工具也不会自动获得权限。
+- V4 已完成真实 Office 文件生成；V5 已实现邮件/日历接入与受限的结构化深度浏览，但仍拒绝任意脚本、selector、域名和无审批提交，真实账号兼容性以显式 smoke 结果为准。
+
+### V5 现实行动与个人数据
+
+- SMTP 使用 STARTTLS 或 TLS、超时和安全错误码真实发送；CalDAV 使用稳定 UID，重试不会重复创建同一事件。账号凭据加密存储，支持测试、禁用和撤销。
+- 浏览器仅接受有界结构化动作，限制允许域名并阻止私网、保留地址、任意 selector、JavaScript 和下载；交互后的状态只有再次精确批准保存才会覆盖密文。
+- 知识库只摄取用户显式授权的 txt、md、pdf、docx、xlsx、pptx，校验真实路径、符号链接、大小和 checksum；解析失败保留旧索引，检索严格按用户隔离并返回来源。
+- 提醒通过持久化 outbox 投递桌面或已有 LangBot 目标，成功记录不会因 Beat、worker 或 Redis 重启而重复发送；失败状态和重试结果可在桌面查看。
+- 确定性 localhost SMTP/CalDAV 协议测试和隔离 Compose 重启测试可在无私人凭据时运行。真实 provider 只由显式 `SMOKE_*` 配置触发，跳过项保持未验证。
+
+### 运维与恢复
+
+可复制的 Compose smoke、真实 provider smoke、soak、备份与空库恢复命令见 `docs/v5/01-operations-runbook.md`。恢复脚本要求目标 `public` schema 为空，先校验 SHA-256，再比对 Alembic 版本和核心表计数；不会覆盖非空数据库。
 
 ### V3 能力目录与扩展边界
 
@@ -178,6 +208,9 @@ uv run pytest
 uv run pytest --cov
 uv run ruff check .
 uv run mypy .
+uv lock --check
+uv run python -m scripts.ops.compose_smoke
+uv run python -m scripts.ops.provider_smoke
 ```
 
 项目遵循 OpenSpec + ATDD：每个 phase 先同步验收标准，再实现和验证，完成后同步主规范并归档变更。

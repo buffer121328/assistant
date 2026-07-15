@@ -8,6 +8,7 @@ class EmailProvider(Protocol):
         self,
         *,
         user_id: str,
+        connection_id: str,
         recipients: tuple[str, ...],
         subject: str,
         body: str,
@@ -19,8 +20,10 @@ class CalendarProvider(Protocol):
         self,
         *,
         user_id: str,
+        connection_id: str,
         title: str,
         start: str,
         end: str,
         description: str,
+        idempotency_key: str,
     ) -> str: ...

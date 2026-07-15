@@ -1,0 +1,20 @@
+FROM postgres:16-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends python3 \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 10001 assistant \
+    && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin assistant \
+    && mkdir -p /app /backups \
+    && chown assistant:assistant /backups
+
+WORKDIR /app
+COPY scripts ./scripts
+
+USER assistant
+
+ENTRYPOINT ["python3", "-m"]

@@ -68,6 +68,7 @@ class LangBotResultClient:
         conversation_id: str,
         conversation_type: str,
         text: str,
+        idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         payload = {
             "adapter": adapter,
@@ -79,6 +80,11 @@ class LangBotResultClient:
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.settings.langbot_api_key}",
         }
+        if idempotency_key:
+            bounded_key = idempotency_key.strip()[:128]
+            if bounded_key:
+                payload["idempotency_key"] = bounded_key
+                headers["Idempotency-Key"] = bounded_key
 
         try:
             async with httpx.AsyncClient(
