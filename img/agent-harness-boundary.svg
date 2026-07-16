@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="500" viewBox="0 0 1280 500" role="img">
+
+<style>
+  .bg { fill: #f8fafc; }
+  .title { font: 700 28px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #0f172a; }
+  .label { font: 600 15px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #0f172a; }
+  .small { font: 400 13px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #334155; }
+  .tiny { font: 400 12px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #475569; }
+  .box { stroke: #2563eb; stroke-width: 1.6; fill: #eff6ff; }
+  .box-green { stroke: #16a34a; fill: #f0fdf4; }
+  .box-orange { stroke: #ea580c; fill: #fff7ed; }
+  .box-purple { stroke: #7c3aed; fill: #f5f3ff; }
+  .box-slate { stroke: #64748b; fill: #f8fafc; }
+  .box-red { stroke: #dc2626; fill: #fef2f2; }
+  .arrow { stroke: #334155; stroke-width: 1.8; fill: none; marker-end: url(#arrow); }
+  .dash { stroke-dasharray: 6 6; }
+  .lane { stroke: #cbd5e1; stroke-width: 1.2; stroke-dasharray: 5 5; }
+</style>
+<defs>
+  <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+    <path d="M0,0 L0,6 L9,3 z" fill="#334155" />
+  </marker>
+</defs>
+
+<rect width="100%" height="100%" class="bg"/>
+<text x="32" y="44" class="title">Agent Harness 解耦边界：核心依赖 ports，API 提供适配器</text>
+<rect x="60" y="150" width="230" height="100" class="box box" rx="14"/>
+<text x="175.0" y="178" text-anchor="middle" class="label">Agent Harness Core</text>
+<text x="175.0" y="202" text-anchor="middle" class="small">只依赖抽象 ports</text>
+<text x="175.0" y="220" text-anchor="middle" class="small">不直接依赖 API 实现</text>
+<rect x="370" y="80" width="230" height="90" class="box box-purple" rx="14"/>
+<text x="485.0" y="108" text-anchor="middle" class="label">Ports</text>
+<text x="485.0" y="132" text-anchor="middle" class="small">TaskLifecyclePort</text>
+<text x="485.0" y="150" text-anchor="middle" class="small">ExecutionTracePort</text>
+<rect x="370" y="205" width="230" height="90" class="box box-purple" rx="14"/>
+<text x="485.0" y="233" text-anchor="middle" class="label">More Ports</text>
+<text x="485.0" y="257" text-anchor="middle" class="small">ConversationContextPort</text>
+<text x="485.0" y="275" text-anchor="middle" class="small">UserLookupPort</text>
+<rect x="680" y="150" width="240" height="100" class="box box-green" rx="14"/>
+<text x="800.0" y="178" text-anchor="middle" class="label">API Adapters</text>
+<text x="800.0" y="202" text-anchor="middle" class="small">agent_ports.py</text>
+<text x="800.0" y="220" text-anchor="middle" class="small">SQLAlchemy 具体实现</text>
+<rect x="1000" y="80" width="220" height="80" class="box box-orange" rx="14"/>
+<text x="1110.0" y="108" text-anchor="middle" class="label">Services</text>
+<text x="1110.0" y="132" text-anchor="middle" class="small">Task / Memory</text>
+<text x="1110.0" y="150" text-anchor="middle" class="small">Conversation</text>
+<rect x="1000" y="205" width="220" height="80" class="box box-orange" rx="14"/>
+<text x="1110.0" y="233" text-anchor="middle" class="label">Persistence</text>
+<text x="1110.0" y="257" text-anchor="middle" class="small">PostgreSQL</text>
+<text x="1110.0" y="275" text-anchor="middle" class="small">ToolLog / AgentRun</text>
+<path d="M290,200 L370,125" class="arrow"/>
+<path d="M290,200 L370,250" class="arrow"/>
+<path d="M600,125 L680,180" class="arrow"/>
+<path d="M600,250 L680,220" class="arrow"/>
+<path d="M920,180 L1000,120" class="arrow"/>
+<path d="M920,220 L1000,245" class="arrow"/>
+<rect x="370" y="365" width="230" height="80" class="box box-slate" rx="14"/>
+<text x="485.0" y="393" text-anchor="middle" class="label">Compat Fallback</text>
+<text x="485.0" y="417" text-anchor="middle" class="small">旧直接调用兼容</text>
+<text x="485.0" y="435" text-anchor="middle" class="small">集中隔离</text>
+<path d="M175,250 L370,405" class="arrow dash"/>
+<path d="M600,405 L1000,245" class="arrow dash"/>
+</svg>

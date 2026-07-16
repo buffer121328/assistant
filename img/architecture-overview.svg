@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1260" height="560" viewBox="0 0 1260 560" role="img">
+
+<style>
+  .bg { fill: #f8fafc; }
+  .title { font: 700 28px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #0f172a; }
+  .label { font: 600 15px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #0f172a; }
+  .small { font: 400 13px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #334155; }
+  .tiny { font: 400 12px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #475569; }
+  .box { stroke: #2563eb; stroke-width: 1.6; fill: #eff6ff; }
+  .box-green { stroke: #16a34a; fill: #f0fdf4; }
+  .box-orange { stroke: #ea580c; fill: #fff7ed; }
+  .box-purple { stroke: #7c3aed; fill: #f5f3ff; }
+  .box-slate { stroke: #64748b; fill: #f8fafc; }
+  .box-red { stroke: #dc2626; fill: #fef2f2; }
+  .arrow { stroke: #334155; stroke-width: 1.8; fill: none; marker-end: url(#arrow); }
+  .dash { stroke-dasharray: 6 6; }
+  .lane { stroke: #cbd5e1; stroke-width: 1.2; stroke-dasharray: 5 5; }
+</style>
+<defs>
+  <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+    <path d="M0,0 L0,6 L9,3 z" fill="#334155" />
+  </marker>
+</defs>
+
+<rect width="100%" height="100%" class="bg"/>
+<text x="32" y="44" class="title">整体架构：入口统一、执行受控、过程可追踪</text>
+<rect x="40" y="90" width="170" height="90" class="box box-green" rx="14"/>
+<text x="125.0" y="118" text-anchor="middle" class="label">入口层</text>
+<text x="125.0" y="142" text-anchor="middle" class="small">LangBot</text>
+<text x="125.0" y="160" text-anchor="middle" class="small">PySide6 桌面端</text>
+<rect x="260" y="90" width="190" height="90" class="box box" rx="14"/>
+<text x="355.0" y="118" text-anchor="middle" class="label">FastAPI API</text>
+<text x="355.0" y="142" text-anchor="middle" class="small">领域路由</text>
+<text x="355.0" y="160" text-anchor="middle" class="small">任务/审批/账号/知识</text>
+<rect x="500" y="90" width="190" height="90" class="box box-purple" rx="14"/>
+<text x="595.0" y="118" text-anchor="middle" class="label">服务与持久化</text>
+<text x="595.0" y="142" text-anchor="middle" class="small">PostgreSQL</text>
+<text x="595.0" y="160" text-anchor="middle" class="small">Redis / Alembic</text>
+<rect x="740" y="90" width="190" height="90" class="box box-orange" rx="14"/>
+<text x="835.0" y="118" text-anchor="middle" class="label">Celery Worker</text>
+<text x="835.0" y="142" text-anchor="middle" class="small">任务执行</text>
+<text x="835.0" y="160" text-anchor="middle" class="small">Beat 维护</text>
+<rect x="980" y="90" width="190" height="90" class="box box" rx="14"/>
+<text x="1075.0" y="118" text-anchor="middle" class="label">Agent Runtime</text>
+<text x="1075.0" y="142" text-anchor="middle" class="small">Agent Harness</text>
+<text x="1075.0" y="160" text-anchor="middle" class="small">LangGraph Executor</text>
+<path d="M210,135 L260,135" class="arrow"/>
+<path d="M450,135 L500,135" class="arrow"/>
+<path d="M690,135 L740,135" class="arrow"/>
+<path d="M930,135 L980,135" class="arrow"/>
+<rect x="70" y="260" width="180" height="100" class="box box-slate" rx="14"/>
+<text x="160.0" y="288" text-anchor="middle" class="label">Context</text>
+<text x="160.0" y="312" text-anchor="middle" class="small">Memory</text>
+<text x="160.0" y="330" text-anchor="middle" class="small">Knowledge</text>
+<text x="160.0" y="348" text-anchor="middle" class="small">Conversation</text>
+<rect x="300" y="260" width="180" height="100" class="box box-slate" rx="14"/>
+<text x="390.0" y="288" text-anchor="middle" class="label">Planning</text>
+<text x="390.0" y="312" text-anchor="middle" class="small">Agent Profile</text>
+<text x="390.0" y="330" text-anchor="middle" class="small">Planning Layer</text>
+<rect x="530" y="260" width="180" height="100" class="box box-slate" rx="14"/>
+<text x="620.0" y="288" text-anchor="middle" class="label">Execution</text>
+<text x="620.0" y="312" text-anchor="middle" class="small">LangGraph</text>
+<text x="620.0" y="330" text-anchor="middle" class="small">Checkpoint</text>
+<rect x="760" y="260" width="180" height="100" class="box box-red" rx="14"/>
+<text x="850.0" y="288" text-anchor="middle" class="label">Tool Safety</text>
+<text x="850.0" y="312" text-anchor="middle" class="small">ToolRegistry</text>
+<text x="850.0" y="330" text-anchor="middle" class="small">Risk / Approval</text>
+<rect x="990" y="260" width="180" height="100" class="box box-slate" rx="14"/>
+<text x="1080.0" y="288" text-anchor="middle" class="label">Observability</text>
+<text x="1080.0" y="312" text-anchor="middle" class="small">AgentRun</text>
+<text x="1080.0" y="330" text-anchor="middle" class="small">TaskEvent / Logs</text>
+<path d="M250,310 L300,310" class="arrow"/>
+<path d="M480,310 L530,310" class="arrow"/>
+<path d="M710,310 L760,310" class="arrow"/>
+<path d="M940,310 L990,310" class="arrow"/>
+<path d="M1075,180 L1075,260" class="arrow"/>
+<rect x="120" y="440" width="150" height="80" class="box box-green" rx="14"/>
+<text x="195.0" y="468" text-anchor="middle" class="label">Search Web</text>
+<text x="195.0" y="492" text-anchor="middle" class="small">Tavily</text>
+<rect x="310" y="440" width="150" height="80" class="box box-green" rx="14"/>
+<text x="385.0" y="468" text-anchor="middle" class="label">Knowledge Tool</text>
+<text x="385.0" y="492" text-anchor="middle" class="small">个人知识库</text>
+<rect x="500" y="440" width="150" height="80" class="box box-orange" rx="14"/>
+<text x="575.0" y="468" text-anchor="middle" class="label">Personal Tools</text>
+<text x="575.0" y="492" text-anchor="middle" class="small">SMTP / CalDAV</text>
+<rect x="690" y="440" width="150" height="80" class="box box-orange" rx="14"/>
+<text x="765.0" y="468" text-anchor="middle" class="label">Browser</text>
+<text x="765.0" y="492" text-anchor="middle" class="small">登录态浏览器</text>
+<rect x="880" y="440" width="150" height="80" class="box box-orange" rx="14"/>
+<text x="955.0" y="468" text-anchor="middle" class="label">Sandbox</text>
+<text x="955.0" y="492" text-anchor="middle" class="small">受限执行</text>
+<rect x="1070" y="440" width="150" height="80" class="box box-purple" rx="14"/>
+<text x="1145.0" y="468" text-anchor="middle" class="label">Model Gateway</text>
+<text x="1145.0" y="492" text-anchor="middle" class="small">DeepSeek 兼容</text>
+<path d="M850,360 L195,440" class="arrow dash"/>
+<path d="M850,360 L385,440" class="arrow dash"/>
+<path d="M850,360 L575,440" class="arrow dash"/>
+<path d="M850,360 L765,440" class="arrow dash"/>
+<path d="M850,360 L955,440" class="arrow dash"/>
+<path d="M850,360 L1145,440" class="arrow dash"/>
+</svg>

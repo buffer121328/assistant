@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1260" height="360" viewBox="0 0 1260 360" role="img">
+
+<style>
+  .bg { fill: #f8fafc; }
+  .title { font: 700 28px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #0f172a; }
+  .label { font: 600 15px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #0f172a; }
+  .small { font: 400 13px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #334155; }
+  .tiny { font: 400 12px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #475569; }
+  .box { stroke: #2563eb; stroke-width: 1.6; fill: #eff6ff; }
+  .box-green { stroke: #16a34a; fill: #f0fdf4; }
+  .box-orange { stroke: #ea580c; fill: #fff7ed; }
+  .box-purple { stroke: #7c3aed; fill: #f5f3ff; }
+  .box-slate { stroke: #64748b; fill: #f8fafc; }
+  .box-red { stroke: #dc2626; fill: #fef2f2; }
+  .arrow { stroke: #334155; stroke-width: 1.8; fill: none; marker-end: url(#arrow); }
+  .dash { stroke-dasharray: 6 6; }
+  .lane { stroke: #cbd5e1; stroke-width: 1.2; stroke-dasharray: 5 5; }
+</style>
+<defs>
+  <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+    <path d="M0,0 L0,6 L9,3 z" fill="#334155" />
+  </marker>
+</defs>
+
+<rect width="100%" height="100%" class="bg"/>
+<text x="32" y="44" class="title">扩展新工具：从实现到审计的受控链路</text>
+<rect x="60" y="160" width="160" height="90" class="box box-orange" rx="14"/>
+<text x="140.0" y="188" text-anchor="middle" class="label">工具实现</text>
+<text x="140.0" y="212" text-anchor="middle" class="small">封装真实动作</text>
+<path d="M220,205 L260,205" class="arrow"/>
+<rect x="260" y="160" width="160" height="90" class="box box-orange" rx="14"/>
+<text x="340.0" y="188" text-anchor="middle" class="label">ToolSpec</text>
+<text x="340.0" y="212" text-anchor="middle" class="small">name / schema / risk</text>
+<path d="M420,205 L460,205" class="arrow"/>
+<rect x="460" y="160" width="160" height="90" class="box box" rx="14"/>
+<text x="540.0" y="188" text-anchor="middle" class="label">ToolCatalog</text>
+<text x="540.0" y="212" text-anchor="middle" class="small">能力发现</text>
+<path d="M620,205 L660,205" class="arrow"/>
+<rect x="660" y="160" width="160" height="90" class="box box" rx="14"/>
+<text x="740.0" y="188" text-anchor="middle" class="label">Planning</text>
+<text x="740.0" y="212" text-anchor="middle" class="small">allowed_tools</text>
+<path d="M820,205 L860,205" class="arrow"/>
+<rect x="860" y="160" width="160" height="90" class="box box-purple" rx="14"/>
+<text x="940.0" y="188" text-anchor="middle" class="label">ToolRegistry</text>
+<text x="940.0" y="212" text-anchor="middle" class="small">审批 / 版本 / 并行</text>
+<path d="M1020,205 L1060,205" class="arrow"/>
+<rect x="1060" y="160" width="160" height="90" class="box box" rx="14"/>
+<text x="1140.0" y="188" text-anchor="middle" class="label">Audit</text>
+<text x="1140.0" y="212" text-anchor="middle" class="small">ToolLog / 脱敏</text>
+</svg>

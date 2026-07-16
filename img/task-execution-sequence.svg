@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1220" height="730" viewBox="0 0 1220 730" role="img">
+
+<style>
+  .bg { fill: #f8fafc; }
+  .title { font: 700 28px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #0f172a; }
+  .label { font: 600 15px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #0f172a; }
+  .small { font: 400 13px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #334155; }
+  .tiny { font: 400 12px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #475569; }
+  .box { stroke: #2563eb; stroke-width: 1.6; fill: #eff6ff; }
+  .box-green { stroke: #16a34a; fill: #f0fdf4; }
+  .box-orange { stroke: #ea580c; fill: #fff7ed; }
+  .box-purple { stroke: #7c3aed; fill: #f5f3ff; }
+  .box-slate { stroke: #64748b; fill: #f8fafc; }
+  .box-red { stroke: #dc2626; fill: #fef2f2; }
+  .arrow { stroke: #334155; stroke-width: 1.8; fill: none; marker-end: url(#arrow); }
+  .dash { stroke-dasharray: 6 6; }
+  .lane { stroke: #cbd5e1; stroke-width: 1.2; stroke-dasharray: 5 5; }
+</style>
+<defs>
+  <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+    <path d="M0,0 L0,6 L9,3 z" fill="#334155" />
+  </marker>
+</defs>
+
+<rect width="100%" height="100%" class="bg"/>
+<text x="32" y="44" class="title">任务执行时序：任务化、可审批、可恢复</text>
+<rect x="15" y="70" width="110" height="44" class="box box-slate" rx="14"/>
+<text x="70.0" y="98" text-anchor="middle" class="label">用户</text>
+<line x1="70" y1="120" x2="70" y2="690" class="lane"/>
+<rect x="150" y="70" width="110" height="44" class="box box-slate" rx="14"/>
+<text x="205.0" y="98" text-anchor="middle" class="label">LangBot / Desktop</text>
+<line x1="205" y1="120" x2="205" y2="690" class="lane"/>
+<rect x="285" y="70" width="110" height="44" class="box box-slate" rx="14"/>
+<text x="340.0" y="98" text-anchor="middle" class="label">FastAPI</text>
+<line x1="340" y1="120" x2="340" y2="690" class="lane"/>
+<rect x="420" y="70" width="110" height="44" class="box box-slate" rx="14"/>
+<text x="475.0" y="98" text-anchor="middle" class="label">PostgreSQL</text>
+<line x1="475" y1="120" x2="475" y2="690" class="lane"/>
+<rect x="555" y="70" width="110" height="44" class="box box-slate" rx="14"/>
+<text x="610.0" y="98" text-anchor="middle" class="label">Celery Worker</text>
+<line x1="610" y1="120" x2="610" y2="690" class="lane"/>
+<rect x="690" y="70" width="110" height="44" class="box box-slate" rx="14"/>
+<text x="745.0" y="98" text-anchor="middle" class="label">Agent Harness</text>
+<line x1="745" y1="120" x2="745" y2="690" class="lane"/>
+<rect x="825" y="70" width="110" height="44" class="box box-slate" rx="14"/>
+<text x="880.0" y="98" text-anchor="middle" class="label">LangGraph</text>
+<line x1="880" y1="120" x2="880" y2="690" class="lane"/>
+<rect x="960" y="70" width="110" height="44" class="box box-slate" rx="14"/>
+<text x="1015.0" y="98" text-anchor="middle" class="label">ToolRegistry</text>
+<line x1="1015" y1="120" x2="1015" y2="690" class="lane"/>
+<rect x="1095" y="70" width="110" height="44" class="box box-slate" rx="14"/>
+<text x="1150.0" y="98" text-anchor="middle" class="label">Model Gateway</text>
+<line x1="1150" y1="120" x2="1150" y2="690" class="lane"/>
+<path d="M70,150 L205,150" class="arrow"/>
+<text x="137.5" y="142" class="tiny" text-anchor="middle">提交 /plan /learn /daily /office</text>
+<path d="M205,188 L340,188" class="arrow"/>
+<text x="272.5" y="180" class="tiny" text-anchor="middle">创建或提交任务</text>
+<path d="M340,226 L475,226" class="arrow"/>
+<text x="407.5" y="218" class="tiny" text-anchor="middle">写 Task pending</text>
+<path d="M340,264 L610,264" class="arrow"/>
+<text x="475.0" y="256" class="tiny" text-anchor="middle">enqueue task_id</text>
+<path d="M610,302 L475,302" class="arrow"/>
+<text x="542.5" y="294" class="tiny" text-anchor="middle">创建 AgentRun running</text>
+<path d="M610,340 L745,340" class="arrow"/>
+<text x="677.5" y="332" class="tiny" text-anchor="middle">execute_task</text>
+<path d="M745,378 L475,378" class="arrow"/>
+<text x="610.0" y="370" class="tiny" text-anchor="middle">加载 Task/User/Memory/Conversation</text>
+<path d="M745,416 L880,416" class="arrow"/>
+<text x="812.5" y="408" class="tiny" text-anchor="middle">执行 LangGraph</text>
+<path d="M880,454 L1150,454" class="arrow"/>
+<text x="1015.0" y="446" class="tiny" text-anchor="middle">模型决策</text>
+<path d="M880,492 L1015,492" class="arrow"/>
+<text x="947.5" y="484" class="tiny" text-anchor="middle">受控工具调用</text>
+<path d="M1015,530 L475,530" class="arrow"/>
+<text x="745.0" y="522" class="tiny" text-anchor="middle">ToolLog / Approval</text>
+<path d="M880,568 L475,568" class="arrow"/>
+<text x="677.5" y="560" class="tiny" text-anchor="middle">Checkpoint</text>
+<path d="M610,606 L475,606" class="arrow"/>
+<text x="542.5" y="598" class="tiny" text-anchor="middle">Task success / AgentRun success</text>
+<path d="M610,644 L205,644" class="arrow"/>
+<text x="407.5" y="636" class="tiny" text-anchor="middle">结果回推</text>
+<rect x="392" y="505" width="610" height="120" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5" rx="12"/>
+<text x="412" y="530" class="label" text-anchor="start">可选审批分支：高风险工具 / 计划确认 / 人工复核</text>
+<path d="M880,555 L475,555" class="arrow dash"/>
+<text x="730" y="547" class="tiny" text-anchor="middle">写 checkpoint + approval request</text>
+<path d="M205,585 L70,585" class="arrow dash"/>
+<text x="150" y="577" class="tiny" text-anchor="middle">推送审批</text>
+<path d="M70,615 L340,615" class="arrow dash"/>
+<text x="190" y="607" class="tiny" text-anchor="middle">approve / reject</text>
+</svg>

@@ -8,8 +8,6 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from assistant_api.models import Task, TaskStatus, ToolLog, User
-from assistant_api.services import MemoryService, StatusService, TaskService
 from packages.memory import SemanticMemory, load_memory_context
 from packages.model_gateway import sanitize_text
 from packages.tools import ToolCandidateSelector, ToolCatalogSnapshot
@@ -22,11 +20,24 @@ from .capabilities import (
 from .context import ContextBuilder, TaskContext
 from .executors import AgentExecutorProtocol, AgentRunInput, AgentRunResult
 from .planner import DefaultPlanningLayer, ExecutionPlan, PlanningLayerProtocol
+from .ports import (
+    ConversationContextPack,
+    ConversationContextPort,
+    ExecutionTracePort,
+    LocalTaskServicePort,
+    TaskLifecyclePort,
+    UserLookupPort,
+)
 from .profiles import DefaultProfileSelector
 from .skills import SkillsLoader
 
 
 LANGGRAPH_EXECUTOR_TOOL_NAME = "langgraph.executor"
+TASK_STATUS_PENDING = "pending"
+TASK_STATUS_RUNNING = "running"
+TASK_STATUS_SUCCESS = "success"
+TASK_STATUS_FAILED = "failed"
+TASK_STATUS_WAITING_APPROVAL = "waiting_approval"
 
 
 class AgentHarnessError(Exception):
@@ -69,16 +80,18 @@ class ExecutionBoundary:
         session: AsyncSession,
         langgraph_executor: AgentExecutorProtocol,
         sensitive_values: list[str | None] | tuple[str | None, ...] = (),
+        trace: ExecutionTracePort | None = None,
     ) -> None:
         self.session = session
         self.langgraph_executor = langgraph_executor
         self.sensitive_values = tuple(sensitive_values)
+        self.trace = trace
 
     async def execute(
         self,
         *,
-        task: Task,
-        user: User,
+        task: Any,
+        user: Any,
         plan: ExecutionPlan,
         context: TaskContext,
     ) -> ExecutionOutcome:
@@ -102,7 +115,7 @@ class ExecutionBoundary:
                 error_message=safe_error,
             )
             return ExecutionOutcome(
-                status=TaskStatus.FAILED.value,
+                status=TASK_STATUS_FAILED,
                 error_message=safe_error,
                 workflow_key=plan.workflow_key,
             )
@@ -125,12 +138,12 @@ class ExecutionBoundary:
                 input_text=input_summary,
                 output_text=(
                     self._safe_json(payload)
-                    if policy_outcome.status == TaskStatus.WAITING_APPROVAL.value
+                    if policy_outcome.status == TASK_STATUS_WAITING_APPROVAL
                     else None
                 ),
                 error_message=(
                     None
-                    if policy_outcome.status == TaskStatus.WAITING_APPROVAL.value
+                    if policy_outcome.status == TASK_STATUS_WAITING_APPROVAL
                     else self._safe_error(policy_outcome.error_message or "执行失败")
                 ),
             )
@@ -157,7 +170,7 @@ class ExecutionBoundary:
             error_message=None,
         )
         return ExecutionOutcome(
-            status=TaskStatus.SUCCESS.value,
+            status=TASK_STATUS_SUCCESS,
             result_text=result.result_text,
             metadata=metadata,
             workflow_key=plan.workflow_key,
@@ -172,8 +185,8 @@ class ExecutionBoundary:
         output_text: str | None,
         error_message: str | None,
     ) -> None:
-        self.session.add(
-            ToolLog(
+        if self.trace is not None:
+            await self.trace.record_trace(
                 task_id=task_id,
                 tool_name=LANGGRAPH_EXECUTOR_TOOL_NAME,
                 status=status,
@@ -181,8 +194,19 @@ class ExecutionBoundary:
                 output_text=output_text,
                 error_message=error_message,
             )
+            return
+
+        from .compat import record_execution_trace
+
+        await record_execution_trace(
+            self.session,
+            task_id=task_id,
+            tool_name=LANGGRAPH_EXECUTOR_TOOL_NAME,
+            status=status,
+            input_text=input_text,
+            output_text=output_text,
+            error_message=error_message,
         )
-        await self.session.flush()
 
     def _safe_error(self, value: object) -> str:
         return sanitize_text(value, extra_sensitive_values=self.sensitive_values)
@@ -219,7 +243,11 @@ class AgentHarness:
         semantic_memory: SemanticMemory | None = None,
         semantic_memory_limit: int = 5,
         event_sink: Callable[[str, dict[str, object]], Awaitable[None]] | None = None,
-        memory_candidate_hook: Callable[[Task], Awaitable[None]] | None = None,
+        memory_candidate_hook: Callable[[Any], Awaitable[None]] | None = None,
+        task_lifecycle: TaskLifecyclePort[Any] | None = None,
+        local_tasks: LocalTaskServicePort[Any] | None = None,
+        conversation_context: ConversationContextPort | None = None,
+        user_lookup: UserLookupPort[Any] | None = None,
     ) -> None:
         self.session = session
         self.executor = executor
@@ -253,16 +281,29 @@ class AgentHarness:
         self.semantic_memory_limit = max(1, min(semantic_memory_limit, 20))
         self.event_sink = event_sink
         self.memory_candidate_hook = memory_candidate_hook
+        self.task_lifecycle = task_lifecycle
+        self.local_tasks = local_tasks
+        self.conversation_context = conversation_context
+        self.user_lookup = user_lookup
 
-    async def execute_task(self, task_id: str) -> Task:
+    async def execute_task(self, task_id: str) -> Any:
         task = await self._load_pending_task(task_id)
         if task.task_type == "memory":
-            return await MemoryService(
+            if self.local_tasks is not None:
+                return await self.local_tasks.execute_memory_task(task.id)
+            from .compat import execute_memory_task
+
+            return await execute_memory_task(
                 self.session,
+                task_id=task.id,
                 semantic_memory=self.semantic_memory,
-            ).execute_task(task.id)
+            )
         if task.task_type == "status":
-            return await StatusService(self.session).execute_task(task.id)
+            if self.local_tasks is not None:
+                return await self.local_tasks.execute_status_task(task.id)
+            from .compat import execute_status_task
+
+            return await execute_status_task(self.session, task_id=task.id)
 
         user = await self._load_user(task.user_id)
         profile = self.profile_selector.select(task)
@@ -307,59 +348,17 @@ class AgentHarness:
         )
         conversation_compacted = False
         if task.conversation_id is not None:
-            from assistant_api.conversation_memory import ConversationMemoryService
-            from assistant_api.conversations import ConversationService
-            from packages.memory.working_set import (
-                ConversationMessageRef,
-                build_context_pack,
-            )
-
-            messages = await ConversationService(self.session).list_messages(
+            pack = await self._conversation_context_pack(
                 conversation_id=task.conversation_id,
                 user_id=task.user_id,
-                limit=200,
-                exclude_task_id=task.id,
-            )
-            conversation_memory = ConversationMemoryService(self.session)
-            summary = await conversation_memory.get_active_summary(
-                conversation_id=task.conversation_id,
-                user_id=task.user_id,
-            )
-            blocks = await conversation_memory.list_blocks(
-                user_id=task.user_id,
-                conversation_id=task.conversation_id,
-            )
-            pack = build_context_pack(
-                memory_blocks=tuple((block.id, block.content) for block in blocks),
-                conversation_summary=summary.summary_text if summary else "",
-                summary_source_ids=(
-                    (summary.source_start_message_id, summary.source_end_message_id)
-                    if summary
-                    else ()
-                ),
-                summary_version=summary.summary_version if summary else None,
-                long_term_memory=memory_summary,
-                messages=tuple(
-                    ConversationMessageRef(message.id, message.role, message.content)
-                    for message in messages
-                ),
+                task_id=task.id,
                 current_input=str(task.input_text),
+                long_term_memory=memory_summary,
             )
-            conversation_history = tuple(
-                (message.role, message.content) for message in pack.recent_turns
-            )
-            conversation_summary = pack.conversation_summary
+            conversation_history = pack.history
+            conversation_summary = pack.summary
             memory_blocks = pack.memory_blocks
-            context_trace = context_trace + tuple(
-                {
-                    "section": item.section,
-                    "estimated_tokens": item.estimated_tokens,
-                    "source_ids": item.source_ids,
-                    "truncated_source_ids": item.truncated_source_ids,
-                    "version": item.version,
-                }
-                for item in pack.trace
-            )
+            context_trace = context_trace + pack.trace
             conversation_compacted = pack.compacted
 
         context = self.context_builder.build(
@@ -383,11 +382,16 @@ class AgentHarness:
         if self.event_sink is not None:
             await self.event_sink("plan", {"steps": list(plan.steps)})
 
-        task.status = TaskStatus.RUNNING.value
-        task.workflow_key = profile.workflow_key
-        task.error_message = None
-        await self.session.commit()
-        await self.session.refresh(task)
+        if self.task_lifecycle is None:
+            task.status = TASK_STATUS_RUNNING
+            task.workflow_key = profile.workflow_key
+            task.error_message = None
+            await self.session.commit()
+            await self.session.refresh(task)
+        else:
+            task = await self.task_lifecycle.mark_running(
+                task.id, workflow_key=profile.workflow_key
+            )
 
         outcome = await self._execute_boundary(
             task=task,
@@ -403,8 +407,8 @@ class AgentHarness:
     async def _execute_boundary(
         self,
         *,
-        task: Task,
-        user: User,
+        task: Any,
+        user: Any,
         context: TaskContext,
         plan: ExecutionPlan,
     ) -> ExecutionOutcome:
@@ -420,11 +424,17 @@ class AgentHarness:
         *,
         task_id: str,
         outcome: ExecutionOutcome,
-    ) -> Task:
-        task_service = TaskService(
-            self.session, success_hook=self.memory_candidate_hook
-        )
-        if outcome.status == TaskStatus.WAITING_APPROVAL.value:
+    ) -> Any:
+        task_lifecycle: Any
+        if self.task_lifecycle is None:
+            from .compat import task_lifecycle as build_task_lifecycle
+
+            task_lifecycle = build_task_lifecycle(
+                self.session, success_hook=self.memory_candidate_hook
+            )
+        else:
+            task_lifecycle = self.task_lifecycle
+        if outcome.status == TASK_STATUS_WAITING_APPROVAL:
             message = (
                 outcome.result_text
                 or outcome.error_message
@@ -432,7 +442,7 @@ class AgentHarness:
             )
             requested_tools = outcome.metadata.get("requested_tools", [])
             approval_requests = outcome.metadata.get("approval_requests", [])
-            return await task_service.save_waiting_approval(
+            return await task_lifecycle.save_waiting_approval(
                 task_id,
                 message,
                 requested_tools=(
@@ -444,29 +454,66 @@ class AgentHarness:
                     if isinstance(request, dict)
                 ),
             )
-        if outcome.status == TaskStatus.FAILED.value:
-            return await task_service.save_failure(
+        if outcome.status == TASK_STATUS_FAILED:
+            return await task_lifecycle.save_failure(
                 task_id,
                 outcome.error_message or "任务执行失败。",
             )
         result_text = outcome.result_text or "任务已完成。"
-        return await task_service.save_success(task_id, result_text)
+        return await task_lifecycle.save_success(task_id, result_text)
 
-    async def _load_pending_task(self, task_id: str) -> Task:
-        task = await self.session.get(Task, task_id)
-        if task is None:
-            raise AgentHarnessError(f"Task not found: {task_id}")
-        if task.status != TaskStatus.PENDING.value:
-            raise NonPendingTaskExecutionError(
-                f"Task is not pending: {task.id} ({task.status})"
+    async def _load_pending_task(self, task_id: str) -> Any:
+        if self.task_lifecycle is not None:
+            return await self.task_lifecycle.load_pending(task_id)
+        from .compat import load_pending_task
+
+        return await load_pending_task(
+            self.session,
+            task_id=task_id,
+            pending_status=TASK_STATUS_PENDING,
+            not_pending_error=NonPendingTaskExecutionError,
+            not_found_error=AgentHarnessError,
+        )
+
+    async def _load_user(self, user_id: str) -> Any:
+        if self.user_lookup is not None:
+            return await self.user_lookup.load_user(user_id)
+        from .compat import load_user
+
+        return await load_user(
+            self.session,
+            user_id=user_id,
+            not_found_error=AgentHarnessError,
+        )
+
+    async def _conversation_context_pack(
+        self,
+        *,
+        conversation_id: str,
+        user_id: str,
+        task_id: str,
+        current_input: str,
+        long_term_memory: str,
+    ) -> ConversationContextPack:
+        if self.conversation_context is not None:
+            return await self.conversation_context.load_context(
+                conversation_id=conversation_id,
+                user_id=user_id,
+                task_id=task_id,
+                current_input=current_input,
+                long_term_memory=long_term_memory,
             )
-        return task
 
-    async def _load_user(self, user_id: str) -> User:
-        user = await self.session.get(User, user_id)
-        if user is None:
-            raise AgentHarnessError(f"User not found: {user_id}")
-        return user
+        from .compat import load_conversation_context
+
+        return await load_conversation_context(
+            self.session,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            task_id=task_id,
+            current_input=current_input,
+            long_term_memory=long_term_memory,
+        )
 
     async def _memory_context(
         self,
@@ -524,7 +571,7 @@ def _tool_policy_outcome(
     if unauthorized:
         joined = ", ".join(unauthorized)
         return ExecutionOutcome(
-            status=TaskStatus.FAILED.value,
+            status=TASK_STATUS_FAILED,
             error_message=f"执行计划未授权工具：{joined}。",
             metadata={"requested_tools": list(requested)},
             workflow_key=plan.workflow_key,
@@ -532,7 +579,7 @@ def _tool_policy_outcome(
 
     if approval_requests:
         return ExecutionOutcome(
-            status=TaskStatus.WAITING_APPROVAL.value,
+            status=TASK_STATUS_WAITING_APPROVAL,
             result_text="任务需要人工审批后才能继续。",
             metadata={
                 "requested_tools": list(requested),
@@ -547,7 +594,7 @@ def _tool_policy_outcome(
     if gated:
         joined = ", ".join(gated)
         return ExecutionOutcome(
-            status=TaskStatus.WAITING_APPROVAL.value,
+            status=TASK_STATUS_WAITING_APPROVAL,
             result_text=f"任务需要审批后才能继续：{joined}。",
             metadata={"requested_tools": list(requested)},
             workflow_key=plan.workflow_key,

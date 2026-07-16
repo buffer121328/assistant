@@ -345,6 +345,31 @@ class Task(TimestampMixin, Base):
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+class AgentRun(Base):
+    __tablename__ = "agent_runs"
+    __table_args__ = (
+        UniqueConstraint("task_id", "attempt_no", name="uq_agent_runs_task_attempt"),
+        Index("ix_agent_runs_task_started", "task_id", "started_at"),
+        Index("ix_agent_runs_user_started", "user_id", "started_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    task_id: Mapped[str] = mapped_column(ForeignKey("tasks.id"), nullable=False)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
+    attempt_no: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    agent_profile: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    graph_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    checkpoint_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    tool_snapshot_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    model_class: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    error_message: Mapped[str | None] = mapped_column(Text)
+
+
 class TaskEvent(Base):
     __tablename__ = "task_events"
     __table_args__ = (

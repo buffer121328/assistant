@@ -1,60 +1,385 @@
-# assistant-api
+# assistant
 
-个人 Agent 助手系统。当前产品入口只保留两类：LangBot 作为主消息通道和响应通道，PySide6 原生小窗口作为本机 GUI；FastAPI 提供二者共用的内部 API。旧网页控制台、项目 CLI 和其他直连消息通道已经移除。
+个人 Agent 助手系统后端。这个项目的目标不是做一个“简单聊天机器人”，而是做一个**可长期演进、可控、可审计、可接入个人工具链的本机 Agent 助手系统**。
 
-项目已完成 MVP 阶段 09、V2、V3 与 V4，并进入 V5-00 工程验收。当前代码已具备本机 API 认证、加密账号连接、真实 SMTP/CalDAV 动作、受限登录态浏览器、个人知识库、持久提醒通知、Compose/CI 和备份恢复入口。真实第三方账号联调与长时间连续运行仍需在用户提供测试账号和本地授权后完成，未配置项不会被标记为通过。
+当前产品入口保留两类：
+
+- **LangBot**：主消息入口和结果回推通道。
+- **PySide6 桌面小窗口**：本机 GUI，用于提交任务、查看结果、处理审批、管理账号、知识库、提醒、Skills 和 Memory Center。
+
+后端由 FastAPI、PostgreSQL、Redis、Celery 和 LangGraph Agent Runtime 组成。所有模型任务统一进入受控 LangGraph 执行层，工具调用经过 ToolRegistry、风险等级、审批和审计约束。
 
 ## 项目介绍
 
-- LangBot 接收多平台消息并把结果推回原会话。
-- PySide6 GUI 提交任务、查看结果、处理计划/工具/复核审批、管理本地 Skills 并驻留系统托盘。
-- FastAPI、PostgreSQL、Redis 与 Celery 组成后端运行层。
-- `/plan`、`/learn`、`/daily`、`/office` 使用 Agent Profile、Planning Layer、模型驱动 LangGraph Agent Core 与 ToolRegistry。
-- `/memory`、`/status` 使用确定性的本地服务，不调用外部模型。
-- LangBot 无斜杠自由文本和 GUI“智能路由”创建 `agent` 任务，由 worker 中的轻量模型从四个已注册 Agent Profile 里选择；固定模式不调用路由模型。
-- Capability Registry 统一索引代码、Agent Profile、Skill 和 Tool；目录查询只读取元数据，不加载具体实现。
-- Model Gateway 统一承载 DeepSeek 兼容模型调用，Tavily 提供 `search.web`。
-- 个人知识库按用户、内容 checksum 和 parser version 去重，重复上传不重复创建文档与 chunks。
-- 提醒通知使用持久 outbox、原子发送租约和稳定幂等键；LangBot endpoint 需识别 payload/header 中的同一键以去重不确定重试。
-- CalDAV 事件要求带时区时间，provider 会统一转换为 UTC RFC 5545 格式并拒绝无效时间区间。
+本项目解决的是个人日常 Agent 使用中的几个核心问题：
 
-方案文档见 `docs/个人Agent助手系统完整方案.md`，MVP 文档见 `docs/mvp/index.md`，V2 文档见 `docs/v2/index.md`，V3 文档见 `docs/v3/index.md`，V4 文档见 `docs/v4/index.md`，V5 文档与运维入口见 `docs/v5/index.md`，V6 自适应记忆与持续个性化规划见 `docs/v6/index.md`。当前已完成 V6-00 至 V6-07，包括基线、契约、短期层级、候选反馈、混合召回、幂等 consolidation、完整 Memory Center、版本化 policy rollout/rollback 和统一发布门禁。自动 hard gates、覆盖率、Compose smoke 及合成本机知识更新/纠正/遗忘/长会话压缩试用已通过；新环境未提供本机 evidence 时发布状态仍为尚未上线。
+1. **入口统一**：LangBot 和桌面端都进入同一套任务系统，不让不同入口各自散落调用模型。
+2. **执行可控**：模型不能随意调用工具，所有工具必须经过 ToolRegistry、allowed tools、risk level、版本和审批控制。
+3. **过程可追踪**：任务状态、事件流、模型日志、工具日志、AgentRun 生命周期都会持久化。
+4. **人机协同**：高风险工具、计划确认、结果复核支持人工审批，审批后可从 LangGraph checkpoint 恢复。
+5. **个人上下文沉淀**：知识库、显式记忆、候选记忆、会话压缩和混合召回让 Agent 能逐步个性化。
+6. **本机优先和安全边界**：账号连接加密保存，真实 SMTP/CalDAV/browser provider 在缺少配置时 fail-closed，不伪造成功。
 
-## 启动方式
+一句话概括：
 
-从完整 Compose 启动、首次用户初始化、三模型池配置，到 GUI、LangBot、账号、知识库和提醒绑定，见 `docs/mvp-startup-config.md`。
+> 这是一个以任务为中心、以 LangGraph 为执行核心、以 ToolRegistry 为安全边界、以 Memory/Knowledge 为长期上下文的个人 Agent 后端。
 
-安装依赖：
+## 四个核心功能
+
+当前项目主要围绕四个核心 Agent 能力展开：
+
+### 1. `/plan`：计划与任务拆解
+
+用于把用户目标拆成可执行计划，并在需要时进入计划审批或人工复核。
+
+典型用途：
+
+- 分解一个复杂任务。
+- 生成执行步骤。
+- 判断需要哪些工具。
+- 高风险步骤先等待用户确认。
+
+特点：
+
+- 使用 Agent Profile 选择规划行为。
+- Planning Layer 生成结构化执行计划。
+- 可触发 `plan_approval` 和 `review_approval`。
+- 执行过程写入 TaskEvent、ToolLog、AgentRun。
+
+### 2. `/learn`：学习与资料理解
+
+用于围绕问题或资料进行搜索、阅读、总结和知识沉淀。
+
+典型用途：
+
+- 搜索某个技术主题。
+- 结合个人知识库回答问题。
+- 从资料中提炼要点。
+- 将有价值内容形成候选记忆。
+
+特点：
+
+- 可使用 `search.web`。
+- 可接入个人知识库检索。
+- 可结合长期记忆、会话摘要和 Memory blocks。
+- 输出可被后续评估、记忆候选和回归测试覆盖。
+
+### 3. `/daily`：日常助理与个人事务
+
+用于处理日常信息、提醒、状态查询和个人事务类任务。
+
+典型用途：
+
+- 整理每日事项。
+- 创建提醒。
+- 查询近期任务状态。
+- 结合记忆给出个性化建议。
+
+特点：
+
+- 和 Reminder / Notification outbox 打通。
+- 支持桌面通知 poll / ack。
+- 能读取本地任务状态和个人上下文。
+- 保持本机私有化和 owner-scoped 访问。
+
+### 4. `/office`：办公内容生成与工具调用
+
+用于处理邮件、日历、文档、表格、浏览器等办公场景。
+
+典型用途：
+
+- 起草邮件或办公内容。
+- 生成结构化材料。
+- 查询或创建日历事件。
+- 使用浏览器读取网页内容。
+- 在需要时通过受控工具执行个人操作。
+
+特点：
+
+- 工具调用受 ToolRegistry 控制。
+- SMTP、CalDAV、browser 等 provider 需要真实账号连接。
+- 高风险工具需要审批。
+- 工具输入输出写入审计日志，并做敏感信息脱敏。
+
+## 技术栈
+
+### 后端
+
+- Python 3.12
+- FastAPI
+- SQLAlchemy Async ORM
+- Alembic
+- PostgreSQL
+- Redis
+- Celery worker / Celery Beat
+- Pydantic Settings
+- httpx
+
+### Agent / AI
+
+- LangGraph
+- LangGraph PostgreSQL checkpoint saver
+- Agent Profile
+- Planning Layer
+- ToolRegistry
+- Capability Registry
+- DeepSeek 兼容模型网关
+- Tavily 搜索
+- 可选 Mem0 语义记忆适配
+- Langfuse / Prometheus / Sentry 观测边界
+
+### 桌面端
+
+- PySide6
+- QSettings
+- keyring
+
+### 测试与质量
+
+- pytest
+- pytest-asyncio
+- pytest-cov
+- ruff
+- mypy
+- GitHub Actions CI
+- Docker Compose smoke
+- provider smoke
+- 离线评测与 Memory release gate
+
+## 项目目录
+
+```text
+.
+├── apps/
+│   ├── api/assistant_api/
+│   │   ├── main.py                  # FastAPI 应用创建与运行态初始化
+│   │   ├── routes.py                # API 路由聚合入口与 /health
+│   │   ├── account_routes.py        # 账号连接
+│   │   ├── capability_routes.py     # 能力目录
+│   │   ├── channel_routes.py        # LangBot webhook、内部模型网关
+│   │   ├── conversation_routes.py   # 会话与消息
+│   │   ├── knowledge_routes.py      # 知识库
+│   │   ├── memory_routes.py         # Memory Center、policy、retrieval trace
+│   │   ├── notification_routes.py   # 提醒和桌面通知
+│   │   ├── skill_routes.py          # Skills 生命周期
+│   │   ├── task_routes.py           # 任务、事件流、审批
+│   │   ├── models.py                # SQLAlchemy ORM 模型
+│   │   ├── repositories.py          # 数据访问层
+│   │   ├── services.py              # 记忆、状态、分发等服务兼容入口
+│   │   ├── task_lifecycle.py        # 任务/审批服务与状态迁移
+│   │   ├── worker.py                # Celery app 与任务入队
+│   │   ├── worker_runtime.py        # worker 执行编排
+│   │   ├── agent_ports.py           # API 层对 Agent Harness ports 的适配器
+│   │   └── task_events.py           # 任务事件持久化与事件流记录
+│   ├── desktop/assistant_desktop/    # PySide6 桌面端
+│   └── scheduler/                   # 定时维护、监控和心跳入口
+├── packages/
+│   ├── agent_harness/               # Agent Profile、Planning、Execution、Ports、Compat
+│   ├── capabilities/                # Capability Registry
+│   ├── evaluation/                  # 离线评测与发布门禁
+│   ├── integrations/                # 账号、凭据、SMTP/CalDAV/browser provider
+│   ├── knowledge/                   # 知识库导入、解析、检索
+│   ├── memory/                      # 记忆安全、召回、候选、consolidation、release
+│   ├── model_gateway/               # 模型网关、模型池、脱敏
+│   ├── notifications/               # 提醒、通知 outbox、投递租约
+│   ├── observability/               # 观测抽象
+│   ├── quality/                     # LLM Judge 与质量抽样
+│   └── tools/                       # 工具目录、注册、搜索、浏览器、个人工具、沙箱
+├── migrations/versions/             # Alembic 迁移
+├── prompts/skills/                  # 内置 Skills
+├── docs/                            # 方案、MVP/V2/V3/V4/V5/V6 文档
+├── scripts/                         # 运维、评测、smoke 脚本
+├── tests/                           # acceptance / evals / integration / unit
+├── docker-compose.yml
+├── Dockerfile
+├── alembic.ini
+├── pyproject.toml
+└── uv.lock
+```
+
+## 项目架构
+
+### 整体架构
+
+![整体架构：入口统一、执行受控、过程可追踪](img/architecture-overview.svg)
+
+### 任务执行时序
+
+![任务执行时序：任务化、可审批、可恢复](img/task-execution-sequence.svg)
+
+### Agent Harness 解耦边界
+
+![Agent Harness 解耦边界：核心依赖 ports，API 提供适配器](img/agent-harness-boundary.svg)
+
+当前生产 worker 路径通过 `agent_ports.py` 注入实现，`compat.py` 只作为未注入 ports 时的旧调用兼容层。
+
+## 项目主要功能
+
+### 四个核心 Agent 场景
+
+| 命令 | 目标 | 典型能力 |
+|---|---|---|
+| `/plan` | 计划与任务拆解 | 目标理解、步骤拆分、计划审批、复核恢复 |
+| `/learn` | 学习与资料理解 | 搜索、知识库检索、总结、候选记忆 |
+| `/daily` | 日常助理 | 提醒、状态、个人上下文、日常建议 |
+| `/office` | 办公处理 | 邮件、日历、浏览器、文档内容、受控工具调用 |
+
+### 支撑能力
+
+- **任务系统**：任务创建、提交、列表、详情、状态流转。
+- **审批系统**：工具审批、计划审批、人工复核，审批后可恢复执行。
+- **事件系统**：任务事件持久化，支持事件流续读和终态退出。
+- **AgentRun**：记录每次 worker 执行尝试，便于审计和排障。
+- **模型网关**：统一 DeepSeek 兼容模型调用、脱敏、模型日志和模型池。
+- **工具系统**：ToolRegistry 统一管理工具 schema、版本、风险、审批、并行安全。
+- **记忆系统**：显式记忆、候选记忆、短期/长期记忆、混合召回、consolidation、policy rollout/rollback。
+- **知识库**：文件上传、解析、分块、去重、搜索。
+- **账号连接**：加密保存账号凭据，支持 SMTP、CalDAV、browser provider。
+- **提醒通知**：提醒创建、取消、通知 outbox、桌面 poll/ack、LangBot 投递。
+- **桌面端**：任务、审批、账号、知识库、提醒、Skills、Memory Center。
+
+## 后续如何扩展新功能
+
+这个项目的优势是：新增能力不需要直接把逻辑塞进 worker 或模型提示词，而是沿着固定扩展点演进。
+
+### 扩展一个新的 Agent 场景
+
+例如在 `/plan`、`/learn`、`/daily`、`/office` 之外新增 `/travel`：
+
+![扩展新 Agent 场景：不要塞进 worker，走固定扩展点](img/new-agent-scenario-flow.svg)
+
+建议步骤：
+
+1. 新增或调整 Agent Profile。
+2. 明确输入命令、任务类型和 workflow key。
+3. 声明该场景允许使用哪些工具。
+4. 如需要新知识，新增 Skill。
+5. 如需要新动作，新增 ToolSpec 并注册到 ToolRegistry。
+6. 补 acceptance 测试，覆盖用户可见行为。
+7. 更新 README 或对应 docs。
+
+### 扩展一个新工具
+
+![扩展新工具：从实现到审计的受控链路](img/new-tool-flow.svg)
+
+新工具必须明确：
+
+- 工具名
+- 输入 schema
+- 风险等级
+- 是否需要审批
+- 是否可并行
+- 是否记录自己的日志
+- 失败时如何脱敏
+
+### 扩展一个新外部账号能力
+
+例如新增一个新的邮件、日历或文档 provider：
+
+1. 在 `packages/integrations` 中实现 provider。
+2. 通过 `AccountConnectionService` 加密保存凭据。
+3. 在工具层暴露受控动作。
+4. 在 ToolRegistry 中设置风险等级和审批策略。
+5. 补 provider smoke 或集成测试。
+
+### 扩展一组新 API
+
+新增 API 时优先按领域创建新的 `*_routes.py`，不要继续膨胀 `routes.py`。
+
+推荐结构：
+
+```text
+apps/api/assistant_api/new_feature_routes.py
+packages/new_feature/
+tests/acceptance/test_new_feature.py
+```
+
+## 项目优势
+
+### 1. 不是简单聊天，而是任务化 Agent 系统
+
+所有入口都落到 Task，任务有状态、有事件、有 AgentRun、有日志，可以排查、恢复和审计。
+
+### 2. 模型和工具之间有安全边界
+
+模型不能直接执行任意动作。工具必须通过 ToolRegistry，受 allowed tools、risk level、approval、version、source availability 控制。
+
+### 3. 支持人工审批和 checkpoint 恢复
+
+高风险工具、计划和复核可以中断等待用户确认，确认后通过 LangGraph checkpoint 恢复，而不是重跑或丢上下文。
+
+### 4. 个人上下文是长期资产
+
+知识库、记忆、会话压缩、候选记忆、混合召回和 policy rollout 让系统能逐步沉淀个人偏好和事实，而不只是单轮问答。
+
+### 5. 本机优先，敏感能力 fail-closed
+
+账号、浏览器、邮件、日历等能力默认不伪造成功；缺少密钥或账号配置时直接 fail-closed，避免误导用户。
+
+### 6. 高内聚、低耦合方向明确
+
+API 路由已按领域拆分，Agent Harness 通过 ports 依赖抽象，API 层提供适配器，后续新增能力可以走固定扩展点。
+
+### 7. 测试和质量门禁完整
+
+当前有 acceptance、integration、evals、unit 测试，配合 ruff、mypy、coverage、CI 和 smoke，适合持续演进。
+
+## 如何部署启动
+
+### 1. 准备环境
+
+Python 版本由 `.python-version` 固定为 3.12，依赖使用 `uv` 管理。
 
 ```bash
 uv sync
 ```
 
-使用 Docker Compose 启动后端：
+复制示例配置：
 
 ```bash
 cp .env.example .env
-# 先填写 LOCAL_API_TOKEN、CREDENTIAL_MASTER_KEY 和需要启用的 provider 配置
+```
+
+至少需要填写：
+
+```text
+LOCAL_API_TOKEN=
+CREDENTIAL_MASTER_KEY=
+DATABASE_URL=
+REDIS_URL=
+```
+
+按需配置外部能力：
+
+```text
+LANGBOT_WEBHOOK_SECRET=
+LANGBOT_API_BASE_URL=
+LANGBOT_API_KEY=
+DEEPSEEK_API_KEY=
+DEEPSEEK_BASE_URL=
+TAVILY_API_KEY=
+SMTP / CALDAV / Browser / Langfuse / Sentry 等配置
+```
+
+`.env`、Token、Cookie、API Key、私有 URL 不提交仓库。
+
+### 2. Docker Compose 启动后端
+
+```bash
 docker compose up --build -d
 ```
 
-Compose 的 `migrate` 一次性服务会在 API、worker 和 Beat 启动前执行 `alembic upgrade head`。API 默认只映射到 `127.0.0.1:8000`。已有数据库中的逾期 pending 任务可能在 worker 启动后被补偿，恢复旧数据后应先检查任务状态再启动 worker。
-
-本地分别启动 API、worker 与单实例 Beat：
+Compose 中的 `migrate` 一次性服务会在 API、worker、Beat 启动前执行：
 
 ```bash
-uv run uvicorn --app-dir apps/api assistant_api.main:app --reload
-PYTHONPATH=apps/api:. uv run celery -A assistant_api.worker:celery_app worker --loglevel=INFO
-PYTHONPATH=apps/api:. uv run celery -A assistant_api.worker:celery_app beat --loglevel=INFO
+alembic upgrade head
 ```
 
-启动 PySide6 桌面小窗口：
+API 默认映射到：
 
-```bash
-uv run assistant-desktop
+```text
+127.0.0.1:8000
 ```
-
-桌面端不会自动启动后端。使用前必须完成数据库迁移，启动 API、Redis、PostgreSQL 和 `celery-worker`，并在数据库中准备用户。GUI 的 API 地址和用户 ID 保存在 `QSettings`，本机 API token 存入系统 keyring；账号密码、Token 和浏览器 storage state 不回显。
 
 健康检查：
 
@@ -62,160 +387,51 @@ uv run assistant-desktop
 curl http://127.0.0.1:8000/health
 ```
 
-## 如何配置
+### 3. 本地分进程启动
 
-`.env.example` 只包含占位值。本地可复制为 `.env`；`.env`、Token、Cookie、API Key 和私有 URL 不提交仓库。
+如果不使用 Compose，可以分别启动 API、worker、Beat。
 
-主要配置：
+先运行数据库迁移：
 
-- `LOCAL_API_AUTH_REQUIRED`、`LOCAL_API_TOKEN`：本机受保护 API 的 Bearer token 边界；Compose 默认要求配置。
-- `CREDENTIAL_MASTER_KEY`：账号连接密文主密钥，至少 32 个字符；缺失时真实账号能力 fail-closed，不回退明文。
-- `DATABASE_URL`：PostgreSQL asyncpg URL，同时供 LangGraph 官方 PostgreSQL checkpoint saver 使用；默认 Agent worker 不对其他数据库伪回退。
-- `REDIS_URL`：Celery broker 与 result backend。
-- `LANGBOT_WEBHOOK_SECRET`：`POST /api/webhooks/langbot` 的请求校验密钥。
-- `LANGBOT_API_BASE_URL`、`LANGBOT_API_KEY`、`LANGBOT_SEND_TIMEOUT_SECONDS`：LangBot 结果回推配置。
-- `DEEPSEEK_API_KEY`、`DEEPSEEK_BASE_URL`、模型别名与网关超时/重试：内部 Model Gateway 配置。
-- `TAVILY_BASE_URL`、`TAVILY_API_KEY`、超时与结果上限：`search.web` 配置。
-- `LANGFUSE_PUBLIC_KEY`、`LANGFUSE_SECRET_KEY`、`LANGFUSE_BASE_URL`：可选 Langfuse v4 配置；public/secret key 必须同时存在才启用，未配置或部分配置时使用零网络 No-op。
-- `RUNNING_TASK_TIMEOUT_SECONDS`：超时 `running` 任务失败阈值。
-- `PENDING_TASK_COMPENSATION_DELAY_SECONDS`：逾期 `pending` 任务补偿阈值。
-- `SCHEDULER_MAINTENANCE_INTERVAL_SECONDS`：单实例 Celery Beat 的维护投递周期。
-- `MANAGED_SKILLS_ROOT`：托管 Skill 的可写根目录，本地默认 `var/skills`；Compose 容器固定使用持久卷中的 `/app/data/skills`。
-- `MANAGED_PROMPTS_ROOT`、`SKILL_PACKAGES_ROOT`：受治理 Prompt 和待审批本地 Skill ZIP 的根目录；后者只接受已校验、无脚本的本地包。
-- `ARTIFACTS_ROOT`：按 task 隔离的 EML/ICS/Office 文件根目录。
-- `KNOWLEDGE_ROOT`：显式导入文件、索引元数据和用户隔离知识内容的受管根目录。
-- `BROWSER_STATE_ROOT`、`BROWSER_ENABLED`：加密浏览器状态根和受限交互开关；需显式安装 Chromium，不读取宿主默认浏览器 profile。
-- `SANDBOX_*`：Docker 隔离 Shell 开关、workspace、镜像 allowlist 与超时；默认关闭且不回退宿主执行。
-- `SUBAGENT_*`：子 Agent 总数、并发和超时硬上限。
-- `MEM0_CONFIG_PATH`、`MEM0_SEARCH_LIMIT`：可选 Mem0/pgvector 本地配置与语义检索上限；无配置使用 SQL。
-- `QUALITY_JUDGE_*`：稳定采样、策略版本和低分阈值；采样率默认 0。
-
-真实 LangBot 联调还需要创建平台绑定：`platform = langbot`，`platform_user_id = <adapter>:<sender_id>`。默认占位配置不会在服务启动时连接 LangBot、DeepSeek、Tavily、Langfuse 或 MCP Server。
-
-## 项目目录介绍
-
-```text
-assistant/
-├── apps/
-│   ├── api/assistant_api/       # FastAPI、LangBot、任务与 Celery 入口
-│   ├── desktop/assistant_desktop/ # PySide6 GUI
-│   └── scheduler/               # V2-04 周期维护编排
-├── packages/
-│   ├── agent_harness/           # Agent 模型协议、规划与有界 LangGraph 执行边界
-│   ├── capabilities/            # V3 统一能力目录与懒解析
-│   ├── integrations/            # 加密账号解析、SMTP、CalDAV 与浏览器会话 provider
-│   ├── knowledge/               # 文件校验、解析、分块、索引与用户隔离检索
-│   ├── model_gateway/           # 模型适配与脱敏
-│   ├── notifications/           # 提醒状态机、通知 outbox、重试与投递 adapter
-│   ├── observability/           # 框架无关的 Trace/Score 协议与 No-op
-│   ├── tools/                   # Agent-facing 工具描述、精确审批和安全 handler
-│   ├── memory/                  # SQL 生命周期、Mem0 语义适配与上下文合并
-│   ├── quality/                 # Judge 采样、分数、指标和阈值策略
-│   └── evaluation/              # 离线评测
-├── prompts/skills/              # 只读内置 Skills
-├── var/skills/                  # 本地托管 Skills（运行时生成，不提交）
-├── migrations/                  # Alembic 迁移
-├── openspec/                    # 当前规范与变更归档
-├── scripts/ops/                 # Compose smoke、provider smoke、soak、备份与空库恢复
-├── docs/                        # MVP、V2、V3、V4、V5 文档与运维手册
-├── tests/
-│   ├── acceptance/              # 确定性用户行为与安全边界
-│   └── integration/             # 本地协议服务器和隔离 PostgreSQL/Redis/Celery 栈
-├── Dockerfile
-├── Dockerfile.ops
-└── docker-compose.yml
+```bash
+uv run alembic upgrade head
 ```
 
-仓库不保留空目录表达未来规划：无实现的目录直接删除；职责相同才合并；需要保留的 Python 包必须包含真实模块或 `__init__.py`。运行时目录统一放在已忽略的 `var/`，不会提交备份、Cookie、知识文件或报告。
+启动 API：
 
-## 核心功能
+```bash
+uv run uvicorn --app-dir apps/api assistant_api.main:app --reload
+```
 
-### 消息与桌面入口
+启动 Celery worker：
 
-- `POST /api/webhooks/langbot` 校验 `x-langbot-secret`，归一化消息，将已知斜杠命令映射到固定类型、将无斜杠自由文本映射到 `agent`，校验用户绑定，按 `platform + message_id` 去重并轻量投递任务；未知斜杠命令仍拒绝。
-- Result Dispatcher 保存 LangBot 的 `adapter`、`conversation_id`、`conversation_type`，对 `success`、`failed`、`cancelled` 和 `waiting_approval` 结果进行幂等回推。
-- PySide6 GUI 默认提供“智能路由”，同时保留六类固定任务；支持用户隔离的历史会话、新建/选择/归档/继续对话、最近任务、流式结果、三类审批、Skill 管理与系统托盘常驻。
-- `GET /app` 和旧直连消息路由不再提供；后端 API 是 LangBot 与 GUI 的内部边界，不作为网页产品入口。
+```bash
+PYTHONPATH=apps/api:. uv run celery -A assistant_api.worker:celery_app worker --loglevel=INFO
+```
 
-### Agent、Skills 与工具路径
+启动单实例 Beat：
 
-- 自由文本路径为：`agent` 任务 → Fast Pool Model Router → Registry 中启用且有白名单映射的 Agent Profile → AgentHarness；模型不能直接选择 Tool、Skill、代码能力或任意 handler。属于历史会话的任务只注入当前用户、当前会话最近 12 条安全 user/assistant 消息。
-- 固定命令路径不经过 Model Router：`memory/status` 直接走本地服务，`plan/learn/daily/office` 直接走对应 Agent Profile。
-- V2-02 提供 `v2.planner`、`v2.researcher`、`v2.daily`、`v2.office`，执行时按 Profile 加载指定 `prompts/skills/*/SKILL.md`；V3-07 将这些指令注入模型上下文，但不会自动启用工具。
-- V2-03 在 V2-02 规划层上实现结构化 Plan、真实 LangGraph `StateGraph`、最大步数/超时限制和 ToolRegistry。未注册或不在 `allowed_tools` 的调用会被拒绝。
-- V3-06 将受信任内置工具归一化为严格 `ToolDescriptor`，通过不可变 `ToolCatalogSnapshot` revision、确定性候选选择和有限工具预算生成本轮计划；LangGraph 只构造计划内 Function Calling Schema，ToolRegistry 再校验 revision、版本、来源可用性、白名单和审批。
-- V3-07 增加严格 AgentDecision 和真实 `model → tool → model` 循环。模型可生成最多五条展示计划并逐轮选择一个计划内工具；结果来自模型 final 决策，不再由固定模板渲染，展示计划不能扩大 ExecutionPlan 权限。
-- 默认 worker 继续只通过内部 Model Gateway 调用模型并写 `model_logs`。生产图使用严格序列化的 `AsyncPostgresSaver`，以 task ID 关联 checkpoint；审批 interrupt 后按同一任务恢复，并由 ToolRegistry 二次校验批准记录。
-- V3-08 用 task ID 关联可选的 `agent.task` 根 observation、模型 generation、LangGraph step 和工具调用。所有载荷先递归脱敏和裁剪；Langfuse 初始化、上报、flush 或 shutdown 失败不改变任务结果，数据库审计仍是权威记录。
-- V4-00 让 `office` 也进入 Plan-Execute-Review；复杂 WorkPlan 可有界 fan-out 给无工具权限的子 Agent，主 Agent 可请求最多 3 个全量预授权的并行安全工具，候选答案仍必须 Review 后发布。
-- `/learn` 通过 `search.web` 获取资料，`/daily` 通过 `search.web` 获取来源，`/office` 默认不执行搜索。
-- 计划、工具和复核 gate 都会进入 `waiting_approval`；批准后从相同 task checkpoint 精确恢复，拒绝后任务取消。ToolRegistry 只接受精确 `tool` 类型批准，计划或复核批准不能授予工具权限。
-- 当前动态快照接入 `search.web`、本地 EML/ICS/Office artifacts、`knowledge.search`，以及显式启用后的 `browser.read`/`browser.interact`/`browser.save_state` 和 `shell.exec`。只有任务所有者存在活动连接时才发布 `email.send` 与 `calendar.sync_event`。
-- 邮件、日历和浏览器外部动作绑定 task、tool、connection、目标、内容摘要与参数指纹，必须经 L3 精确审批；连接存在本身不授予执行权限。
-- 完整 MCP Gateway 尚未配置，MCP Server 默认不启用；未配置时零连接，新发现外部工具也不会自动获得权限。
-- V4 已完成真实 Office 文件生成；V5 已实现邮件/日历接入与受限的结构化深度浏览，但仍拒绝任意脚本、selector、域名和无审批提交，真实账号兼容性以显式 smoke 结果为准。
+```bash
+PYTHONPATH=apps/api:. uv run celery -A assistant_api.worker:celery_app beat --loglevel=INFO
+```
 
-### V5 现实行动与个人数据
+### 4. 启动桌面端
 
-- SMTP 使用 STARTTLS 或 TLS、超时和安全错误码真实发送；CalDAV 使用稳定 UID，重试不会重复创建同一事件。账号凭据加密存储，支持测试、禁用和撤销。
-- 浏览器仅接受有界结构化动作，限制允许域名并阻止私网、保留地址、任意 selector、JavaScript 和下载；交互后的状态只有再次精确批准保存才会覆盖密文。
-- 知识库只摄取用户显式授权的 txt、md、pdf、docx、xlsx、pptx，校验真实路径、符号链接、大小和 checksum；解析失败保留旧索引，检索严格按用户隔离并返回来源。
-- 提醒通过持久化 outbox 投递桌面或已有 LangBot 目标，成功记录不会因 Beat、worker 或 Redis 重启而重复发送；失败状态和重试结果可在桌面查看。
-- 确定性 localhost SMTP/CalDAV 协议测试和隔离 Compose 重启测试可在无私人凭据时运行。真实 provider 只由显式 `SMOKE_*` 配置触发，跳过项保持未验证。
+```bash
+uv run assistant-desktop
+```
 
-### 运维与恢复
+桌面端不会自动启动后端。使用桌面端前需要确保：
 
-可复制的 Compose smoke、真实 provider smoke、soak、备份与空库恢复命令见 `docs/v5/01-operations-runbook.md`。恢复脚本要求目标 `public` schema 为空，先校验 SHA-256，再比对 Alembic 版本和核心表计数；不会覆盖非空数据库。
+- PostgreSQL 已启动。
+- Redis 已启动。
+- Alembic 迁移已完成。
+- FastAPI 已启动。
+- Celery worker 已启动。
+- 数据库中已准备用户。
+- 本机 API token 已配置。
 
-### V3 能力目录与扩展边界
-
-- `packages/capabilities/` 使用统一元数据描述 `code`、`agent_profile`、`skill`、`tool` 四类能力，默认目录覆盖 `memory`、`status`、四类 Profile、四个内置 Skill 和 `search.web`。
-- `GET /api/capabilities` 可按 `kind`、`enabled` 查询稳定排序的安全元数据；响应不包含 loader、实例、本地路径或外部服务配置。
-- Registry 的 `list/get` 不加载实现；只有显式 `resolve` 才调用已注册 loader，并在当前 revision 内缓存。目录可见不等于工具获准执行，最终门禁仍由 ToolRegistry 与审批记录控制。
-- V3-02 路由候选只包含 `profile.plan`、`profile.learn`、`profile.daily`、`profile.office`；模型输出必须通过严格 JSON、启用状态和执行映射校验，成功与失败都走脱敏审计边界。
-- V3-03 将内置根 `prompts/skills/` 与可写托管根分离。托管 Skill 可由 GUI 按模板创建，或安装恰好包含 `manifest.json` 与 `SKILL.md` 的受限本地 ZIP；创建和安装后默认停用，启停、失败和卸载均写持久审计。
-- `GET /api/skills` 与五类变更接口为 GUI 提供生命周期边界。服务端限制包和文件大小，拒绝路径穿越、额外文件、内置覆盖及未知操作者，并以临时目录加原子改名发布。
-- 启用托管 Skill 只允许 Registry 在显式 `resolve` 时读取说明，不会自动加入 Model Router、不会安装依赖或脚本，也不会自动获得 Tool 权限。
-- 扩展新能力时先选择类型：规则明确的操作写确定性代码，多步推理写 Agent Profile，可复用指令写 Skill，外部动作写 Tool；再定义稳定 capability ID、摘要、风险、审批需求和验收测试。
-- 新 Profile 不会仅因被发现就自动参与模型路由，必须显式增加执行映射；新 Tool 必须进入 ToolRegistry 与审批策略；重依赖只能由受控 loader 在调用时加载。
-- Skill 包契约、桌面路径和后续扩展边界见 `docs/v3/03-skill-lifecycle-gui.md`。
-- V3-04 已移除退役执行集成及其环境变量、客户端和 worker 分支。现有 `light` / `standard` 调用继续兼容，并分别进入 Fast / Reasoning Pool；未知值会安全失败，不会静默改走其他执行路径。
-- 当前 Model Gateway 提供 Fast、Reasoning、Private 三池边界。DeepSeek Flash/Pro 由既有配置生成兼容节点；GLM、企业 OpenAI-compatible 接口和私有 Qwen 可通过 `MODEL_GATEWAY_NODES_JSON` 增加。配置不完整或 `enabled=false` 的本地小模型与 Qwen 占位节点不会参与选择。
-- 池内使用归一化加权最少负载：可用容量 40%，延迟惩罚 25%，失败率 20%，成本惩罚 15%；同池节点失败时有界切换，Private 不自动降级到公有池。运行指标当前为进程内状态，跨 Celery 进程共享指标留待独立阶段。
-- Agent 智能意图路由使用 Fast Pool 的通用模型并继续受 Capability Registry 候选约束，不依赖微调意图模型。PySide6 提交后通过所有者隔离的 NDJSON 任务事件流先显示执行计划，再追加已验证的最终回答增量；断流时保留已有内容并回退任务轮询。
-- V3-05 只同步累计主规范与当前 runtime 的一致性，不改变代码行为；退役能力的负向回归要求和历史归档继续保留。
-- V3-06 让 Capability Registry 从一个完整工具快照 revision 投影元数据；目录可见、工具启用、计划允许和最终执行是四个独立边界。系统不扫描或热加载任意 Python 插件，不以全目录工具注入作为兜底。
-- V3-07 参考 FinchBot 的 Agent 循环、动态上下文和 checkpoint 机制，但没有迁入其文件工作区、自修改、shell、后台任务或 MCP 自配置能力。详见 `docs/v3/07-agent-core-runtime.md`。
-- V3-08 使用项目自有 Observability 协议隔离 Langfuse v4 SDK；默认 No-op，完整配置后才启用。Langfuse 负责运行 Trace、实验和可选评分，pytest 继续负责确定性安全与发布硬门禁。详见 `docs/v3/08-langfuse-observability-evaluation.md`。
-- V3-09 增加结构化 WorkPlan、ReviewDecision、有界 retry/replan 和三类 Human-in-the-loop；模型输出始终从属于 Planning Layer 与 ToolRegistry 安全包络。详见 `docs/v3/09-plan-execute-review-hitl.md`。
-
-### 记忆、监控与演进
-
-- `/memory` 支持中英文 remember/list/forget/correct/confirm/reject/why/policy 等命令；SQL 是事实源，semantic 候选必须回 SQL 验证 owner、状态、有效期和 sensitivity，失败回退 SQL keyword 检索。
-- V6-01 保留 `memories` 表和 SQL memory ID，增加 scope、status、content hash、sensitivity、用户确认、validity、supersedes 和 provenance；新增 `memory_links`、`memory_feedback`、`memory_index_outbox`。显式写入先执行确定性 forbidden 扫描，启用 Mem0 后同步失败会保留 SQL 事实并创建待处理 outbox。
-- V6-02 新增 `conversation_summaries` 和 `memory_blocks`，Agent Harness 使用 token-aware Context Pack 替代固定最近 12 条。Hot path 只读取现有 owned summary/block 并选择预算内完整 turns；摘要更新通过可注入服务显式触发，失败不删除原始消息。会话 API 与 PySide6 会显示“已压缩历史”和摘要版本/更新时间。
-- V6-03 增加 source trust、严格 candidate schema、hash/source dedup、明显冲突 `conflict_pending`、`memory_policies` 和 best-effort success hook。自动 extractor 默认不配置；外部网页、邮件、文档、Tool 和子 Agent 内容只能作为不可信 episode candidate，不能视为用户授权。`/memory 确认|拒绝|纠正|反馈|范围|不再记住` 与 PySide6 最小候选按钮提供用户闭环。
-- V6-04 使用 semantic IDs、SQL keyword、time intent、feedback、scope 和 links 生成/重排候选；所有 semantic 结果必须回 SQL 验证 owner/status/validity/sensitivity。`RetrievalWeights` 集中配置评分与预算，Mem0 失败记录 `keyword_fallback`。`memory_retrieval_traces` 只保存 query hash、ID、分数、rank、reason 和 token；API/PySide6 可显示本次使用数量，不返回 Memory content 或隐藏推理。
-- V6-05 增加 event/observed/valid/created 四类时间、Daily/Weekly consolidation run、digest 和 decision。Daily 只自动处理 exact duplicate、明确 temporal supersede 和明显 contradiction；Weekly procedure/reflection 至少需要两个成功 episode，且只生成 candidate。scheduler 使用完整 UTC 日/周窗口和唯一键幂等执行，SQL/Mem0 对账失败不回滚 SQL。PostgreSQL typed links 继续作为图实现，不安装 Graphiti/Neo4j。
-- V6-06 新增 owner-scoped Memory overview/list/detail/action/policy/retrieval/digest API，以及独立 PySide6 `MemoryCenterDialog`。Overview、List、Detail、Candidates、Conflicts、Retrieval、Settings 均通过 `ApiWorker` 非阻塞加载，后端成功后才刷新；GUI 可完成记住、确认、拒绝、纠正、Pin、作用域、有效期、忘记、归档和索引重建。可选 Obsidian 导出使用受管根目录、确定性 Markdown/YAML 和内部链接；forbidden 不导出，sensitive 只写 `[REDACTED]`，Markdown 不会反向写数据库。
-- V6-07 已实现统一 Memory release evaluator、owner-scoped effectiveness、immutable retrieval policy version、shadow/activation/rollback 和恢复计数。shadow policy 不进入生产 Context Pack；activation 必须引用同 owner/scope/version 的通过报告并显式批准。默认脱敏 fixture 的自动指标通过，并已在本机使用合成用户真实执行知识更新、纠正、遗忘和长会话压缩后完成 release gate；本机 evidence 文件位于 Git 忽略目录且不提交。其他环境仍必须独立提供四类脱敏 evidence，不能复用或伪造本机记录。
-- `/status` 查询本人最近任务或指定任务，不泄露其他用户信息。
-- V2-04 使用 `TaskService` 幂等创建周期任务，由单实例 Celery Beat 投递、既有 worker 执行。
-- 记忆包含 `access_count`、重要性、过期和归档元数据；行为服务可把建议转为 managed Prompt/Skill proposal，但在精确 `change` 审批前不会自动修改任何文件，批准后才能原子应用并可回滚，且不能修改代码、依赖或工具权限。
-- 维护流程包括超时 `running` 任务失败与逾期 `pending` 任务补偿。
-
-### 评测与质量
-
-- V2-05 评测与回归阶段已完成，数据集与基线继续保存在 `tests/evals/datasets/core_commands.json` 和 `tests/evals/baselines/v2-05.json`。V3-08 已移除 Deepeval；确定性关键词、禁词、长度、安全和基线规则现在由普通 Python/pytest 执行。
-- 本地或 CI 可运行 `uv run python scripts/run_evaluation.py` 获取机器可读 JSON 报告；失败、缺失基线或回归返回非零退出码。该命令不读取 Langfuse 配置、不调用外部模型、不发送遥测。
-- V6-00 使用脱敏合成数据集 `tests/evals/datasets/adaptive_memory_v6_00.json` 记录长会话截断、全量偏好注入、可选语义层、跨会话正确率、陈旧记忆和 `/memory` 缺口。运行 `uv run python scripts/run_memory_baseline.py` 可得到确定性 JSON；有效基线中的已知失败返回 1，fixture 无效返回 2。该入口只建立对照基线，不表示自适应记忆已经上线。
-- V6-03 候选基线位于 `tests/evals/datasets/memory_candidates_v6_03.json`，确定性报告覆盖 candidate precision、敏感拒绝率、冲突率和确认率，不使用真实用户会话。
-- V6-04 检索基线位于 `tests/evals/datasets/memory_retrieval_v6_04.json`，覆盖 update/temporal/abstention、平均 token、p95 latency 和 stale-use rate。
-- V6-07 发布 fixture 位于 `tests/evals/datasets/memory_release_v6_07.json`。运行 `uv run python scripts/run_memory_release_gate.py`：通过返回 0，合法但门禁未通过返回 1，fixture/证据无效返回 2。默认返回 1，因为自动指标通过但 `manual_evidence_pending`；完成真实本机试用后，将 `docs/v6/v6-release-evidence.example.json` 复制到被 Git 忽略的 `var/v6-release-evidence.json`，替换全部占位 ID/时间，再使用 `--manual-evidence var/v6-release-evidence.json`。证据 manifest 只允许 type、evidence ID 和时间，不接受对话或 Memory 原文。
-- `packages.evaluation.run_langfuse_experiment` 只提供可注入的实验边界，调用方必须传入真实 task callable；静态 golden `actual_output` 不代表真实 Agent 质量。离线评测和 Langfuse 都不替代功能、安全、集成测试及人工发布检查。
-- V4-00 提供默认关闭的 Gateway LLM Judge，对成功 Agent 输出做稳定 hash 抽样，将三维分数写入 Langfuse Score 和 Prometheus 指标；远端 Dashboard、Evaluator Rule 与外部告警按 `docs/v4/00-personal-agent-capability-completion.md` 在部署时显式配置。
-
-## 验证
+### 5. 常用验证命令
 
 ```bash
 uv run pytest
@@ -223,8 +439,13 @@ uv run pytest --cov
 uv run ruff check .
 uv run mypy .
 uv lock --check
+```
+
+可选 smoke：
+
+```bash
 uv run python -m scripts.ops.compose_smoke
 uv run python -m scripts.ops.provider_smoke
 ```
 
-项目遵循 OpenSpec + ATDD：每个 phase 先同步验收标准，再实现和验证，完成后同步主规范并归档变更。
+注意：部分集成测试会绑定本地 `127.0.0.1` 临时端口；在受限 sandbox 中运行可能需要放开本地端口绑定权限。

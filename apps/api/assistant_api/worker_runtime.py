@@ -4,7 +4,8 @@ from pathlib import Path
 from typing import Any
 
 from langgraph.checkpoint.base import BaseCheckpointSaver
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from packages.agent_harness import (
@@ -55,15 +56,22 @@ from packages.tools import (
 
 from .config import Settings
 from .agent_model import AgentGatewayModel
+from .agent_ports import (
+    SqlAlchemyConversationContextPort,
+    SqlAlchemyExecutionTracePort,
+    SqlAlchemyLocalTaskServicePort,
+    SqlAlchemyTaskLifecyclePort,
+    SqlAlchemyUserLookupPort,
+)
 from .checkpoints import open_agent_checkpointer
 from .agent_routing import CapabilityRoutingService, RoutingModelAdapter
 from .langbot import LangBotResultClient
-from .models import EvolutionChange, Task, TaskStatus
+from .models import AgentRun, EvolutionChange, Task, TaskStatus, utc_now
 from .observability import build_observability
 from .quality import GatewayJudgeModel
 from .services import DISPATCHABLE_TASK_STATUSES, ResultDispatcher
 from .subagents import GatewaySubAgentRunner
-from .task_events import TaskEventPublisher
+from .task_events import TASK_EVENT_STATUS, TaskEventPublisher
 
 
 async def execute_task_by_id(
@@ -87,6 +95,11 @@ async def execute_task_by_id(
     try:
         async with sessionmaker() as session:
             task_preview = await session.get(Task, task_id)
+            agent_run = (
+                await _start_agent_run(session, task_preview)
+                if task_preview is not None
+                else None
+            )
             with runtime_observability.observe(
                 "agent.task",
                 as_type="agent",
@@ -173,9 +186,17 @@ async def execute_task_by_id(
                 await publisher.publish(
                     task_id=task.id,
                     user_id=task.user_id,
-                    event_type="status",
+                    event_type=TASK_EVENT_STATUS,
                     payload={"status": task.status},
                 )
+
+                if agent_run is not None:
+                    await _finish_agent_run(
+                        session,
+                        agent_run=agent_run,
+                        task=task,
+                        sensitive_values=sensitive_values,
+                    )
 
                 observation.update(
                     output={"status": task.status},
@@ -483,16 +504,80 @@ async def _execute_with_harness(
         session=session,
         langgraph_executor=runtime_executor,
         sensitive_values=sensitive_values,
+        trace=SqlAlchemyExecutionTracePort(session),
     )
+    semantic_memory = Mem0MemoryAdapter(settings.mem0_config_path)
     return await AgentHarness(
         session=session,
         executor=executor,
         search_tool=search_tool,
         tool_snapshot=tool_snapshot,
-        semantic_memory=Mem0MemoryAdapter(settings.mem0_config_path),
+        semantic_memory=semantic_memory,
         semantic_memory_limit=settings.mem0_search_limit,
         event_sink=publish_event,
+        task_lifecycle=SqlAlchemyTaskLifecyclePort(session),
+        local_tasks=SqlAlchemyLocalTaskServicePort(
+            session,
+            semantic_memory=semantic_memory,
+        ),
+        conversation_context=SqlAlchemyConversationContextPort(session),
+        user_lookup=SqlAlchemyUserLookupPort(session),
     ).execute_task(task_id)
+
+
+async def _start_agent_run(session: AsyncSession, task: Task) -> AgentRun:
+    last_error: IntegrityError | None = None
+    for _ in range(3):
+        attempt_no = int(
+            await session.scalar(
+                select(func.coalesce(func.max(AgentRun.attempt_no), 0)).where(
+                    AgentRun.task_id == task.id
+                )
+            )
+            or 0
+        ) + 1
+        agent_run = AgentRun(
+            task_id=task.id,
+            user_id=task.user_id,
+            attempt_no=attempt_no,
+            status="running",
+            agent_profile=None,
+            graph_version="langgraph-v2",
+            checkpoint_id=None,
+            tool_snapshot_revision=None,
+            model_class=task.model_class,
+        )
+        session.add(agent_run)
+        try:
+            await session.commit()
+        except IntegrityError as exc:
+            last_error = exc
+            await session.rollback()
+            continue
+        await session.refresh(agent_run)
+        return agent_run
+    assert last_error is not None
+    raise last_error
+
+
+async def _finish_agent_run(
+    session: AsyncSession,
+    *,
+    agent_run: AgentRun,
+    task: Task,
+    sensitive_values: tuple[str | None, ...],
+) -> AgentRun:
+    agent_run.status = task.status
+    agent_run.ended_at = utc_now()
+    agent_run.model_class = task.model_class
+    agent_run.error_message = (
+        _safe_worker_summary(task.error_message, sensitive_values=sensitive_values)
+        if task.error_message
+        else None
+    )
+    await session.commit()
+    await session.refresh(agent_run)
+    return agent_run
 
 
 async def _record_worker_failure(

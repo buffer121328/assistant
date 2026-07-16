@@ -527,3 +527,24 @@ async def test_task_event_stream_is_owner_scoped_and_resumable(
     assert [(item["sequence"], item["type"]) for item in records] == [(2, "status")]
     assert denied.status_code == 404
     assert "先返回计划" not in denied.text
+
+
+@pytest.mark.asyncio
+async def test_task_event_stream_ends_for_cancelled_task(
+    client: TestClient,
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    user, task = await create_task(sessionmaker, task_type="plan")
+    async with sessionmaker() as session:
+        stored = await session.get(Task, task.id)
+        assert stored is not None
+        stored.status = TaskStatus.CANCELLED.value
+        await session.commit()
+
+    response = client.get(
+        f"/api/tasks/{task.id}/events/stream",
+        params={"user_id": user.id},
+    )
+
+    assert response.status_code == 200
+    assert response.text == ""

@@ -47,6 +47,17 @@ from .core import (
     NonPendingTaskExecutionError,
 )
 from .planner import DefaultPlanningLayer, ExecutionPlan
+from .ports import (
+    ConversationContextPack,
+    ConversationContextPort,
+    ExecutionTracePort,
+    HarnessTaskRecord,
+    LocalTaskServicePort,
+    MemoryContextPort,
+    StatusContextPort,
+    TaskLifecyclePort,
+    UserLookupPort,
+)
 from .profiles import (
     AgentProfile,
     DefaultProfileSelector,
@@ -100,6 +111,13 @@ __all__ = [
     "AgentRunInput",
     "AgentRunResult",
     "HumanApprovalRequest",
+    "ConversationContextPort",
+    "ConversationContextPack",
+    "LocalTaskServicePort",
+    "TaskLifecyclePort",
+    "StatusContextPort",
+    "MemoryContextPort",
+    "HarnessTaskRecord",
     "BehaviorEvolutionService",
     "BehaviorMetrics",
     "CapabilitiesBuilder",
@@ -111,6 +129,7 @@ __all__ = [
     "ExecutionBoundary",
     "ExecutionOutcome",
     "ExecutionPlan",
+    "ExecutionTracePort",
     "EVOLUTION_SUGGESTION_TOOL_NAME",
     "EvolutionSuggestion",
     "EvolutionApprovalError",
@@ -132,6 +151,7 @@ __all__ = [
     "SubAgentResult",
     "SubAgentRunner",
     "TaskContext",
+    "UserLookupPort",
     "ToolCapability",
     "UnsupportedModelClassError",
     "UnsupportedWorkflowTaskTypeError",

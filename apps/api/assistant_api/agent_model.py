@@ -28,6 +28,7 @@ from packages.observability import NoopObservability, Observability
 from .answer_stream import FinalAnswerDeltaDecoder
 from .config import Settings
 from .repositories import ModelLogCreate, ModelLogRepository
+from .task_events import TASK_EVENT_CONTENT_DELTA
 
 
 class AgentGatewayAdapter(Protocol):
@@ -140,7 +141,7 @@ class AgentGatewayModel:
                         answer_delta = decoder.feed(chunk)
                         if answer_delta:
                             await event_sink(
-                                "content_delta", {"text": answer_delta}
+                                TASK_EVENT_CONTENT_DELTA, {"text": answer_delta}
                             )
 
                     result = await self.adapter.chat_stream(

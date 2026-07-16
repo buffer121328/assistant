@@ -27,7 +27,7 @@ from assistant_api.checkpoints import (
     open_agent_checkpointer,
 )
 from assistant_api.config import Settings
-from assistant_api.models import Approval, Base, ModelLog, Task, ToolLog, User
+from assistant_api.models import AgentRun, Approval, Base, ModelLog, Task, ToolLog, User
 from assistant_api.worker_runtime import execute_task_by_id
 from packages.agent_harness import (
     AgentDecision,
@@ -904,6 +904,15 @@ async def test_worker_runs_real_agent_core_with_injected_model_and_saver(
     assert result.status == "success"
     assert result.result_text == "Agent Core worker result"
     assert len(model.requests) == 1
+    async with sessionmaker() as session:
+        agent_run = await session.scalar(
+            select(AgentRun).where(AgentRun.task_id == task.id)
+        )
+    assert agent_run is not None
+    assert agent_run.status == "success"
+    assert agent_run.attempt_no == 1
+    assert agent_run.graph_version == "langgraph-v2"
+    assert agent_run.ended_at is not None
 
 
 @pytest.mark.asyncio
@@ -921,3 +930,11 @@ async def test_worker_does_not_fake_persistence_for_non_postgres(
     assert result.status == "failed"
     assert result.error_message is not None
     assert "PostgreSQL" in result.error_message
+    async with sessionmaker() as session:
+        agent_run = await session.scalar(
+            select(AgentRun).where(AgentRun.task_id == task.id)
+        )
+    assert agent_run is not None
+    assert agent_run.status == "failed"
+    assert agent_run.error_message is not None
+    assert "PostgreSQL" in agent_run.error_message
