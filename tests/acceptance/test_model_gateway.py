@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from pathlib import Path
+import json
 from typing import Any
 
 import httpx
@@ -483,3 +484,46 @@ async def test_12_sensitive_values_are_absent_from_errors_and_model_logs(
     for value in [logs[0].request_text, logs[0].response_text, logs[0].error_message]:
         if value is not None:
             assert_no_sensitive_text(value)
+
+
+@pytest.mark.asyncio
+async def test_task_event_stream_is_owner_scoped_and_resumable(
+    client: TestClient,
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    from assistant_api.task_events import TaskEventPublisher
+
+    user, task = await create_task(sessionmaker, task_type="plan")
+    async with sessionmaker() as session:
+        stored = await session.get(Task, task.id)
+        assert stored is not None
+        stored.status = TaskStatus.SUCCESS.value
+        await session.commit()
+    publisher = TaskEventPublisher(sessionmaker)
+    await publisher.publish(
+        task_id=task.id,
+        user_id=user.id,
+        event_type="plan",
+        payload={"steps": ["先返回计划"]},
+    )
+    await publisher.publish(
+        task_id=task.id,
+        user_id=user.id,
+        event_type="status",
+        payload={"status": "success"},
+    )
+
+    response = client.get(
+        f"/api/tasks/{task.id}/events/stream",
+        params={"user_id": user.id, "after": 1},
+    )
+    denied = client.get(
+        f"/api/tasks/{task.id}/events/stream",
+        params={"user_id": "other-user"},
+    )
+
+    assert response.status_code == 200
+    records = [json.loads(line) for line in response.text.splitlines()]
+    assert [(item["sequence"], item["type"]) for item in records] == [(2, "status")]
+    assert denied.status_code == 404
+    assert "先返回计划" not in denied.text

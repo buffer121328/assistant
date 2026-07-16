@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 from packages.capabilities import CapabilityKind, CapabilityMetadata
 
-from .models import AccountConnection, Approval, Task
+from .models import AccountConnection, Approval, Conversation, ConversationMessage, Task
 from .skill_lifecycle import SkillInventoryItem
 
 MODEL_GATEWAY_VALIDATION_ERROR = "model_gateway_validation_error"
@@ -72,6 +72,7 @@ class TaskCreateRequest(BaseModel):
     input_text: str = Field(min_length=1)
     workflow_key: str | None = None
     model_class: Literal["light", "standard"] | None = None
+    conversation_id: str | None = None
 
 
 class TaskResponse(BaseModel):
@@ -83,6 +84,7 @@ class TaskResponse(BaseModel):
     status: str
     workflow_key: str | None
     model_class: str | None
+    conversation_id: str | None
     result_text: str | None
     error_message: str | None
     created_at: datetime
@@ -96,6 +98,45 @@ class TaskListResponse(BaseModel):
 class TaskSubmissionResponse(BaseModel):
     task: TaskResponse
     queued: bool
+
+
+class ConversationCreateRequest(BaseModel):
+    user_id: str = Field(min_length=1)
+    title: str | None = Field(default=None, max_length=255)
+
+
+class ConversationActorRequest(BaseModel):
+    user_id: str = Field(min_length=1)
+
+
+class ConversationResponse(BaseModel):
+    conversation_id: str
+    user_id: str
+    title: str
+    channel: str
+    archived_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class ConversationListResponse(BaseModel):
+    items: list[ConversationResponse]
+
+
+class ConversationMessageResponse(BaseModel):
+    message_id: str
+    conversation_id: str
+    task_id: str | None
+    role: Literal["user", "assistant"]
+    content: str
+    created_at: datetime
+
+
+class ConversationMessageListResponse(BaseModel):
+    items: list[ConversationMessageResponse]
+    compacted: bool = False
+    summary_updated_at: datetime | None = None
+    summary_version: str | None = None
 
 
 class CapabilityResponse(BaseModel):
@@ -282,10 +323,36 @@ def task_response(task: Task) -> TaskResponse:
         status=task.status,
         workflow_key=task.workflow_key,
         model_class=task.model_class,
+        conversation_id=task.conversation_id,
         result_text=task.result_text,
         error_message=task.error_message,
         created_at=task.created_at,
         updated_at=task.updated_at,
+    )
+
+
+def conversation_response(item: Conversation) -> ConversationResponse:
+    return ConversationResponse(
+        conversation_id=item.id,
+        user_id=item.user_id,
+        title=item.title,
+        channel=item.channel,
+        archived_at=item.archived_at,
+        created_at=item.created_at,
+        updated_at=item.updated_at,
+    )
+
+
+def conversation_message_response(
+    item: ConversationMessage,
+) -> ConversationMessageResponse:
+    return ConversationMessageResponse(
+        message_id=item.id,
+        conversation_id=item.conversation_id,
+        task_id=item.task_id,
+        role=cast(Literal["user", "assistant"], item.role),
+        content=item.content,
+        created_at=item.created_at,
     )
 
 

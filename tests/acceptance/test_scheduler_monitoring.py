@@ -306,8 +306,7 @@ async def test_04_cron_creates_one_pending_task_per_schedule_slot(
     assert stored.platform == "scheduler"
     assert calls == [first.id]
     assert not any(
-        log.tool_name in {"langgraph.executor", "mcp.adapter", "shell"}
-        for log in logs
+        log.tool_name in {"langgraph.executor", "mcp.adapter", "shell"} for log in logs
     )
 
 
@@ -341,12 +340,16 @@ async def test_06_worker_heartbeat_composes_bounded_v2_maintenance(
         "timed_out_task_ids": [],
         "compensated_task_ids": [],
         "archived_memory_ids": [],
+        "memory_consolidation": {
+            "processed_user_count": 0,
+            "daily_run_ids": (),
+            "weekly_run_ids": (),
+        },
         "evolution_suggestion_created": False,
         "created_notification_outbox_ids": [],
         "delivered_notification_outbox_ids": [],
     }
     assert [log.tool_name for log in logs] == ["memory.maintenance"]
     assert not any(
-        log.tool_name in {"langgraph.executor", "mcp.adapter", "shell"}
-        for log in logs
+        log.tool_name in {"langgraph.executor", "mcp.adapter", "shell"} for log in logs
     )

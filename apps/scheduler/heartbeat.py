@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from assistant_api.config import Settings
 from assistant_api.monitoring import run_phase09_monitoring
 from packages.agent_harness.evolution import BehaviorEvolutionService
+from packages.memory.consolidation import run_memory_consolidation_maintenance
 from packages.memory.maintenance import maintain_memories
 from packages.notifications import ReminderService, deliver_langbot_due
 from assistant_api.langbot import LangBotResultClient
@@ -33,6 +34,10 @@ async def run_v2_maintenance(
 
     async with sessionmaker() as session:
         memory_result = await maintain_memories(session=session, now=now)
+        consolidation_result = await run_memory_consolidation_maintenance(
+            session=session,
+            now=now or datetime.now().astimezone(),
+        )
         suggestion = await BehaviorEvolutionService(session).evaluate(now=now)
         await session.commit()
 
@@ -47,6 +52,7 @@ async def run_v2_maintenance(
         )
 
     result["archived_memory_ids"] = list(memory_result.archived_memory_ids)
+    result["memory_consolidation"] = consolidation_result
     result["evolution_suggestion_created"] = suggestion is not None
     result["created_notification_outbox_ids"] = list(created_outbox_ids)
     result["delivered_notification_outbox_ids"] = list(delivered_outbox_ids)

@@ -1,0 +1,12 @@
+{
+  "version": "v6-03",
+  "cases": [
+    {"id": "explicit-preference", "eligible": true, "expected": "active", "observed": "active", "confirmed": true},
+    {"id": "inferred-preference", "eligible": true, "expected": "candidate", "observed": "candidate", "confirmed": false},
+    {"id": "runtime-fact", "eligible": true, "expected": "candidate", "observed": "candidate", "confirmed": false},
+    {"id": "synthetic-forbidden", "eligible": false, "expected": "rejected", "observed": "rejected", "confirmed": false},
+    {"id": "external-injection", "eligible": false, "expected": "candidate", "observed": "candidate", "confirmed": false},
+    {"id": "preference-conflict", "eligible": true, "expected": "conflict", "observed": "conflict", "confirmed": false},
+    {"id": "confirmed-candidate", "eligible": true, "expected": "active", "observed": "active", "confirmed": true}
+  ]
+}

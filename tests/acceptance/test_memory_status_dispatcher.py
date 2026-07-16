@@ -112,7 +112,7 @@ async def test_active_memory_summary_excludes_deleted_and_cross_user_records(
         sessionmaker,
         user_id=user.id,
         task_type="plan",
-        input_text="/plan 使用记忆",
+        input_text="/plan 先给结论再给步骤",
     )
 
     async with sessionmaker() as session:
@@ -123,6 +123,7 @@ async def test_active_memory_summary_excludes_deleted_and_cross_user_records(
                     memory_type="preference",
                     content="先给结论",
                     is_active=True,
+                    confirmed_by_user=True,
                     created_at=now,
                     updated_at=now,
                 ),
@@ -140,6 +141,7 @@ async def test_active_memory_summary_excludes_deleted_and_cross_user_records(
                     memory_type="preference",
                     content="再给步骤",
                     is_active=True,
+                    confirmed_by_user=True,
                     created_at=now + timedelta(minutes=2),
                     updated_at=now + timedelta(minutes=2),
                 ),
@@ -160,7 +162,7 @@ async def test_active_memory_summary_excludes_deleted_and_cross_user_records(
             executor=executor,
         ).execute_task(task.id)
 
-    assert executor.calls[0]["context"].memory_summary == "先给结论\n再给步骤"
+    assert executor.calls[0]["context"].memory_summary == "再给步骤\n先给结论"
 
 
 @pytest.mark.asyncio

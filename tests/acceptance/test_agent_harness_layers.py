@@ -217,7 +217,9 @@ class FakeSearchTool:
     def __init__(self, events: list[str]) -> None:
         self.events = events
 
-    async def search(self, *, task_id: str, user_id: str, query: str) -> SearchWebResult:
+    async def search(
+        self, *, task_id: str, user_id: str, query: str
+    ) -> SearchWebResult:
         self.events.append("search")
         return SearchWebResult(
             query=query,
@@ -262,9 +264,7 @@ async def test_06_harness_plans_before_primary_executor_manages_tools(
             input_text="/learn V2 planning integration",
             status=TaskStatus.PENDING.value,
         )
-        session.add_all(
-            [task, Memory(user_id=user.id, content="回答先给结论")]
-        )
+        session.add_all([task, Memory(user_id=user.id, content="回答先给结论")])
         await session.commit()
 
         events: list[str] = []
@@ -282,7 +282,7 @@ async def test_06_harness_plans_before_primary_executor_manages_tools(
     plan = boundary.calls[0]["plan"]
     context = boundary.calls[0]["context"]
     assert plan.allowed_tools == ("search.web",)
-    assert context.memory_summary == "回答先给结论"
+    assert context.memory_summary == ""
     assert context.skill_names == ("research",)
     assert context.sources == ()
 

@@ -42,7 +42,9 @@ class SemanticMemory(Protocol):
 class NoopSemanticMemory:
     enabled = False
 
-    async def add(self, *, user_id: str, run_id: str, memory_id: str, content: str) -> bool:
+    async def add(
+        self, *, user_id: str, run_id: str, memory_id: str, content: str
+    ) -> bool:
         del user_id, run_id, memory_id, content
         return False
 
@@ -50,7 +52,9 @@ class NoopSemanticMemory:
         del user_id, memory_id
         return False
 
-    async def search(self, *, user_id: str, query: str, limit: int) -> tuple[SemanticMemoryResult, ...]:
+    async def search(
+        self, *, user_id: str, query: str, limit: int
+    ) -> tuple[SemanticMemoryResult, ...]:
         del user_id, query, limit
         return ()
 
@@ -65,7 +69,9 @@ class Mem0MemoryAdapter:
     def enabled(self) -> bool:
         return self.config_path is not None
 
-    async def add(self, *, user_id: str, run_id: str, memory_id: str, content: str) -> bool:
+    async def add(
+        self, *, user_id: str, run_id: str, memory_id: str, content: str
+    ) -> bool:
         try:
             client = await self._client_instance()
             await asyncio.to_thread(
@@ -85,7 +91,10 @@ class Mem0MemoryAdapter:
             payload = await asyncio.to_thread(client.get_all, user_id=user_id)
             for item in _result_items(payload):
                 metadata = item.get("metadata")
-                if isinstance(metadata, dict) and metadata.get("sql_memory_id") == memory_id:
+                if (
+                    isinstance(metadata, dict)
+                    and metadata.get("sql_memory_id") == memory_id
+                ):
                     mem0_id = item.get("id")
                     if isinstance(mem0_id, str):
                         await asyncio.to_thread(client.delete, mem0_id)
@@ -93,7 +102,9 @@ class Mem0MemoryAdapter:
             return False
         return True
 
-    async def search(self, *, user_id: str, query: str, limit: int) -> tuple[SemanticMemoryResult, ...]:
+    async def search(
+        self, *, user_id: str, query: str, limit: int
+    ) -> tuple[SemanticMemoryResult, ...]:
         client = await self._client_instance()
         bounded_limit = max(1, min(limit, 20))
         payload = await asyncio.to_thread(
@@ -107,7 +118,13 @@ class Mem0MemoryAdapter:
             content = item.get("memory") or item.get("content")
             if not isinstance(content, str) or not content.strip():
                 continue
-            raw_id = item.get("id") or item.get("memory_id") or "unknown"
+            metadata = item.get("metadata")
+            sql_memory_id = (
+                metadata.get("sql_memory_id") if isinstance(metadata, dict) else None
+            )
+            raw_id = (
+                sql_memory_id or item.get("memory_id") or item.get("id") or "unknown"
+            )
             score = item.get("score")
             results.append(
                 SemanticMemoryResult(

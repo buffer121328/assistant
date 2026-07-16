@@ -68,6 +68,7 @@ class AgentModelRequest:
     user_id: str
     task_type: str
     messages: tuple[GatewayMessage, ...]
+    stream_answer: bool = False
 
 
 class AgentModelProtocol(Protocol):
@@ -127,11 +128,15 @@ def parse_agent_decision(value: str) -> AgentDecision:
             call_id = raw_call.get("id")
             tool_name = raw_call.get("tool_name")
             arguments = raw_call.get("arguments")
-            if not isinstance(call_id, str) or not _TOOL_NAME_PATTERN.fullmatch(call_id.strip()):
+            if not isinstance(call_id, str) or not _TOOL_NAME_PATTERN.fullmatch(
+                call_id.strip()
+            ):
                 raise AgentDecisionError("Tool batch item requires a valid id")
             if call_id.strip() in call_ids:
                 raise AgentDecisionError("Tool batch call ids must be unique")
-            if not isinstance(tool_name, str) or not _TOOL_NAME_PATTERN.fullmatch(tool_name.strip()):
+            if not isinstance(tool_name, str) or not _TOOL_NAME_PATTERN.fullmatch(
+                tool_name.strip()
+            ):
                 raise AgentDecisionError("Tool batch item requires a valid tool name")
             if not isinstance(arguments, dict):
                 raise AgentDecisionError("Tool batch arguments must be an object")
@@ -231,7 +236,10 @@ def build_agent_model_request(
         "max_steps": plan.max_steps,
         "timeout_seconds": plan.timeout_seconds,
         "output_format": plan.output_format,
+        "memory_blocks": list(context.memory_blocks),
+        "conversation_summary": context.conversation_summary,
         "memory_summary": context.memory_summary,
+        "context_trace": list(context.context_trace),
         "skills": [
             {"name": name, "instructions": instructions}
             for name, instructions in zip(
@@ -264,15 +272,28 @@ def build_agent_model_request(
                 system_text,
                 extra_sensitive_values=sensitive_values,
             ),
-        ),
+        )
+    ]
+    for conversation_role, conversation_content in context.conversation_history:
+        if conversation_role not in {"user", "assistant"} or not conversation_content:
+            continue
+        messages.append(
+            GatewayMessage(
+                role=conversation_role,
+                content=sanitize_text(
+                    conversation_content, extra_sensitive_values=sensitive_values
+                ),
+            )
+        )
+    messages.append(
         GatewayMessage(
             role="user",
             content=sanitize_text(
                 context.input_text,
                 extra_sensitive_values=sensitive_values,
             ),
-        ),
-    ]
+        )
+    )
     for item in history:
         role = item.get("role")
         name = item.get("name")
@@ -284,7 +305,9 @@ def build_agent_model_request(
             message_content = content
         else:
             message_role = "user"
-            prefix = f"工具结果 {name}: " if isinstance(name, str) and name else "执行结果: "
+            prefix = (
+                f"工具结果 {name}: " if isinstance(name, str) and name else "执行结果: "
+            )
             message_content = f"{prefix}{content}"
         messages.append(
             GatewayMessage(
@@ -300,6 +323,7 @@ def build_agent_model_request(
         user_id=context.user_id,
         task_type=context.task_type,
         messages=tuple(messages),
+        stream_answer=run_input.plan.execution_mode == "react",
     )
 
 
@@ -319,7 +343,10 @@ def build_work_plan_request(
         "max_steps": plan.max_steps,
         "timeout_seconds": plan.timeout_seconds,
         "output_format": plan.output_format,
+        "memory_blocks": list(context.memory_blocks),
+        "conversation_summary": context.conversation_summary,
         "memory_summary": context.memory_summary,
+        "context_trace": list(context.context_trace),
         "skills": list(context.skill_names),
     }
     system_text = (
@@ -415,26 +442,35 @@ def _phase_request(
     sensitive_values: tuple[str | None, ...],
 ) -> AgentModelRequest:
     context = run_input.context
+    messages = [
+        GatewayMessage(
+            role="system",
+            content=sanitize_text(system_text, extra_sensitive_values=sensitive_values),
+        )
+    ]
+    for conversation_role, conversation_content in context.conversation_history:
+        if conversation_role in {"user", "assistant"} and conversation_content:
+            messages.append(
+                GatewayMessage(
+                    role=conversation_role,
+                    content=sanitize_text(
+                        conversation_content, extra_sensitive_values=sensitive_values
+                    ),
+                )
+            )
+    messages.append(
+        GatewayMessage(
+            role="user",
+            content=sanitize_text(
+                context.input_text, extra_sensitive_values=sensitive_values
+            ),
+        )
+    )
     return AgentModelRequest(
         task_id=context.task_id,
         user_id=context.user_id,
         task_type=context.task_type,
-        messages=(
-            GatewayMessage(
-                role="system",
-                content=sanitize_text(
-                    system_text,
-                    extra_sensitive_values=sensitive_values,
-                ),
-            ),
-            GatewayMessage(
-                role="user",
-                content=sanitize_text(
-                    context.input_text,
-                    extra_sensitive_values=sensitive_values,
-                ),
-            ),
-        ),
+        messages=tuple(messages),
     )
 
 

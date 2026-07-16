@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import json
 import re
 from typing import Any, Literal
 from urllib.parse import urlparse
@@ -56,7 +57,11 @@ class DesktopApiClient:
         timeout_seconds: float = 10.0,
     ) -> None:
         self.base_url, self.user_id = normalize_connection_settings(base_url, user_id)
-        headers = {"authorization": f"Bearer {api_token.strip()}"} if api_token.strip() else None
+        headers = (
+            {"authorization": f"Bearer {api_token.strip()}"}
+            if api_token.strip()
+            else None
+        )
         self._client = httpx.Client(
             base_url=self.base_url,
             headers=headers,
@@ -67,7 +72,13 @@ class DesktopApiClient:
     def close(self) -> None:
         self._client.close()
 
-    def submit_task(self, *, task_type: str, input_text: str) -> SubmissionResult:
+    def submit_task(
+        self,
+        *,
+        task_type: str,
+        input_text: str,
+        conversation_id: str | None = None,
+    ) -> SubmissionResult:
         payload = self._request(
             "POST",
             "/api/tasks/submit",
@@ -76,6 +87,7 @@ class DesktopApiClient:
                 "platform": "desktop",
                 "task_type": task_type,
                 "input_text": input_text,
+                "conversation_id": conversation_id,
             },
         )
         return SubmissionResult(
@@ -83,11 +95,170 @@ class DesktopApiClient:
             queued=bool(payload.get("queued")),
         )
 
+    def stream_task_events(self, task_id: str, *, after: int = 0):
+        try:
+            with self._client.stream(
+                "GET",
+                f"/api/tasks/{task_id}/events/stream",
+                params={"user_id": self.user_id, "after": after},
+            ) as response:
+                response.raise_for_status()
+                for line in response.iter_lines():
+                    if not line:
+                        continue
+                    payload = json.loads(line)
+                    if not isinstance(payload, dict):
+                        raise DesktopApiError("任务事件格式无效。")
+                    yield payload
+        except httpx.HTTPStatusError as exc:
+            raise self._status_error(exc.response) from exc
+        except (httpx.HTTPError, ValueError) as exc:
+            raise DesktopApiError("任务事件流已断开。") from exc
+
+    def create_conversation(self, title: str | None = None) -> JsonObject:
+        payload: JsonObject = {"user_id": self.user_id}
+        if title:
+            payload["title"] = title
+        return self._request("POST", "/api/conversations", json=payload)
+
+    def list_conversations(self) -> list[JsonObject]:
+        payload = self._request(
+            "GET", "/api/conversations", params={"user_id": self.user_id}
+        )
+        return self._object_list(payload, "items")
+
+    def get_conversation_messages(self, conversation_id: str) -> JsonObject:
+        return self._request(
+            "GET",
+            f"/api/conversations/{conversation_id}/messages",
+            params={"user_id": self.user_id},
+        )
+
+    def list_conversation_messages(self, conversation_id: str) -> list[JsonObject]:
+        return self._object_list(
+            self.get_conversation_messages(conversation_id), "items"
+        )
+
+    def archive_conversation(self, conversation_id: str) -> JsonObject:
+        return self._request(
+            "POST",
+            f"/api/conversations/{conversation_id}/archive",
+            json={"user_id": self.user_id},
+        )
+
     def list_tasks(self) -> list[JsonObject]:
         payload = self._request(
             "GET",
             "/api/tasks",
             params={"user_id": self.user_id},
+        )
+        return self._object_list(payload, "items")
+
+    def get_task_memory_retrieval(self, task_id: str) -> JsonObject:
+        return self._request(
+            "GET",
+            f"/api/tasks/{task_id}/memory-retrieval",
+            params={"user_id": self.user_id},
+        )
+
+    def get_memory_overview(self) -> JsonObject:
+        return self._request(
+            "GET",
+            "/api/memories/overview",
+            params={"user_id": self.user_id},
+        )
+
+    def create_memory(
+        self,
+        *,
+        content: str,
+        memory_type: str = "preference",
+        scope_kind: str = "user/global",
+        scope_id: str | None = None,
+    ) -> JsonObject:
+        return self._request(
+            "POST",
+            "/api/memories",
+            json={
+                "user_id": self.user_id,
+                "content": content,
+                "memory_type": memory_type,
+                "scope_kind": scope_kind,
+                "scope_id": scope_id,
+            },
+        )
+
+    def list_memories(
+        self,
+        *,
+        status: str | None = None,
+        memory_type: str | None = None,
+        scope_kind: str | None = None,
+        sensitivity: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> JsonObject:
+        params: dict[str, object] = {
+            "user_id": self.user_id,
+            "limit": limit,
+            "offset": offset,
+        }
+        for key, value in (
+            ("status", status),
+            ("memory_type", memory_type),
+            ("scope_kind", scope_kind),
+            ("sensitivity", sensitivity),
+        ):
+            if value:
+                params[key] = value
+        return self._request("GET", "/api/memories", params=params)
+
+    def get_memory_detail(self, memory_id: str) -> JsonObject:
+        return self._request(
+            "GET",
+            f"/api/memories/{memory_id}",
+            params={"user_id": self.user_id},
+        )
+
+    def perform_memory_action(
+        self, memory_id: str, action: str, **values: object
+    ) -> JsonObject:
+        return self._request(
+            "POST",
+            f"/api/memories/{memory_id}/actions/{action}",
+            json={"user_id": self.user_id, **values},
+        )
+
+    def list_memory_policies(self) -> list[JsonObject]:
+        payload = self._request(
+            "GET", "/api/memory/policies", params={"user_id": self.user_id}
+        )
+        return self._object_list(payload, "items")
+
+    def update_memory_policy(
+        self,
+        policy_key: str,
+        *,
+        enabled: bool,
+        scope_kind: str = "user/global",
+        scope_id: str | None = None,
+    ) -> JsonObject:
+        return self._request(
+            "PUT",
+            f"/api/memory/policies/{policy_key}",
+            json={
+                "user_id": self.user_id,
+                "enabled": enabled,
+                "scope_kind": scope_kind,
+                "scope_id": scope_id,
+            },
+        )
+
+    def list_memory_digests(self, *, limit: int = 20) -> list[JsonObject]:
+        payload = self._request(
+            "GET",
+            "/api/memory/consolidation-digests",
+            params={"user_id": self.user_id, "limit": limit},
         )
         return self._object_list(payload, "items")
 
@@ -348,9 +519,7 @@ class DesktopApiClient:
             error = payload.get("error")
             if isinstance(error, dict) and isinstance(error.get("code"), str):
                 code = f"{error['code']}，"
-        return DesktopApiError(
-            f"服务请求失败（{code}状态码 {response.status_code}）。"
-        )
+        return DesktopApiError(f"服务请求失败（{code}状态码 {response.status_code}）。")
 
     @staticmethod
     def _skill_name(name: str) -> str:

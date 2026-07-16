@@ -1,0 +1,7 @@
+{"version":"v6-04","cases":[
+{"id":"relevant-preference","category":"extraction","correct":true,"tokens":18,"latency_ms":12,"stale_used":false},
+{"id":"updated-preference","category":"update","correct":true,"tokens":20,"latency_ms":15,"stale_used":false},
+{"id":"historical-preference","category":"temporal","correct":true,"tokens":24,"latency_ms":18,"stale_used":false},
+{"id":"unknown-abstention","category":"abstention","correct":true,"tokens":0,"latency_ms":8,"stale_used":false},
+{"id":"semantic-fallback","category":"fallback","correct":true,"tokens":16,"latency_ms":25,"stale_used":false}
+]}

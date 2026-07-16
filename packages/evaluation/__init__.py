@@ -17,6 +17,7 @@ from .models import (
     TaskType,
 )
 from .runner import evaluate_dataset
+from .memory_release import evaluate_memory_release_fixture
 
 
 __all__ = [
@@ -31,6 +32,7 @@ __all__ = [
     "RubricScore",
     "TaskType",
     "evaluate_dataset",
+    "evaluate_memory_release_fixture",
     "load_baseline",
     "load_candidate_outputs",
     "load_cases",

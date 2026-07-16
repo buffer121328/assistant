@@ -8,7 +8,12 @@ import pytest
 
 from scripts.ops import backup, restore
 from scripts.ops.soak import ProbeResult, run_soak
-from scripts.ops.db_common import COUNTED_TABLES, DatabaseTarget, OpsError, migration_version
+from scripts.ops.db_common import (
+    COUNTED_TABLES,
+    DatabaseTarget,
+    OpsError,
+    migration_version,
+)
 
 
 def test_database_target_never_places_password_in_command_or_repr(
@@ -23,6 +28,19 @@ def test_database_target_never_places_password_in_command_or_repr(
     assert "private-password" not in repr(target)
     assert "private-password" not in " ".join(command)
     assert target.environment()["PGPASSWORD"] == "private-password"
+
+
+def test_v6_short_term_memory_tables_are_in_backup_count_scope() -> None:
+    assert {"conversation_summaries", "memory_blocks"}.issubset(COUNTED_TABLES)
+
+
+def test_v6_memory_tables_are_in_backup_count_scope() -> None:
+    assert {
+        "memories",
+        "memory_links",
+        "memory_feedback",
+        "memory_index_outbox",
+    }.issubset(COUNTED_TABLES)
 
 
 def test_backup_writes_hash_manifest_and_table_counts(
@@ -40,7 +58,9 @@ def test_backup_writes_hash_manifest_and_table_counts(
 
     counts = {table: index for index, table in enumerate(COUNTED_TABLES)}
     monkeypatch.setattr(backup, "capture", fake_capture)
-    monkeypatch.setattr(backup, "migration_version", lambda target_value: "202607140005")
+    monkeypatch.setattr(
+        backup, "migration_version", lambda target_value: "202607140005"
+    )
     monkeypatch.setattr(backup, "table_counts", lambda target_value: counts)
     monkeypatch.setattr(sys, "argv", ["backup", "--output-dir", str(tmp_path)])
     assert backup.main() == 0
@@ -86,7 +106,9 @@ def test_restore_requires_empty_database_and_matching_counts(
         return "0"
 
     monkeypatch.setattr(restore, "capture", fake_capture)
-    monkeypatch.setattr(restore, "migration_version", lambda target_value: "202607140005")
+    monkeypatch.setattr(
+        restore, "migration_version", lambda target_value: "202607140005"
+    )
     monkeypatch.setattr(restore, "table_counts", lambda target_value: counts)
     monkeypatch.setattr(
         sys, "argv", ["restore", "--manifest", str(manifest), "--confirm-empty"]
@@ -145,7 +167,9 @@ def test_soak_runner_is_bounded_and_reports_safe_failures() -> None:
     assert report.max_latency_ms == 25.0
     assert report.error_codes == {"http_503": 1}
     with pytest.raises(ValueError):
-        run_soak(duration_seconds=1, interval_seconds=1, probe=lambda: ProbeResult(True, 1))
+        run_soak(
+            duration_seconds=1, interval_seconds=1, probe=lambda: ProbeResult(True, 1)
+        )
 
 
 def test_ops_image_pins_postgres_client_to_server_major() -> None:

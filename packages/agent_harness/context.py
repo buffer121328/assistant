@@ -26,6 +26,11 @@ class TaskContext:
     tool_selection_reasons: tuple[tuple[str, str], ...] = ()
     search_query: str | None = None
     sources: tuple[dict[str, Any], ...] = ()
+    conversation_history: tuple[tuple[str, str], ...] = ()
+    conversation_summary: str = ""
+    memory_blocks: tuple[str, ...] = ()
+    context_trace: tuple[dict[str, Any], ...] = ()
+    conversation_compacted: bool = False
 
 
 class ContextBuilder:
@@ -39,6 +44,11 @@ class ContextBuilder:
         capabilities: CapabilitySnapshot,
         search_query: str | None = None,
         sources: tuple[dict[str, Any], ...] = (),
+        conversation_history: tuple[tuple[str, str], ...] = (),
+        conversation_summary: str = "",
+        memory_blocks: tuple[str, ...] = (),
+        context_trace: tuple[dict[str, Any], ...] = (),
+        conversation_compacted: bool = False,
     ) -> TaskContext:
         return TaskContext(
             task_id=str(task.id),
@@ -58,4 +68,9 @@ class ContextBuilder:
             tool_selection_reasons=capabilities.selection_reasons,
             search_query=search_query,
             sources=sources,
+            conversation_history=conversation_history,
+            conversation_summary=conversation_summary,
+            memory_blocks=memory_blocks,
+            context_trace=context_trace,
+            conversation_compacted=conversation_compacted,
         )

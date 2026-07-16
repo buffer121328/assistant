@@ -18,11 +18,11 @@
 - 提醒通知使用持久 outbox、原子发送租约和稳定幂等键；LangBot endpoint 需识别 payload/header 中的同一键以去重不确定重试。
 - CalDAV 事件要求带时区时间，provider 会统一转换为 UTC RFC 5545 格式并拒绝无效时间区间。
 
-方案文档见 `docs/个人Agent助手系统完整方案.md`，MVP 文档见 `docs/mvp/index.md`，V2 文档见 `docs/v2/index.md`，V3 文档见 `docs/v3/index.md`，V4 文档见 `docs/v4/index.md`，V5 文档与运维入口见 `docs/v5/index.md`。
+方案文档见 `docs/个人Agent助手系统完整方案.md`，MVP 文档见 `docs/mvp/index.md`，V2 文档见 `docs/v2/index.md`，V3 文档见 `docs/v3/index.md`，V4 文档见 `docs/v4/index.md`，V5 文档与运维入口见 `docs/v5/index.md`，V6 自适应记忆与持续个性化规划见 `docs/v6/index.md`。当前已完成 V6-00 至 V6-07，包括基线、契约、短期层级、候选反馈、混合召回、幂等 consolidation、完整 Memory Center、版本化 policy rollout/rollback 和统一发布门禁。自动 hard gates、覆盖率、Compose smoke 及合成本机知识更新/纠正/遗忘/长会话压缩试用已通过；新环境未提供本机 evidence 时发布状态仍为尚未上线。
 
 ## 启动方式
 
-完整配置与初始化步骤见 `docs/mvp-startup-config.md`。
+从完整 Compose 启动、首次用户初始化、三模型池配置，到 GUI、LangBot、账号、知识库和提醒绑定，见 `docs/mvp-startup-config.md`。
 
 安装依赖：
 
@@ -134,12 +134,12 @@ assistant/
 
 - `POST /api/webhooks/langbot` 校验 `x-langbot-secret`，归一化消息，将已知斜杠命令映射到固定类型、将无斜杠自由文本映射到 `agent`，校验用户绑定，按 `platform + message_id` 去重并轻量投递任务；未知斜杠命令仍拒绝。
 - Result Dispatcher 保存 LangBot 的 `adapter`、`conversation_id`、`conversation_type`，对 `success`、`failed`、`cancelled` 和 `waiting_approval` 结果进行幂等回推。
-- PySide6 GUI 默认提供“智能路由”，同时保留六类固定任务，支持最近任务、结果查看、三类待审批请求、批准/拒绝、Skill 管理与系统托盘常驻。
+- PySide6 GUI 默认提供“智能路由”，同时保留六类固定任务；支持用户隔离的历史会话、新建/选择/归档/继续对话、最近任务、流式结果、三类审批、Skill 管理与系统托盘常驻。
 - `GET /app` 和旧直连消息路由不再提供；后端 API 是 LangBot 与 GUI 的内部边界，不作为网页产品入口。
 
 ### Agent、Skills 与工具路径
 
-- 自由文本路径为：`agent` 任务 → 轻量 Model Router → Registry 中启用且有白名单映射的 Agent Profile → 原有 AgentHarness；模型不能直接选择 Tool、Skill、代码能力或任意 handler。
+- 自由文本路径为：`agent` 任务 → Fast Pool Model Router → Registry 中启用且有白名单映射的 Agent Profile → AgentHarness；模型不能直接选择 Tool、Skill、代码能力或任意 handler。属于历史会话的任务只注入当前用户、当前会话最近 12 条安全 user/assistant 消息。
 - 固定命令路径不经过 Model Router：`memory/status` 直接走本地服务，`plan/learn/daily/office` 直接走对应 Agent Profile。
 - V2-02 提供 `v2.planner`、`v2.researcher`、`v2.daily`、`v2.office`，执行时按 Profile 加载指定 `prompts/skills/*/SKILL.md`；V3-07 将这些指令注入模型上下文，但不会自动启用工具。
 - V2-03 在 V2-02 规划层上实现结构化 Plan、真实 LangGraph `StateGraph`、最大步数/超时限制和 ToolRegistry。未注册或不在 `allowed_tools` 的调用会被拒绝。
@@ -179,7 +179,10 @@ assistant/
 - 扩展新能力时先选择类型：规则明确的操作写确定性代码，多步推理写 Agent Profile，可复用指令写 Skill，外部动作写 Tool；再定义稳定 capability ID、摘要、风险、审批需求和验收测试。
 - 新 Profile 不会仅因被发现就自动参与模型路由，必须显式增加执行映射；新 Tool 必须进入 ToolRegistry 与审批策略；重依赖只能由受控 loader 在调用时加载。
 - Skill 包契约、桌面路径和后续扩展边界见 `docs/v3/03-skill-lifecycle-gui.md`。
-- V3-04 已移除退役执行集成及其环境变量、客户端和 worker 分支。任务创建的 `model_class` 只接受 `light`、`standard` 或空值；历史未知值会安全失败，不会静默改走其他执行路径。
+- V3-04 已移除退役执行集成及其环境变量、客户端和 worker 分支。现有 `light` / `standard` 调用继续兼容，并分别进入 Fast / Reasoning Pool；未知值会安全失败，不会静默改走其他执行路径。
+- 当前 Model Gateway 提供 Fast、Reasoning、Private 三池边界。DeepSeek Flash/Pro 由既有配置生成兼容节点；GLM、企业 OpenAI-compatible 接口和私有 Qwen 可通过 `MODEL_GATEWAY_NODES_JSON` 增加。配置不完整或 `enabled=false` 的本地小模型与 Qwen 占位节点不会参与选择。
+- 池内使用归一化加权最少负载：可用容量 40%，延迟惩罚 25%，失败率 20%，成本惩罚 15%；同池节点失败时有界切换，Private 不自动降级到公有池。运行指标当前为进程内状态，跨 Celery 进程共享指标留待独立阶段。
+- Agent 智能意图路由使用 Fast Pool 的通用模型并继续受 Capability Registry 候选约束，不依赖微调意图模型。PySide6 提交后通过所有者隔离的 NDJSON 任务事件流先显示执行计划，再追加已验证的最终回答增量；断流时保留已有内容并回退任务轮询。
 - V3-05 只同步累计主规范与当前 runtime 的一致性，不改变代码行为；退役能力的负向回归要求和历史归档继续保留。
 - V3-06 让 Capability Registry 从一个完整工具快照 revision 投影元数据；目录可见、工具启用、计划允许和最终执行是四个独立边界。系统不扫描或热加载任意 Python 插件，不以全目录工具注入作为兜底。
 - V3-07 参考 FinchBot 的 Agent 循环、动态上下文和 checkpoint 机制，但没有迁入其文件工作区、自修改、shell、后台任务或 MCP 自配置能力。详见 `docs/v3/07-agent-core-runtime.md`。
@@ -188,7 +191,14 @@ assistant/
 
 ### 记忆、监控与演进
 
-- `/memory` 支持记住、查看与软删除，SQL 保留用户隔离的审计与生命周期；可选 Mem0 以当前输入做有界语义检索并与 SQL preference 去重合并，失败回退 SQL。
+- `/memory` 支持中英文 remember/list/forget/correct/confirm/reject/why/policy 等命令；SQL 是事实源，semantic 候选必须回 SQL 验证 owner、状态、有效期和 sensitivity，失败回退 SQL keyword 检索。
+- V6-01 保留 `memories` 表和 SQL memory ID，增加 scope、status、content hash、sensitivity、用户确认、validity、supersedes 和 provenance；新增 `memory_links`、`memory_feedback`、`memory_index_outbox`。显式写入先执行确定性 forbidden 扫描，启用 Mem0 后同步失败会保留 SQL 事实并创建待处理 outbox。
+- V6-02 新增 `conversation_summaries` 和 `memory_blocks`，Agent Harness 使用 token-aware Context Pack 替代固定最近 12 条。Hot path 只读取现有 owned summary/block 并选择预算内完整 turns；摘要更新通过可注入服务显式触发，失败不删除原始消息。会话 API 与 PySide6 会显示“已压缩历史”和摘要版本/更新时间。
+- V6-03 增加 source trust、严格 candidate schema、hash/source dedup、明显冲突 `conflict_pending`、`memory_policies` 和 best-effort success hook。自动 extractor 默认不配置；外部网页、邮件、文档、Tool 和子 Agent 内容只能作为不可信 episode candidate，不能视为用户授权。`/memory 确认|拒绝|纠正|反馈|范围|不再记住` 与 PySide6 最小候选按钮提供用户闭环。
+- V6-04 使用 semantic IDs、SQL keyword、time intent、feedback、scope 和 links 生成/重排候选；所有 semantic 结果必须回 SQL 验证 owner/status/validity/sensitivity。`RetrievalWeights` 集中配置评分与预算，Mem0 失败记录 `keyword_fallback`。`memory_retrieval_traces` 只保存 query hash、ID、分数、rank、reason 和 token；API/PySide6 可显示本次使用数量，不返回 Memory content 或隐藏推理。
+- V6-05 增加 event/observed/valid/created 四类时间、Daily/Weekly consolidation run、digest 和 decision。Daily 只自动处理 exact duplicate、明确 temporal supersede 和明显 contradiction；Weekly procedure/reflection 至少需要两个成功 episode，且只生成 candidate。scheduler 使用完整 UTC 日/周窗口和唯一键幂等执行，SQL/Mem0 对账失败不回滚 SQL。PostgreSQL typed links 继续作为图实现，不安装 Graphiti/Neo4j。
+- V6-06 新增 owner-scoped Memory overview/list/detail/action/policy/retrieval/digest API，以及独立 PySide6 `MemoryCenterDialog`。Overview、List、Detail、Candidates、Conflicts、Retrieval、Settings 均通过 `ApiWorker` 非阻塞加载，后端成功后才刷新；GUI 可完成记住、确认、拒绝、纠正、Pin、作用域、有效期、忘记、归档和索引重建。可选 Obsidian 导出使用受管根目录、确定性 Markdown/YAML 和内部链接；forbidden 不导出，sensitive 只写 `[REDACTED]`，Markdown 不会反向写数据库。
+- V6-07 已实现统一 Memory release evaluator、owner-scoped effectiveness、immutable retrieval policy version、shadow/activation/rollback 和恢复计数。shadow policy 不进入生产 Context Pack；activation 必须引用同 owner/scope/version 的通过报告并显式批准。默认脱敏 fixture 的自动指标通过，并已在本机使用合成用户真实执行知识更新、纠正、遗忘和长会话压缩后完成 release gate；本机 evidence 文件位于 Git 忽略目录且不提交。其他环境仍必须独立提供四类脱敏 evidence，不能复用或伪造本机记录。
 - `/status` 查询本人最近任务或指定任务，不泄露其他用户信息。
 - V2-04 使用 `TaskService` 幂等创建周期任务，由单实例 Celery Beat 投递、既有 worker 执行。
 - 记忆包含 `access_count`、重要性、过期和归档元数据；行为服务可把建议转为 managed Prompt/Skill proposal，但在精确 `change` 审批前不会自动修改任何文件，批准后才能原子应用并可回滚，且不能修改代码、依赖或工具权限。
@@ -198,6 +208,10 @@ assistant/
 
 - V2-05 评测与回归阶段已完成，数据集与基线继续保存在 `tests/evals/datasets/core_commands.json` 和 `tests/evals/baselines/v2-05.json`。V3-08 已移除 Deepeval；确定性关键词、禁词、长度、安全和基线规则现在由普通 Python/pytest 执行。
 - 本地或 CI 可运行 `uv run python scripts/run_evaluation.py` 获取机器可读 JSON 报告；失败、缺失基线或回归返回非零退出码。该命令不读取 Langfuse 配置、不调用外部模型、不发送遥测。
+- V6-00 使用脱敏合成数据集 `tests/evals/datasets/adaptive_memory_v6_00.json` 记录长会话截断、全量偏好注入、可选语义层、跨会话正确率、陈旧记忆和 `/memory` 缺口。运行 `uv run python scripts/run_memory_baseline.py` 可得到确定性 JSON；有效基线中的已知失败返回 1，fixture 无效返回 2。该入口只建立对照基线，不表示自适应记忆已经上线。
+- V6-03 候选基线位于 `tests/evals/datasets/memory_candidates_v6_03.json`，确定性报告覆盖 candidate precision、敏感拒绝率、冲突率和确认率，不使用真实用户会话。
+- V6-04 检索基线位于 `tests/evals/datasets/memory_retrieval_v6_04.json`，覆盖 update/temporal/abstention、平均 token、p95 latency 和 stale-use rate。
+- V6-07 发布 fixture 位于 `tests/evals/datasets/memory_release_v6_07.json`。运行 `uv run python scripts/run_memory_release_gate.py`：通过返回 0，合法但门禁未通过返回 1，fixture/证据无效返回 2。默认返回 1，因为自动指标通过但 `manual_evidence_pending`；完成真实本机试用后，将 `docs/v6/v6-release-evidence.example.json` 复制到被 Git 忽略的 `var/v6-release-evidence.json`，替换全部占位 ID/时间，再使用 `--manual-evidence var/v6-release-evidence.json`。证据 manifest 只允许 type、evidence ID 和时间，不接受对话或 Memory 原文。
 - `packages.evaluation.run_langfuse_experiment` 只提供可注入的实验边界，调用方必须传入真实 task callable；静态 golden `actual_output` 不代表真实 Agent 质量。离线评测和 Langfuse 都不替代功能、安全、集成测试及人工发布检查。
 - V4-00 提供默认关闭的 Gateway LLM Judge，对成功 Agent 输出做稳定 hash 抽样，将三维分数写入 Langfuse Score 和 Prometheus 指标；远端 Dashboard、Evaluator Rule 与外部告警按 `docs/v4/00-personal-agent-capability-completion.md` 在部署时显式配置。
 

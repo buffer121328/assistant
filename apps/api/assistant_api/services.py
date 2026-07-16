@@ -1,20 +1,32 @@
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass
 import json
 from typing import Any, Protocol
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from packages.model_gateway import sanitize_text
-from packages.memory import NoopSemanticMemory, SemanticMemory
+from packages.memory import (
+    NoopSemanticMemory,
+    SemanticMemory,
+    classify_memory_sensitivity,
+    memory_content_hash,
+    normalize_memory_content,
+)
 
 from .models import (
     Approval,
     ApprovalStatus,
     ApprovalType,
     Memory,
+    MemoryFeedback,
+    MemoryIndexOutbox,
+    MemoryLink,
+    MemoryPolicy,
+    MemoryRetrievalTrace,
     ProcessedMessage,
     Task,
     TaskStatus,
@@ -77,6 +89,11 @@ class InvalidMemoryCommandError(TaskServiceError):
     status_code = 400
 
 
+class ForbiddenMemoryContentError(TaskServiceError):
+    code = "forbidden_memory_content"
+    status_code = 400
+
+
 VALID_TRANSITIONS: dict[TaskStatus, set[TaskStatus]] = {
     TaskStatus.PENDING: {TaskStatus.RUNNING, TaskStatus.CANCELLED},
     TaskStatus.RUNNING: {
@@ -93,7 +110,9 @@ TERMINAL_TASK_STATUSES = {
     TaskStatus.FAILED.value,
     TaskStatus.CANCELLED.value,
 }
-DISPATCHABLE_TASK_STATUSES = TERMINAL_TASK_STATUSES | {TaskStatus.WAITING_APPROVAL.value}
+DISPATCHABLE_TASK_STATUSES = TERMINAL_TASK_STATUSES | {
+    TaskStatus.WAITING_APPROVAL.value
+}
 
 
 def _normalize_approval_requests(
@@ -131,9 +150,15 @@ def _normalize_approval_requests(
 
 
 class TaskService:
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        *,
+        success_hook: Callable[[Task], Awaitable[None]] | None = None,
+    ) -> None:
         self.session = session
         self.repository = TaskRepository(session)
+        self.success_hook = success_hook
 
     async def create_task(
         self,
@@ -144,10 +169,18 @@ class TaskService:
         input_text: str,
         workflow_key: str | None = None,
         model_class: str | None = None,
+        conversation_id: str | None = None,
         commit: bool = True,
     ) -> Task:
         if not await self.repository.user_exists(user_id):
             raise UserNotFoundError(f"User not found: {user_id}")
+
+        if conversation_id is not None:
+            from .conversations import ConversationService
+
+            await ConversationService(self.session).get_owned(
+                conversation_id=conversation_id, user_id=user_id, active_only=True
+            )
 
         task = await self.repository.create_task(
             TaskCreate(
@@ -157,8 +190,19 @@ class TaskService:
                 input_text=input_text,
                 workflow_key=workflow_key,
                 model_class=model_class,
+                conversation_id=conversation_id,
             )
         )
+        if conversation_id is not None:
+            from .conversations import ConversationService
+
+            await ConversationService(self.session).append_message(
+                conversation_id=conversation_id,
+                user_id=user_id,
+                role="user",
+                content=input_text,
+                task_id=task.id,
+            )
         if commit:
             await self.session.commit()
             await self.session.refresh(task)
@@ -189,8 +233,14 @@ class TaskService:
         task.status = TaskStatus.SUCCESS.value
         task.result_text = result_text
         task.error_message = None
+        await self._append_assistant_message(task, result_text)
         await self.session.commit()
         await self.session.refresh(task)
+        if self.success_hook is not None:
+            try:
+                await self.success_hook(task)
+            except Exception:
+                pass
         return task
 
     async def save_failure(self, task_id: str, error_message: str) -> Task:
@@ -199,6 +249,7 @@ class TaskService:
         task.status = TaskStatus.FAILED.value
         task.result_text = None
         task.error_message = error_message
+        await self._append_assistant_message(task, error_message)
         await self.session.commit()
         await self.session.refresh(task)
         return task
@@ -250,9 +301,23 @@ class TaskService:
                     tool_name=tool_name,
                     request_summary=summary,
                 )
+        await self._append_assistant_message(task, message)
         await self.session.commit()
         await self.session.refresh(task)
         return task
+
+    async def _append_assistant_message(self, task: Task, content: str) -> None:
+        if task.conversation_id is None:
+            return
+        from .conversations import ConversationService
+
+        await ConversationService(self.session).append_message(
+            conversation_id=task.conversation_id,
+            user_id=task.user_id,
+            role="assistant",
+            content=content,
+            task_id=task.id,
+        )
 
     def _validate_transition(self, task: Task, next_status: TaskStatus) -> None:
         current_status = TaskStatus(task.status)
@@ -363,20 +428,262 @@ class MemoryService:
         user_id: str,
         content: str,
         memory_type: str = "preference",
+        source_kind: str = "explicit_service",
+        source_trust: str = "trusted_user",
+        source_spans_json: str = "[]",
+        candidate_links_json: str = "[]",
+        reason_code: str = "explicit_user_request",
+        source_conversation_id: str | None = None,
+        source_message_id: str | None = None,
+        source_task_id: str | None = None,
+        supersedes_id: str | None = None,
+        confirmed_by_user: bool = True,
     ) -> Memory:
-        normalized_content = content.strip()
+        normalized_content = normalize_memory_content(content)
         if not normalized_content:
             raise InvalidMemoryCommandError("记忆内容不能为空")
+        safety = classify_memory_sensitivity(normalized_content)
+        if safety.sensitivity == "forbidden":
+            raise ForbiddenMemoryContentError("记忆内容包含禁止保存的凭据类型")
+        if source_message_id is not None:
+            existing = await self.repository.get_by_source_message(
+                user_id=user_id,
+                source_kind=source_kind,
+                source_message_id=source_message_id,
+            )
+            if existing is not None:
+                return existing
+        now = utc_now()
         return await self.repository.create_memory(
             MemoryCreate(
                 user_id=user_id,
                 content=normalized_content,
+                normalized_content=normalized_content,
+                content_hash=memory_content_hash(normalized_content),
                 memory_type=memory_type,
+                status="active" if confirmed_by_user else "candidate",
+                sensitivity=safety.sensitivity,
+                confirmed_by_user=confirmed_by_user,
+                confirmed_at=now if confirmed_by_user else None,
+                source_kind=source_kind,
+                source_trust=source_trust,
+                source_spans_json=source_spans_json,
+                candidate_links_json=candidate_links_json,
+                reason_code=reason_code,
+                source_conversation_id=source_conversation_id,
+                source_message_id=source_message_id,
+                source_task_id=source_task_id,
+                supersedes_id=supersedes_id,
             )
         )
 
     async def list_active_memories(self, user_id: str) -> list[Memory]:
         return await self.repository.list_active_memories(user_id)
+
+    async def list_memories(
+        self,
+        *,
+        user_id: str,
+        status: str | None = None,
+        scope_kind: str | None = None,
+    ) -> list[Memory]:
+        return await self.repository.list_memories(
+            user_id=user_id, status=status, scope_kind=scope_kind
+        )
+
+    async def get_memory(self, *, user_id: str, memory_id: str) -> Memory:
+        memory = await self.repository.get_memory_by_user(
+            user_id=user_id, memory_id=memory_id
+        )
+        if memory is None:
+            raise MemoryNotFoundError("未找到记忆或无权访问")
+        return memory
+
+    async def confirm_memory(self, *, user_id: str, memory_id: str) -> Memory:
+        memory = await self.get_memory(user_id=user_id, memory_id=memory_id)
+        if memory.status not in {"candidate", "conflict_pending"}:
+            raise InvalidMemoryCommandError("当前记忆状态不可确认")
+        now = utc_now()
+        memory.status = "active"
+        memory.is_active = True
+        memory.confirmed_by_user = True
+        memory.confirmed_at = now
+        memory.valid_from = memory.valid_from or now
+        if memory.supersedes_id is not None:
+            old = await self.get_memory(user_id=user_id, memory_id=memory.supersedes_id)
+            old.status = "superseded"
+            old.is_active = False
+            old.valid_to = now
+            await self.repository.create_link(
+                source_memory_id=memory.id,
+                target_memory_id=old.id,
+                link_type="supersedes",
+                created_by="user",
+            )
+        await self.session.flush()
+        return memory
+
+    async def reject_memory(self, *, user_id: str, memory_id: str) -> Memory:
+        memory = await self.get_memory(user_id=user_id, memory_id=memory_id)
+        if memory.status not in {"candidate", "conflict_pending"}:
+            raise InvalidMemoryCommandError("当前记忆状态不可拒绝")
+        memory.status = "rejected"
+        memory.is_active = False
+        await self.session.flush()
+        return memory
+
+    async def correct_memory(
+        self,
+        *,
+        user_id: str,
+        memory_id: str,
+        content: str,
+        confirm: bool = False,
+    ) -> Memory:
+        original = await self.get_memory(user_id=user_id, memory_id=memory_id)
+        if original.status not in {"active", "candidate", "conflict_pending"}:
+            raise InvalidMemoryCommandError("当前记忆状态不可修正")
+        corrected = await self.create_memory(
+            user_id=user_id,
+            content=content,
+            memory_type=original.memory_type,
+            source_kind="user_correction",
+            confirmed_by_user=False,
+        )
+        corrected.scope_kind = original.scope_kind
+        corrected.scope_id = original.scope_id
+        corrected.supersedes_id = original.id
+        await self.session.flush()
+        if confirm:
+            return await self.confirm_memory(user_id=user_id, memory_id=corrected.id)
+        return corrected
+
+    async def archive_memory(self, *, user_id: str, memory_id: str) -> Memory:
+        memory = await self.get_memory(user_id=user_id, memory_id=memory_id)
+        memory.status = "archived"
+        memory.is_active = False
+        memory.archived_at = utc_now()
+        await self.session.flush()
+        return memory
+
+    async def set_memory_pinned(
+        self, *, user_id: str, memory_id: str, pinned: bool
+    ) -> Memory:
+        memory = await self.get_memory(user_id=user_id, memory_id=memory_id)
+        memory.is_pinned = pinned
+        await self.session.flush()
+        return memory
+
+    async def change_memory_scope(
+        self,
+        *,
+        user_id: str,
+        memory_id: str,
+        scope_kind: str,
+        scope_id: str | None = None,
+    ) -> Memory:
+        allowed = {
+            "user/global",
+            "user/project",
+            "user/conversation",
+            "agent/profile",
+        }
+        if scope_kind not in allowed or (scope_kind != "user/global" and not scope_id):
+            raise InvalidMemoryCommandError("无效的记忆作用域")
+        memory = await self.get_memory(user_id=user_id, memory_id=memory_id)
+        memory.scope_kind = scope_kind
+        memory.scope_id = None if scope_kind == "user/global" else scope_id
+        await self.session.flush()
+        return memory
+
+    async def add_feedback(
+        self,
+        *,
+        user_id: str,
+        memory_id: str,
+        feedback_type: str,
+        task_id: str | None = None,
+        conversation_id: str | None = None,
+        retrieval_trace_id: str | None = None,
+    ) -> MemoryFeedback:
+        allowed = {
+            "helpful",
+            "harmful",
+            "incorrect",
+            "confirmed",
+            "scope_changed",
+            "forgotten",
+        }
+        if feedback_type not in allowed:
+            raise InvalidMemoryCommandError("无效的记忆反馈类型")
+        await self.get_memory(user_id=user_id, memory_id=memory_id)
+        return await self.repository.create_feedback(
+            memory_id=memory_id,
+            user_id=user_id,
+            feedback_type=feedback_type,
+            task_id=task_id,
+            conversation_id=conversation_id,
+            retrieval_trace_id=retrieval_trace_id,
+        )
+
+    async def add_link(
+        self,
+        *,
+        user_id: str,
+        source_memory_id: str,
+        target_memory_id: str,
+        link_type: str,
+        created_by: str = "user",
+    ) -> MemoryLink:
+        allowed_links = {
+            "related_to",
+            "derived_from",
+            "supports",
+            "contradicts",
+            "supersedes",
+            "part_of",
+            "applies_to_project",
+        }
+        if link_type not in allowed_links:
+            raise InvalidMemoryCommandError("无效的记忆链接类型")
+        await self.get_memory(user_id=user_id, memory_id=source_memory_id)
+        await self.get_memory(user_id=user_id, memory_id=target_memory_id)
+        return await self.repository.create_link(
+            source_memory_id=source_memory_id,
+            target_memory_id=target_memory_id,
+            link_type=link_type,
+            created_by=created_by,
+        )
+
+    async def list_links(self, *, user_id: str, memory_id: str) -> list[MemoryLink]:
+        await self.get_memory(user_id=user_id, memory_id=memory_id)
+        return await self.repository.list_links_for_memory(memory_id=memory_id)
+
+    async def list_feedback(
+        self, *, user_id: str, memory_id: str
+    ) -> list[MemoryFeedback]:
+        await self.get_memory(user_id=user_id, memory_id=memory_id)
+        return await self.repository.list_feedback_for_memory(
+            memory_id=memory_id, user_id=user_id
+        )
+
+    async def list_index_outbox(
+        self, *, user_id: str, status: str | None = None
+    ) -> list[MemoryIndexOutbox]:
+        return await self.repository.list_index_outbox(user_id=user_id, status=status)
+
+    async def forget_memory(self, *, user_id: str, memory_id: str) -> Memory:
+        memory = await self.get_memory(user_id=user_id, memory_id=memory_id)
+        memory.status = "deleted"
+        memory.is_active = False
+        memory.deleted_at = utc_now()
+        await self.repository.create_feedback(
+            memory_id=memory.id,
+            user_id=user_id,
+            feedback_type="forgotten",
+        )
+        await self.session.flush()
+        return memory
 
     async def delete_memory(self, *, user_id: str, memory_id: str) -> Memory:
         memory = await self.repository.get_active_memory_by_user(
@@ -387,6 +694,7 @@ class MemoryService:
             raise MemoryNotFoundError("未找到可删除的记忆或无权访问")
 
         memory.is_active = False
+        memory.status = "deleted"
         memory.deleted_at = utc_now()
         await self.session.flush()
         return memory
@@ -408,35 +716,212 @@ class MemoryService:
 
     async def _execute_memory_command(self, task: Task) -> str:
         rest = _command_rest(task.input_text, "/memory")
+        aliases = {
+            "list": "查看",
+            "remember": "记住",
+            "forget": "删除",
+            "correct": "纠正",
+            "confirm": "确认",
+            "reject": "拒绝",
+            "why": "为什么",
+            "policy": "策略",
+        }
+        first, _, remainder = rest.partition(" ")
+        if first in aliases:
+            rest = f"{aliases[first]} {remainder}".strip()
         if rest.startswith("记住"):
             content = rest.removeprefix("记住").strip()
-            memory = await self.create_memory(user_id=task.user_id, content=content)
+            memory = await self.create_memory(
+                user_id=task.user_id,
+                content=content,
+                source_kind="explicit_command",
+                source_task_id=task.id,
+            )
             synced = await self._semantic_add(task=task, memory=memory)
+            if self.semantic_memory.enabled and not synced:
+                await self.repository.queue_index_operation(
+                    memory=memory,
+                    operation="add",
+                    error_code="semantic_add_failed",
+                )
             status = "语义记忆已同步" if synced else "语义记忆不可用，已保留 SQL 记录"
             return f"已保存记忆：{memory.id}；{status}"
 
-        if rest == "查看":
-            memories = await self.list_active_memories(task.user_id)
+        if rest.startswith("确认"):
+            memory_id = rest.removeprefix("确认").strip()
+            if not memory_id:
+                raise InvalidMemoryCommandError("请提供要确认的 memory_id")
+            memory = await self.confirm_memory(
+                user_id=task.user_id, memory_id=memory_id
+            )
+            return f"已确认记忆：{memory.id}"
+
+        if rest.startswith("拒绝"):
+            memory_id = rest.removeprefix("拒绝").strip()
+            if not memory_id:
+                raise InvalidMemoryCommandError("请提供要拒绝的 memory_id")
+            memory = await self.reject_memory(user_id=task.user_id, memory_id=memory_id)
+            return f"已拒绝记忆：{memory.id}"
+
+        if rest.startswith("纠正"):
+            parts = rest.removeprefix("纠正").strip().split(maxsplit=1)
+            if len(parts) != 2:
+                raise InvalidMemoryCommandError("请提供 memory_id 和纠正内容")
+            memory = await self.correct_memory(
+                user_id=task.user_id,
+                memory_id=parts[0],
+                content=parts[1],
+                confirm=True,
+            )
+            return f"已纠正记忆：{memory.id}"
+
+        if rest.startswith("反馈"):
+            parts = rest.removeprefix("反馈").strip().split()
+            if len(parts) != 2:
+                raise InvalidMemoryCommandError("请提供 memory_id 和反馈类型")
+            feedback = await self.add_feedback(
+                user_id=task.user_id,
+                memory_id=parts[0],
+                feedback_type=parts[1],
+                task_id=task.id,
+                conversation_id=task.conversation_id,
+            )
+            return f"已记录记忆反馈：{feedback.feedback_type}"
+
+        if rest.startswith("范围"):
+            parts = rest.removeprefix("范围").strip().split()
+            if len(parts) not in {2, 3}:
+                raise InvalidMemoryCommandError(
+                    "请提供 memory_id、scope_kind 和可选 scope_id"
+                )
+            memory = await self.change_memory_scope(
+                user_id=task.user_id,
+                memory_id=parts[0],
+                scope_kind=parts[1],
+                scope_id=parts[2] if len(parts) == 3 else None,
+            )
+            return f"已更新记忆范围：{memory.scope_kind}"
+
+        if rest.startswith("不再记住"):
+            memory_type = rest.removeprefix("不再记住").strip()
+            if not memory_type:
+                raise InvalidMemoryCommandError("请提供不再记住的记忆类型")
+            from .memory_candidates import MemoryPolicyService
+
+            await MemoryPolicyService(self.session).set_never_remember(
+                user_id=task.user_id, memory_type=memory_type
+            )
+            return f"已设置不再记住：{memory_type}"
+
+        if rest.startswith("为什么"):
+            task_id = rest.removeprefix("为什么").strip()
+            owned_task = await self.task_repository.get_task_by_user(
+                task_id=task_id, user_id=task.user_id
+            )
+            if owned_task is None:
+                raise TaskNotFoundError("未找到可解释的任务或无权访问")
+            trace = await self.session.scalar(
+                select(MemoryRetrievalTrace)
+                .where(
+                    MemoryRetrievalTrace.task_id == task_id,
+                    MemoryRetrievalTrace.user_id == task.user_id,
+                )
+                .order_by(MemoryRetrievalTrace.created_at.desc())
+                .limit(1)
+            )
+            if trace is None:
+                return "该任务没有使用记忆。"
+            return (
+                f"该任务使用了 {trace.injected_count} 条记忆；"
+                f"模式：{trace.retrieval_mode}；时间意图：{trace.time_intent}。"
+            )
+
+        if rest == "策略":
+            policies = list(
+                await self.session.scalars(
+                    select(MemoryPolicy)
+                    .where(MemoryPolicy.user_id == task.user_id)
+                    .order_by(MemoryPolicy.policy_key)
+                )
+            )
+            if not policies:
+                return "当前没有自定义记忆策略。"
+            return "当前记忆策略：\n" + "\n".join(
+                f"- {item.policy_key}: {'启用' if item.enabled else '停用'}"
+                for item in policies
+            )
+
+        if rest == "查看" or rest.startswith("查看 "):
+            filter_value = rest.removeprefix("查看").strip()
+            statement = select(Memory).where(
+                Memory.user_id == task.user_id,
+                Memory.sensitivity != "forbidden",
+            )
+            if filter_value:
+                if filter_value in {
+                    "episode",
+                    "fact",
+                    "preference",
+                    "constraint",
+                    "procedure",
+                    "reflection",
+                }:
+                    statement = statement.where(Memory.memory_type == filter_value)
+                elif filter_value in {
+                    "active",
+                    "candidate",
+                    "conflict_pending",
+                    "superseded",
+                    "archived",
+                }:
+                    statement = statement.where(Memory.status == filter_value)
+                elif filter_value in {
+                    "user/global",
+                    "user/project",
+                    "user/conversation",
+                    "agent/profile",
+                }:
+                    statement = statement.where(Memory.scope_kind == filter_value)
+                else:
+                    raise InvalidMemoryCommandError("无效的记忆筛选条件")
+            else:
+                statement = statement.where(Memory.status == "active")
+            memories = list(
+                await self.session.scalars(
+                    statement.order_by(Memory.updated_at.desc()).limit(50)
+                )
+            )
             if not memories:
                 return "暂无记忆。"
             lines = ["当前记忆："]
-            lines.extend(f"- {memory.id}: {memory.content}" for memory in memories)
+            lines.extend(
+                f"- {memory.id}: "
+                f"{'[SENSITIVE]' if memory.sensitivity == 'sensitive' else memory.content}"
+                for memory in memories
+            )
             return "\n".join(lines)
 
         if rest.startswith("删除"):
             memory_id = rest.removeprefix("删除").strip()
             if not memory_id:
                 raise InvalidMemoryCommandError("请提供要删除的 memory_id")
-            await self.delete_memory(user_id=task.user_id, memory_id=memory_id)
+            memory = await self.delete_memory(user_id=task.user_id, memory_id=memory_id)
             synced = await self._semantic_delete(
                 user_id=task.user_id,
                 memory_id=memory_id,
             )
+            if self.semantic_memory.enabled and not synced:
+                await self.repository.queue_index_operation(
+                    memory=memory,
+                    operation="delete",
+                    error_code="semantic_delete_failed",
+                )
             status = "语义记忆已同步" if synced else "语义记忆不可用，SQL 删除已生效"
             return f"已删除记忆：{memory_id}；{status}"
 
         raise InvalidMemoryCommandError(
-            "不支持的 /memory 命令，请使用 /memory 记住、/memory 查看 或 /memory 删除"
+            "不支持的 /memory 命令，请使用记住、查看、删除、确认、拒绝、纠正、"
+            "反馈、范围、不再记住、为什么或策略"
         )
 
     async def _semantic_add(self, *, task: Task, memory: Memory) -> bool:
@@ -575,7 +1060,9 @@ class ResultDispatcher:
         if already_dispatched:
             return DispatchResult(status="skipped", message="任务结果已推送")
 
-        dispatch_record = await self.webhook_repository.get_task_dispatch_record(task.id)
+        dispatch_record = await self.webhook_repository.get_task_dispatch_record(
+            task.id
+        )
         target = _resolve_dispatch_target(task=task, dispatch_record=dispatch_record)
         if target is None:
             message = _missing_target_message(task.platform)
@@ -598,7 +1085,9 @@ class ResultDispatcher:
                 outbound_text=outbound_text,
             )
         except Exception as exc:
-            safe_error = _safe_summary(exc, extra_sensitive_values=self.sensitive_values)
+            safe_error = _safe_summary(
+                exc, extra_sensitive_values=self.sensitive_values
+            )
             await self._record_dispatch(
                 task=task,
                 tool_name=tool_name,

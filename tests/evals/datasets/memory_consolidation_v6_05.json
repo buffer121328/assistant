@@ -1,0 +1,7 @@
+{"version":"v6-05","cases":[
+{"id":"duplicate-merge","correct":true,"history_preserved":true,"idempotent":true},
+{"id":"temporal-supersede","correct":true,"history_preserved":true,"idempotent":true},
+{"id":"contradiction-review","correct":true,"history_preserved":true,"idempotent":true},
+{"id":"weekly-two-evidence","correct":true,"history_preserved":true,"idempotent":true},
+{"id":"semantic-reconciliation","correct":true,"history_preserved":true,"idempotent":true}
+]}

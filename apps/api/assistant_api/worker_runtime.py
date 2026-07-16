@@ -63,6 +63,7 @@ from .observability import build_observability
 from .quality import GatewayJudgeModel
 from .services import DISPATCHABLE_TASK_STATUSES, ResultDispatcher
 from .subagents import GatewaySubAgentRunner
+from .task_events import TaskEventPublisher
 
 
 async def execute_task_by_id(
@@ -153,6 +154,28 @@ async def execute_task_by_id(
                     )
                     await dispatcher.dispatch_task(task.id)
                     await session.refresh(task)
+
+                if task.conversation_id is not None:
+                    from .conversations import ConversationService
+
+                    visible = task.result_text or task.error_message
+                    if visible:
+                        await ConversationService(session).append_message(
+                            conversation_id=task.conversation_id,
+                            user_id=task.user_id,
+                            role="assistant",
+                            content=visible,
+                            task_id=task.id,
+                        )
+                        await session.commit()
+
+                publisher = TaskEventPublisher(sessionmaker)
+                await publisher.publish(
+                    task_id=task.id,
+                    user_id=task.user_id,
+                    event_type="status",
+                    payload={"status": task.status},
+                )
 
                 observation.update(
                     output={"status": task.status},
@@ -411,6 +434,18 @@ async def _execute_with_harness(
                 parallel_safe=spec.parallel_safe,
             )
         )
+    event_publisher = TaskEventPublisher(sessionmaker)
+
+    async def publish_event(event_type: str, payload: dict[str, object]) -> None:
+        current = await session.get(Task, task_id)
+        if current is not None:
+            await event_publisher.publish(
+                task_id=current.id,
+                user_id=current.user_id,
+                event_type=event_type,
+                payload=payload,
+            )
+
     runtime_executor = langgraph_executor
     if runtime_executor is None:
         if checkpointer is None:
@@ -423,6 +458,7 @@ async def _execute_with_harness(
                 session=session,
                 settings=settings,
                 observability=observability,
+                event_sink=publish_event,
             ),
             checkpointer=checkpointer,
             sensitive_values=sensitive_values,
@@ -455,6 +491,7 @@ async def _execute_with_harness(
         tool_snapshot=tool_snapshot,
         semantic_memory=Mem0MemoryAdapter(settings.mem0_config_path),
         semantic_memory_limit=settings.mem0_search_limit,
+        event_sink=publish_event,
     ).execute_task(task_id)
 
 

@@ -135,7 +135,9 @@ async def test_02_agent_context_filters_memory_and_only_context_counts_access(
         session.add_all([eligible, deleted, archived, expired])
         await session.commit()
 
-        summary = await load_memory_summary(session=session, user_id=user.id, now=now)
+        summary = await load_memory_summary(
+            session=session, user_id=user.id, now=now, query="eligible"
+        )
         await session.commit()
 
     assert "eligible memory" in summary
@@ -187,7 +189,12 @@ def test_03_capability_refresh_is_revisioned_and_context_uses_latest_snapshot() 
     task = type(
         "TaskStub",
         (),
-        {"id": "task-1", "user_id": "user-1", "task_type": "plan", "input_text": "plan"},
+        {
+            "id": "task-1",
+            "user_id": "user-1",
+            "task_type": "plan",
+            "input_text": "plan",
+        },
     )()
     user = type("UserStub", (), {"id": "user-1", "display_name": "User"})()
     context = ContextBuilder().build(
@@ -211,11 +218,7 @@ async def test_04_evolution_suggestion_is_safe_deduplicated_and_waits_for_approv
 ) -> None:
     now = datetime(2026, 7, 13, 12, 0, tzinfo=UTC)
     prompt_files = sorted((ROOT / "prompts" / "skills").rglob("*"))
-    before = {
-        path: path.read_bytes()
-        for path in prompt_files
-        if path.is_file()
-    }
+    before = {path: path.read_bytes() for path in prompt_files if path.is_file()}
 
     async with sessionmaker() as session:
         user = User(display_name="Evolution User")
@@ -282,11 +285,7 @@ async def test_04_evolution_suggestion_is_safe_deduplicated_and_waits_for_approv
             )
         )
 
-    after = {
-        path: path.read_bytes()
-        for path in prompt_files
-        if path.is_file()
-    }
+    after = {path: path.read_bytes() for path in prompt_files if path.is_file()}
 
     assert first is not None
     assert second is None

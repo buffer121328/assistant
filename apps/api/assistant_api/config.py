@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     deepseek_standard_model: str = "deepseek-standard-placeholder"
     model_gateway_timeout_seconds: float = 10.0
     model_gateway_retry_attempts: int = 2
+    model_gateway_nodes_json: str = ""
     tavily_base_url: str = "https://tavily.invalid"
     tavily_api_key: str = "placeholder-tavily-api-key"
     tavily_timeout_seconds: float = 10.0

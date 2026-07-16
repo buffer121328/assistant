@@ -5,7 +5,7 @@ from functools import partial
 from typing import Any, TypeAlias
 
 from PySide6.QtCore import QSettings, QThreadPool, QTimer, Qt
-from PySide6.QtGui import QAction, QCloseEvent
+from PySide6.QtGui import QAction, QCloseEvent, QTextCursor
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -36,10 +36,11 @@ from .client import (
 )
 from .account_dialog import AccountManagerDialog
 from .knowledge_dialog import KnowledgeManagerDialog
+from .memory_center_dialog import MemoryCenterDialog
 from .reminder_dialog import ReminderManagerDialog
 from .skill_dialog import SkillManagerDialog
 from .secure_store import KeyringTokenStore, TokenStore
-from .worker import ApiWorker
+from .worker import ApiWorker, TaskStreamWorker
 
 
 ClientFactory: TypeAlias = Callable[..., DesktopApiClient]
@@ -61,16 +62,20 @@ class TaskWindow(QMainWindow):
         self.client_factory = client_factory
         self.token_store = token_store or KeyringTokenStore()
         self._workers: set[ApiWorker] = set()
+        self._stream_workers: dict[str, TaskStreamWorker] = {}
         self._busy_operations: set[str] = set()
         self._current_task_id: str | None = None
+        self._current_conversation_id: str | None = None
+        self._pending_submission: tuple[str, str, tuple[str, str]] | None = None
         self._skill_dialog: SkillManagerDialog | None = None
         self._account_dialog: AccountManagerDialog | None = None
         self._knowledge_dialog: KnowledgeManagerDialog | None = None
+        self._memory_center_dialog: MemoryCenterDialog | None = None
         self._reminder_dialog: ReminderManagerDialog | None = None
         self._quitting = False
 
         self.setWindowTitle("个人 Agent 助手")
-        self.setFixedSize(440, 680)
+        self.setFixedSize(440, 800)
         self._build_ui()
         self._build_tray()
 
@@ -117,17 +122,47 @@ class TaskWindow(QMainWindow):
         manage_reminders = QPushButton("提醒")
         manage_reminders.setObjectName("manage_reminders")
         manage_reminders.clicked.connect(self.open_reminder_manager)
+        manage_memory = QPushButton("记忆中心")
+        manage_memory.setObjectName("manage_memory_center")
+        manage_memory.setAccessibleName("打开 Memory Center 记忆管理中心")
+        manage_memory.clicked.connect(self.open_memory_center)
         connection_actions = QHBoxLayout()
         connection_actions.addWidget(save_button)
         connection_actions.addWidget(manage_skills)
         connection_actions.addWidget(manage_accounts)
         connection_actions.addWidget(manage_knowledge)
         connection_actions.addWidget(manage_reminders)
+        connection_actions.addWidget(manage_memory)
         settings_form.addRow("API", self.api_url)
         settings_form.addRow("用户", self.user_id)
         settings_form.addRow("Token", self.api_token)
         settings_form.addRow("", connection_actions)
         layout.addWidget(settings_group)
+
+        conversation_group = QGroupBox("历史会话")
+        conversation_layout = QVBoxLayout(conversation_group)
+        conversation_actions = QHBoxLayout()
+        self.conversation_list = QComboBox()
+        self.conversation_list.setObjectName("conversation_list")
+        self.conversation_list.currentIndexChanged.connect(self._conversation_selected)
+        new_conversation = QPushButton("新建")
+        new_conversation.clicked.connect(self.create_conversation)
+        archive_conversation = QPushButton("归档")
+        archive_conversation.clicked.connect(self.archive_conversation)
+        refresh_conversations = QPushButton("刷新")
+        refresh_conversations.clicked.connect(self.refresh_conversations)
+        conversation_actions.addWidget(self.conversation_list)
+        conversation_actions.addWidget(new_conversation)
+        conversation_actions.addWidget(archive_conversation)
+        conversation_actions.addWidget(refresh_conversations)
+        conversation_layout.addLayout(conversation_actions)
+        self.conversation_history = QPlainTextEdit()
+        self.conversation_history.setObjectName("conversation_history")
+        self.conversation_history.setReadOnly(True)
+        self.conversation_history.setPlaceholderText("选择会话查看历史消息")
+        self.conversation_history.setMaximumHeight(105)
+        conversation_layout.addWidget(self.conversation_history)
+        layout.addWidget(conversation_group)
 
         task_group = QGroupBox("新任务")
         task_layout = QVBoxLayout(task_group)
@@ -149,8 +184,28 @@ class TaskWindow(QMainWindow):
         self.task_input.setMaximumHeight(76)
         submit_button = QPushButton("提交任务")
         submit_button.clicked.connect(self.submit_task)
+        candidate_actions = QHBoxLayout()
+        confirm_candidate = QPushButton("确认候选")
+        confirm_candidate.setObjectName("confirm_memory_candidate")
+        confirm_candidate.clicked.connect(
+            lambda: self.submit_memory_candidate_action("确认")
+        )
+        reject_candidate = QPushButton("拒绝候选")
+        reject_candidate.setObjectName("reject_memory_candidate")
+        reject_candidate.clicked.connect(
+            lambda: self.submit_memory_candidate_action("拒绝")
+        )
+        correct_candidate = QPushButton("纠正候选")
+        correct_candidate.setObjectName("correct_memory_candidate")
+        correct_candidate.clicked.connect(
+            lambda: self.submit_memory_candidate_action("纠正")
+        )
+        candidate_actions.addWidget(confirm_candidate)
+        candidate_actions.addWidget(reject_candidate)
+        candidate_actions.addWidget(correct_candidate)
         task_layout.addWidget(self.task_mode)
         task_layout.addWidget(self.task_input)
+        task_layout.addLayout(candidate_actions)
         task_layout.addWidget(submit_button)
         layout.addWidget(task_group)
 
@@ -165,10 +220,14 @@ class TaskWindow(QMainWindow):
         self.recent_tasks.setMaximumHeight(115)
         self.recent_tasks.currentItemChanged.connect(self._task_selected)
         tasks_layout.addWidget(self.recent_tasks)
-        self.task_result = QLabel("尚未选择任务")
+        self.task_plan = QLabel("执行计划：等待生成")
+        self.task_plan.setObjectName("task_plan")
+        self.task_plan.setWordWrap(True)
+        tasks_layout.addWidget(self.task_plan)
+        self.task_result = QPlainTextEdit("尚未选择任务")
         self.task_result.setObjectName("task_result")
-        self.task_result.setWordWrap(True)
-        self.task_result.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.task_result.setReadOnly(True)
+        self.task_result.setMaximumHeight(100)
         tasks_layout.addWidget(self.task_result)
         layout.addWidget(tasks_group)
 
@@ -184,9 +243,7 @@ class TaskWindow(QMainWindow):
             lambda: self.decide_selected_approval("approved")
         )
         reject_button = QPushButton("拒绝")
-        reject_button.clicked.connect(
-            lambda: self.decide_selected_approval("rejected")
-        )
+        reject_button.clicked.connect(lambda: self.decide_selected_approval("rejected"))
         decision_layout.addWidget(approve_button)
         decision_layout.addWidget(reject_button)
         approvals_layout.addLayout(decision_layout)
@@ -236,6 +293,7 @@ class TaskWindow(QMainWindow):
         self.settings.sync()
         self.status_label.setText("连接设置已保存。")
         self.refresh_tasks()
+        self.refresh_conversations()
 
     def submit_task(self) -> None:
         input_text = self.task_input.toPlainText().strip()
@@ -246,18 +304,31 @@ class TaskWindow(QMainWindow):
         if connection is None:
             return
         task_type = str(self.task_mode.currentData())
-        self.status_label.setText("正在提交任务…")
-        self._start_request(
-            "submit",
-            lambda: self._with_client(
-                connection,
-                lambda client: client.submit_task(
-                    task_type=task_type,
-                    input_text=input_text,
+        if self._current_conversation_id is None:
+            self._pending_submission = (task_type, input_text, connection)
+            self.status_label.setText("正在创建新会话…")
+            self._start_request(
+                "conversation-create",
+                lambda: self._with_client(
+                    connection, lambda client: client.create_conversation()
                 ),
-            ),
-            self._submitted,
+                self._conversation_created_then_submit,
+            )
+            return
+        self._submit_to_conversation(
+            connection, task_type, input_text, self._current_conversation_id
         )
+
+    def submit_memory_candidate_action(self, action: str) -> None:
+        value = self.task_input.toPlainText().strip()
+        if not value:
+            self.status_label.setText("请输入候选 memory_id；纠正时再附新内容。")
+            return
+        index = self.task_mode.findData("memory")
+        if index >= 0:
+            self.task_mode.setCurrentIndex(index)
+        self.task_input.setPlainText(f"/memory {action} {value}")
+        self.submit_task()
 
     def open_skill_manager(self) -> None:
         connection = self._connection()
@@ -338,6 +409,189 @@ class TaskWindow(QMainWindow):
         self._reminder_dialog.raise_()
         self._reminder_dialog.activateWindow()
         self._reminder_dialog.refresh_reminders()
+
+    def open_memory_center(self) -> None:
+        connection = self._connection()
+        if connection is None:
+            return
+        if self._memory_center_dialog is not None:
+            self._memory_center_dialog.close()
+            self._memory_center_dialog.deleteLater()
+        self._memory_center_dialog = MemoryCenterDialog(
+            base_url=connection[0],
+            user_id=connection[1],
+            parent=self,
+            thread_pool=self.thread_pool,
+            client_factory=self.client_factory,
+            api_token=self._load_token(connection),
+        )
+        self._memory_center_dialog.show()
+        self._memory_center_dialog.raise_()
+        self._memory_center_dialog.activateWindow()
+        self._memory_center_dialog.refresh_all()
+
+    def refresh_conversations(self) -> None:
+        connection = self._connection(show_error=False)
+        if connection is None:
+            return
+        self._start_request(
+            "conversations",
+            lambda: self._with_client(
+                connection, lambda client: client.list_conversations()
+            ),
+            self._conversations_refreshed,
+        )
+
+    def create_conversation(self) -> None:
+        connection = self._connection()
+        if connection is None:
+            return
+        self._start_request(
+            "conversation-create",
+            lambda: self._with_client(
+                connection, lambda client: client.create_conversation()
+            ),
+            self._conversation_created,
+        )
+
+    def archive_conversation(self) -> None:
+        if self._current_conversation_id is None:
+            self.status_label.setText("请先选择一个会话。")
+            return
+        connection = self._connection()
+        if connection is None:
+            return
+        conversation_id = self._current_conversation_id
+        self._start_request(
+            "conversation-archive",
+            lambda: self._with_client(
+                connection,
+                lambda client: client.archive_conversation(conversation_id),
+            ),
+            lambda _value: self._conversation_archived(),
+        )
+
+    def refresh_conversation_messages(self) -> None:
+        if self._current_conversation_id is None:
+            self.conversation_history.clear()
+            return
+        connection = self._connection(show_error=False)
+        if connection is None:
+            return
+        conversation_id = self._current_conversation_id
+        self._start_request(
+            "conversation-messages",
+            lambda: self._with_client(
+                connection,
+                lambda client: client.get_conversation_messages(conversation_id),
+            ),
+            self._conversation_messages_refreshed,
+        )
+
+    def _submit_to_conversation(
+        self,
+        connection: tuple[str, str],
+        task_type: str,
+        input_text: str,
+        conversation_id: str,
+    ) -> None:
+        self.status_label.setText("正在提交任务…")
+        self._start_request(
+            "submit",
+            lambda: self._with_client(
+                connection,
+                lambda client: client.submit_task(
+                    task_type=task_type,
+                    input_text=input_text,
+                    conversation_id=conversation_id,
+                ),
+            ),
+            self._submitted,
+        )
+
+    def _conversation_created_then_submit(self, value: object) -> None:
+        pending = self._pending_submission
+        self._pending_submission = None
+        if not isinstance(value, dict) or pending is None:
+            self.status_label.setText("会话创建响应无效。")
+            return
+        conversation_id = str(value.get("conversation_id") or "")
+        if not conversation_id:
+            self.status_label.setText("会话创建响应缺少 ID。")
+            return
+        self._current_conversation_id = conversation_id
+        task_type, input_text, connection = pending
+        self._submit_to_conversation(connection, task_type, input_text, conversation_id)
+        self.refresh_conversations()
+
+    def _conversation_created(self, value: object) -> None:
+        if not isinstance(value, dict):
+            self.status_label.setText("会话创建响应无效。")
+            return
+        self._current_conversation_id = str(value.get("conversation_id") or "") or None
+        self.status_label.setText("新会话已创建。")
+        self.refresh_conversations()
+
+    def _conversation_archived(self) -> None:
+        self._current_conversation_id = None
+        self.conversation_history.clear()
+        self.status_label.setText("会话已归档。")
+        self.refresh_conversations()
+
+    def _conversations_refreshed(self, value: object) -> None:
+        if not isinstance(value, list):
+            self.status_label.setText("会话列表响应无效。")
+            return
+        selected = self._current_conversation_id
+        self.conversation_list.blockSignals(True)
+        self.conversation_list.clear()
+        selected_index = -1
+        for index, item in enumerate(value):
+            if not isinstance(item, dict):
+                continue
+            conversation_id = str(item.get("conversation_id") or "")
+            self.conversation_list.addItem(
+                str(item.get("title") or "新会话"), conversation_id
+            )
+            if conversation_id == selected:
+                selected_index = index
+        if self.conversation_list.count():
+            self.conversation_list.setCurrentIndex(
+                selected_index if selected_index >= 0 else 0
+            )
+            self._current_conversation_id = (
+                str(self.conversation_list.currentData() or "") or None
+            )
+        else:
+            self._current_conversation_id = None
+        self.conversation_list.blockSignals(False)
+        self.refresh_conversation_messages()
+
+    def _conversation_selected(self, _index: int) -> None:
+        self._current_conversation_id = (
+            str(self.conversation_list.currentData() or "") or None
+        )
+        self.refresh_conversation_messages()
+
+    def _conversation_messages_refreshed(self, value: object) -> None:
+        if not isinstance(value, dict) or not isinstance(value.get("items"), list):
+            self.status_label.setText("会话消息响应无效。")
+            return
+        if value.get("compacted"):
+            updated = str(value.get("summary_updated_at") or "未知时间")
+            version = str(value.get("summary_version") or "")
+            self.status_label.setText(
+                f"已压缩历史；摘要更新：{updated}"
+                + (f"（{version}）" if version else "")
+            )
+        lines: list[str] = []
+        for item in value["items"]:
+            if not isinstance(item, dict):
+                continue
+            role = "我" if item.get("role") == "user" else "助手"
+            lines.append(f"{role}：{item.get('content', '')}")
+        self.conversation_history.setPlainText("\n\n".join(lines))
+        self.conversation_history.moveCursor(QTextCursor.MoveOperation.End)
 
     def refresh_tasks(self) -> None:
         connection = self._connection(show_error=False)
@@ -455,9 +709,7 @@ class TaskWindow(QMainWindow):
         self._workers.add(worker)
         worker.signals.succeeded.connect(on_success)
         worker.signals.failed.connect(self.status_label.setText)
-        worker.signals.finished.connect(
-            lambda: self._request_finished(key, worker)
-        )
+        worker.signals.finished.connect(lambda: self._request_finished(key, worker))
         self.thread_pool.start(worker)
 
     def _request_finished(self, key: str, worker: ApiWorker) -> None:
@@ -475,6 +727,67 @@ class TaskWindow(QMainWindow):
         )
         self.refresh_tasks()
         self.refresh_approvals()
+        self.refresh_conversation_messages()
+        if value.queued and self._current_task_id is not None:
+            self._start_task_stream(self._current_task_id)
+
+    def _start_task_stream(self, task_id: str) -> None:
+        if task_id in self._stream_workers:
+            return
+        connection = self._connection(show_error=False)
+        if connection is None:
+            return
+
+        def events():
+            token = self._load_token(connection)
+            kwargs = {"base_url": connection[0], "user_id": connection[1]}
+            if token:
+                kwargs["api_token"] = token
+            client = self.client_factory(**kwargs)
+            try:
+                yield from client.stream_task_events(task_id)
+            finally:
+                client.close()
+
+        worker = TaskStreamWorker(events)
+        self._stream_workers[task_id] = worker
+        worker.signals.event_received.connect(self._task_event_received)
+        worker.signals.failed.connect(
+            lambda _message: self.status_label.setText(
+                "任务事件流已断开，已切换为状态轮询。"
+            )
+        )
+        worker.signals.finished.connect(lambda: self._stream_workers.pop(task_id, None))
+        self.thread_pool.start(worker)
+
+    def _task_event_received(self, value: object) -> None:
+        if not isinstance(value, dict):
+            return
+        payload = value.get("payload")
+        if not isinstance(payload, dict):
+            return
+        event_type = value.get("type")
+        if event_type == "plan":
+            steps = payload.get("steps")
+            if isinstance(steps, list):
+                lines = [f"{index}. {step}" for index, step in enumerate(steps, 1)]
+                self.task_plan.setText("执行计划：\n" + "\n".join(lines))
+        elif event_type == "content_delta":
+            text = payload.get("text")
+            if isinstance(text, str):
+                if self.task_result.toPlainText() in {
+                    "尚未选择任务",
+                    "等待模型输出…",
+                }:
+                    self.task_result.clear()
+                self.task_result.moveCursor(QTextCursor.MoveOperation.End)
+                self.task_result.insertPlainText(text)
+        elif event_type == "status":
+            status = payload.get("status")
+            if isinstance(status, str):
+                self.status_label.setText(f"任务状态：{status}")
+                if status in {"success", "failed", "waiting_approval", "cancelled"}:
+                    self.refresh_conversation_messages()
 
     def _tasks_refreshed(self, value: object) -> None:
         if not isinstance(value, list):
@@ -507,17 +820,45 @@ class TaskWindow(QMainWindow):
         del previous
         if current is None:
             self._current_task_id = None
-            self.task_result.setText("尚未选择任务")
+            self.task_plan.setText("执行计划：等待生成")
+            self.task_result.setPlainText("尚未选择任务")
             self.approval_list.clear()
             return
         task = current.data(Qt.ItemDataRole.UserRole)
         if not isinstance(task, dict):
             return
         self._current_task_id = str(task.get("task_id") or "") or None
+        conversation_id = str(task.get("conversation_id") or "") or None
+        if conversation_id and conversation_id != self._current_conversation_id:
+            index = self.conversation_list.findData(conversation_id)
+            if index >= 0:
+                self.conversation_list.setCurrentIndex(index)
         status = str(task.get("status") or "unknown")
         result = task.get("result_text") or task.get("error_message") or "暂无结果"
-        self.task_result.setText(f"状态：{status}\n{result}")
+        self.task_result.setPlainText(f"状态：{status}\n{result}")
         self.refresh_approvals()
+        if self._current_task_id is not None:
+            connection = self._connection(show_error=False)
+            if connection is not None:
+                task_id = self._current_task_id
+                self._start_request(
+                    "memory-retrieval",
+                    lambda: self._with_client(
+                        connection,
+                        lambda client: client.get_task_memory_retrieval(task_id),
+                    ),
+                    self._memory_retrieval_refreshed,
+                )
+
+    def _memory_retrieval_refreshed(self, value: object) -> None:
+        if not isinstance(value, dict):
+            return
+        trace = value.get("trace")
+        if not isinstance(trace, dict):
+            return
+        count = int(trace.get("injected_count") or 0)
+        mode = str(trace.get("retrieval_mode") or "unknown")
+        self.status_label.setText(f"本次使用了 {count} 条记忆（{mode}）")
 
     def _approvals_refreshed(self, value: object) -> None:
         if not isinstance(value, list):
@@ -534,9 +875,7 @@ class TaskWindow(QMainWindow):
                 "review": "复核",
             }.get(approval_type, "审批")
             subject = str(
-                approval.get("subject")
-                or approval.get("tool_name")
-                or "未知对象"
+                approval.get("subject") or approval.get("tool_name") or "未知对象"
             )
             summary = str(approval.get("request_summary") or "").strip()
             label = f"[{type_label}] {subject}"
@@ -554,7 +893,9 @@ class TaskWindow(QMainWindow):
             return
         status = str(value.approval.get("status") or "unknown")
         if status == "approved":
-            message = "审批已通过并重新入队。" if value.queued else "审批已通过，任务待入队。"
+            message = (
+                "审批已通过并重新入队。" if value.queued else "审批已通过，任务待入队。"
+            )
         else:
             message = "审批已拒绝，任务已取消。"
         self.status_label.setText(message)
@@ -585,9 +926,7 @@ class TaskWindow(QMainWindow):
                 lambda value: None,
             )
 
-    def _ack_notification(
-        self, connection: tuple[str, str], outbox_id: str
-    ) -> None:
+    def _ack_notification(self, connection: tuple[str, str], outbox_id: str) -> None:
         self._with_client(
             connection,
             lambda client: client.acknowledge_notification(outbox_id),

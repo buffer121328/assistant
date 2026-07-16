@@ -211,3 +211,25 @@ def _truncate(value: str) -> str:
     if len(value) <= _MAX_LOG_TEXT_LENGTH:
         return value
     return f"{value[:_MAX_LOG_TEXT_LENGTH]}..."
+
+
+POOL_ALIASES = {
+    "light": "fast",
+    "standard": "reasoning",
+    "fast": "fast",
+    "reasoning": "reasoning",
+    "private": "private",
+}
+
+
+def route_pool(task_type: str, model_class: str | None) -> str:
+    normalized = model_class.strip().lower() if model_class is not None else None
+    if normalized is not None:
+        try:
+            return POOL_ALIASES[normalized]
+        except KeyError as exc:
+            raise ModelGatewayError(
+                MODEL_GATEWAY_VALIDATION_ERROR, "Invalid model pool", 400
+            ) from exc
+    legacy = route_model(task_type, None)
+    return POOL_ALIASES[legacy]

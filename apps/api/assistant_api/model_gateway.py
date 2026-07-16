@@ -5,7 +5,6 @@ from collections.abc import Iterable
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from packages.model_gateway import (
-    DeepSeekAdapter,
     DeepSeekConfig,
     GatewayMessage,
     GatewayRequest,
@@ -57,7 +56,9 @@ async def handle_model_chat(
         resolved_model_class=resolved_model_class,
         extra_sensitive_values=sensitive_values,
     )
-    adapter = DeepSeekAdapter(_deepseek_config(settings))
+    from .model_pool import build_pooled_model_gateway
+
+    adapter = build_pooled_model_gateway(settings)
     repository = ModelLogRepository(session)
 
     try:

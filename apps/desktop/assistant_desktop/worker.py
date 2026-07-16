@@ -32,3 +32,28 @@ class ApiWorker(QRunnable):
             self.signals.succeeded.emit(result)
         finally:
             self.signals.finished.emit()
+
+
+class StreamWorkerSignals(QObject):
+    event_received = Signal(object)
+    failed = Signal(str)
+    finished = Signal()
+
+
+class TaskStreamWorker(QRunnable):
+    def __init__(self, operation: Callable[[], Any]) -> None:
+        super().__init__()
+        self.operation = operation
+        self.signals = StreamWorkerSignals()
+
+    @Slot()
+    def run(self) -> None:
+        try:
+            for event in self.operation():
+                self.signals.event_received.emit(event)
+        except DesktopApiError as exc:
+            self.signals.failed.emit(str(exc))
+        except Exception:
+            self.signals.failed.emit("任务事件流已断开。")
+        finally:
+            self.signals.finished.emit()

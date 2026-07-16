@@ -32,30 +32,44 @@ async def sessionmaker(
 class FakeSemanticMemory:
     enabled = True
 
-    def __init__(self, *, fail: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        fail: bool = False,
+        results: tuple[SemanticMemoryResult, ...] = (),
+    ) -> None:
         self.fail = fail
+        self.results = results
         self.adds: list[dict[str, str]] = []
         self.deletes: list[tuple[str, str]] = []
         self.searches: list[tuple[str, str, int]] = []
 
-    async def add(self, *, user_id: str, run_id: str, memory_id: str, content: str) -> bool:
+    async def add(
+        self, *, user_id: str, run_id: str, memory_id: str, content: str
+    ) -> bool:
         if self.fail:
             return False
-        self.adds.append({"user_id": user_id, "run_id": run_id, "memory_id": memory_id, "content": content})
+        self.adds.append(
+            {
+                "user_id": user_id,
+                "run_id": run_id,
+                "memory_id": memory_id,
+                "content": content,
+            }
+        )
         return True
 
     async def delete(self, *, user_id: str, memory_id: str) -> bool:
         self.deletes.append((user_id, memory_id))
         return not self.fail
 
-    async def search(self, *, user_id: str, query: str, limit: int) -> tuple[SemanticMemoryResult, ...]:
+    async def search(
+        self, *, user_id: str, query: str, limit: int
+    ) -> tuple[SemanticMemoryResult, ...]:
         self.searches.append((user_id, query, limit))
         if self.fail:
             raise RuntimeError("semantic unavailable")
-        return (
-            SemanticMemoryResult(memory_id="semantic-1", content="相关项目偏好", score=0.9),
-            SemanticMemoryResult(memory_id="semantic-2", content="先给结论", score=0.8),
-        )
+        return self.results
 
 
 @pytest.mark.asyncio
@@ -67,14 +81,27 @@ async def test_memory_command_keeps_sql_and_syncs_mem0_with_exact_ids(
         user = User(display_name="memory")
         session.add(user)
         await session.flush()
-        task = Task(user_id=user.id, platform="api", task_type="memory", input_text="/memory 记住 先给结论", status="pending")
+        task = Task(
+            user_id=user.id,
+            platform="api",
+            task_type="memory",
+            input_text="/memory 记住 先给结论",
+            status="pending",
+        )
         session.add(task)
         await session.commit()
         await MemoryService(session, semantic_memory=semantic).execute_task(task.id)
         stored = await session.scalar(select(Memory))
         assert stored is not None
 
-    assert semantic.adds == [{"user_id": user.id, "run_id": task.id, "memory_id": stored.id, "content": "先给结论"}]
+    assert semantic.adds == [
+        {
+            "user_id": user.id,
+            "run_id": task.id,
+            "memory_id": stored.id,
+            "content": "先给结论",
+        }
+    ]
     assert "语义记忆已同步" in (task.result_text or "")
 
 
@@ -88,23 +115,34 @@ async def test_semantic_context_is_query_relevant_and_sql_fallback_is_stable(
         other = User(display_name="other")
         session.add_all((user, other))
         await session.flush()
-        session.add_all(
-            (
-                Memory(user_id=user.id, content="先给结论", memory_type="preference"),
-                Memory(user_id=other.id, content="其他用户私密内容", memory_type="preference"),
-            )
+        owned = await MemoryService(session).create_memory(
+            user_id=user.id, content="先给结论"
+        )
+        foreign = await MemoryService(session).create_memory(
+            user_id=other.id, content="其他用户私密内容"
         )
         await session.commit()
+        semantic = FakeSemanticMemory(
+            results=(
+                SemanticMemoryResult(memory_id=owned.id, content="先给结论", score=0.8),
+                SemanticMemoryResult(
+                    memory_id=foreign.id, content="其他用户私密内容", score=1.0
+                ),
+                SemanticMemoryResult(
+                    memory_id="missing-sql-id", content="未验证内容", score=1.0
+                ),
+            )
+        )
         summary = await load_memory_summary(
             session=session,
             user_id=user.id,
-            query="项目怎么安排",
+            query="先给结论怎么回答",
             semantic_memory=semantic,
             semantic_limit=3,
         )
 
-    assert semantic.searches == [(user.id, "项目怎么安排", 3)]
-    assert summary.splitlines() == ["相关项目偏好", "先给结论"]
+    assert semantic.searches == [(user.id, "先给结论怎么回答", 10)]
+    assert summary.splitlines() == ["先给结论"]
     assert "其他用户" not in summary
 
     failing = FakeSemanticMemory(fail=True)
@@ -112,7 +150,7 @@ async def test_semantic_context_is_query_relevant_and_sql_fallback_is_stable(
         fallback = await load_memory_summary(
             session=session,
             user_id=user.id,
-            query="项目怎么安排",
+            query="先给结论怎么回答",
             semantic_memory=failing,
         )
     assert fallback == "先给结论"

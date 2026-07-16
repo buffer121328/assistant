@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Protocol, TypeVar
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,7 +15,6 @@ from packages.agent_harness import (
     parse_work_plan,
 )
 from packages.model_gateway import (
-    DeepSeekAdapter,
     DeepSeekConfig,
     GatewayRequest,
     GatewayResult,
@@ -26,6 +25,7 @@ from packages.model_gateway import (
 )
 from packages.observability import NoopObservability, Observability
 
+from .answer_stream import FinalAnswerDeltaDecoder
 from .config import Settings
 from .repositories import ModelLogCreate, ModelLogRepository
 
@@ -49,13 +49,19 @@ class AgentGatewayModel:
         settings: Settings,
         adapter: AgentGatewayAdapter | None = None,
         observability: Observability | None = None,
+        event_sink: Callable[[str, dict[str, object]], Awaitable[None]] | None = None,
     ) -> None:
         self.session = session
         self.settings = settings
-        self.adapter = adapter or DeepSeekAdapter(_deepseek_config(settings))
+        if adapter is None:
+            from .model_pool import build_pooled_model_gateway
+
+            adapter = build_pooled_model_gateway(settings)
+        self.adapter = adapter
         self.repository = ModelLogRepository(session)
         self.sensitive_values = _sensitive_values(settings)
         self.observability = observability or NoopObservability()
+        self.event_sink = event_sink
 
     async def decide(self, request: AgentModelRequest) -> AgentDecision:
         return await self._complete(
@@ -120,7 +126,28 @@ class AgentGatewayModel:
             model=model_class,
         ) as observation:
             try:
-                result = await self.adapter.chat(gateway_request, model_class)
+                if (
+                    phase == "decision"
+                    and request.stream_answer
+                    and self.event_sink is not None
+                    and hasattr(self.adapter, "chat_stream")
+                ):
+                    decoder = FinalAnswerDeltaDecoder()
+                    event_sink = self.event_sink
+                    assert event_sink is not None
+
+                    async def on_delta(chunk: str) -> None:
+                        answer_delta = decoder.feed(chunk)
+                        if answer_delta:
+                            await event_sink(
+                                "content_delta", {"text": answer_delta}
+                            )
+
+                    result = await self.adapter.chat_stream(
+                        gateway_request, model_class, on_delta
+                    )
+                else:
+                    result = await self.adapter.chat(gateway_request, model_class)
             except Exception as exc:
                 error = AgentModelGatewayError("Agent model request failed")
                 await self._record_failure(

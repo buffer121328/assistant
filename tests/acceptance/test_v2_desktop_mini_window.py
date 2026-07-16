@@ -373,7 +373,10 @@ def test_desktop_client_contract_uses_interactive_and_owned_approval_apis() -> N
         if request.url.path == "/api/tasks/submit":
             return httpx.Response(
                 201,
-                json={"task": {"task_id": "task-1", "status": "pending"}, "queued": False},
+                json={
+                    "task": {"task_id": "task-1", "status": "pending"},
+                    "queued": False,
+                },
             )
         if request.url.path == "/api/tasks/task-1/approvals":
             return httpx.Response(
@@ -441,6 +444,10 @@ def test_pyside_window_is_compact_native_and_contains_required_controls(
     assert window.findChild(QWidget, "task_input") is not None
     assert window.findChild(QWidget, "recent_tasks") is not None
     assert window.findChild(QWidget, "approval_list") is not None
+    assert window.findChild(QWidget, "confirm_memory_candidate") is not None
+    assert window.findChild(QWidget, "reject_memory_candidate") is not None
+    assert window.findChild(QWidget, "correct_memory_candidate") is not None
+    assert window.findChild(QWidget, "manage_memory_center") is not None
     assert isinstance(window.tray_icon, QSystemTrayIcon)
 
     window._approvals_refreshed(  # noqa: SLF001 - verify user-visible approval label
@@ -454,9 +461,30 @@ def test_pyside_window_is_compact_native_and_contains_required_controls(
             }
         ]
     )
-    assert window.approval_list.item(0).text() == (
-        "[计划] plan:0 — 核对来源；形成回答"
+    assert window.approval_list.item(0).text() == ("[计划] plan:0 — 核对来源；形成回答")
+
+    window._conversation_messages_refreshed(  # noqa: SLF001
+        {
+            "items": [{"role": "user", "content": "继续"}],
+            "compacted": True,
+            "summary_updated_at": "2026-07-16T08:00:00+00:00",
+            "summary_version": "summary-v1",
+        }
     )
+    assert "已压缩历史" in window.status_label.text()
+    assert "summary-v1" in window.status_label.text()
+
+    window._memory_retrieval_refreshed(  # noqa: SLF001
+        {
+            "trace": {
+                "injected_count": 3,
+                "retrieval_mode": "keyword_fallback",
+            },
+            "items": [],
+        }
+    )
+    assert "本次使用了 3 条记忆" in window.status_label.text()
+    assert "keyword_fallback" in window.status_label.text()
 
     window.show()
     application.processEvents()

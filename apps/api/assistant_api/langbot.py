@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .commands import parse_task_type
 from .config import Settings
+from .conversations import ConversationService
 from .errors import AppError
 from .models import Task
 from .repositories import MessageRepository, ProcessedMessageCreate
@@ -158,12 +159,23 @@ async def handle_langbot_webhook(
             reason=REASON_UNBOUND_USER,
         )
 
+    conversation = await ConversationService(session).resolve_external(
+        user_id=user_id,
+        channel=PLATFORM,
+        external_key=(
+            f"{message.adapter}:{message.conversation_type}:"
+            f"{message.conversation_id}"
+        ),
+        title=f"LangBot · {message.adapter} · {message.conversation_id}",
+    )
+
     return await create_task_ack(
         session=session,
         repository=repository,
         settings=settings,
         user_id=user_id,
         task_type=task_type,
+        conversation_id=conversation.id,
         message=message,
         task_handoff=task_handoff,
     )
@@ -217,6 +229,7 @@ async def create_task_ack(
     settings: Settings,
     user_id: str,
     task_type: str,
+    conversation_id: str,
     message: NormalizedLangBotMessage,
     task_handoff: Callable[[str], bool] | None = None,
 ) -> dict[str, object]:
@@ -235,6 +248,7 @@ async def create_task_ack(
             platform=PLATFORM,
             task_type=task_type,
             input_text=message.text,
+            conversation_id=conversation_id,
             commit=False,
         )
         processed_message.task_id = task.id

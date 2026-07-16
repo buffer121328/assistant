@@ -9,9 +9,17 @@ from .core import (
     build_request_summary,
     build_response_summary,
     route_model,
+    route_pool,
     sanitize_text,
 )
 from .deepseek import DeepSeekAdapter, DeepSeekConfig
+from .openai_compatible import OpenAICompatibleAdapter
+from .pools import (
+    ModelNode,
+    NodeMetrics,
+    PooledModelGateway,
+    WeightedLeastLoadBalancer,
+)
 
 __all__ = [
     "DeepSeekAdapter",
@@ -26,5 +34,11 @@ __all__ = [
     "build_request_summary",
     "build_response_summary",
     "route_model",
+    "route_pool",
+    "OpenAICompatibleAdapter",
+    "ModelNode",
+    "NodeMetrics",
+    "PooledModelGateway",
+    "WeightedLeastLoadBalancer",
     "sanitize_text",
 ]

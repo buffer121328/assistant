@@ -3,13 +3,14 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 import json
 from pathlib import Path
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from assistant_api.models import Task, TaskStatus, ToolLog, User
 from assistant_api.services import MemoryService, StatusService, TaskService
-from packages.memory import SemanticMemory, load_memory_summary
+from packages.memory import SemanticMemory, load_memory_context
 from packages.model_gateway import sanitize_text
 from packages.tools import ToolCandidateSelector, ToolCatalogSnapshot
 
@@ -116,9 +117,7 @@ class ExecutionBoundary:
             payload = {
                 "message": policy_outcome.result_text or policy_outcome.error_message,
                 "requested_tools": list(result.requested_tools),
-                "approval_requests": [
-                    asdict(request) for request in approval_requests
-                ],
+                "approval_requests": [asdict(request) for request in approval_requests],
             }
             await self._record_trace(
                 task_id=context.task_id,
@@ -141,9 +140,7 @@ class ExecutionBoundary:
             "display_plan": list(result.display_plan),
             "tool_calls": list(result.tool_calls),
             "requested_tools": list(result.requested_tools),
-            "approval_requests": [
-                asdict(request) for request in approval_requests
-            ],
+            "approval_requests": [asdict(request) for request in approval_requests],
             "loop_steps": result.loop_steps,
             "checkpoint_id": result.checkpoint_id,
         }
@@ -221,6 +218,8 @@ class AgentHarness:
         tool_count_budget: int = 15,
         semantic_memory: SemanticMemory | None = None,
         semantic_memory_limit: int = 5,
+        event_sink: Callable[[str, dict[str, object]], Awaitable[None]] | None = None,
+        memory_candidate_hook: Callable[[Task], Awaitable[None]] | None = None,
     ) -> None:
         self.session = session
         self.executor = executor
@@ -252,6 +251,8 @@ class AgentHarness:
         self.tool_count_budget = max(0, min(tool_count_budget, 15))
         self.semantic_memory = semantic_memory
         self.semantic_memory_limit = max(1, min(semantic_memory_limit, 20))
+        self.event_sink = event_sink
+        self.memory_candidate_hook = memory_candidate_hook
 
     async def execute_task(self, task_id: str) -> Task:
         task = await self._load_pending_task(task_id)
@@ -265,10 +266,13 @@ class AgentHarness:
 
         user = await self._load_user(task.user_id)
         profile = self.profile_selector.select(task)
-        memory_summary = await self._memory_summary(
+        memory_retrieval = await self._memory_context(
             user.id,
             query=str(task.input_text),
+            task_id=task.id,
+            conversation_id=task.conversation_id,
         )
+        memory_summary = "\n".join(item.content for item in memory_retrieval.items)
         skills = self.skills_loader.load(profile.skill_names)
         if self.tool_snapshot is None:
             capabilities = self.capabilities_builder.build(
@@ -288,18 +292,96 @@ class AgentHarness:
                 self.tool_snapshot,
                 selection,
             )
+        conversation_history: tuple[tuple[str, str], ...] = ()
+        conversation_summary = ""
+        memory_blocks: tuple[str, ...] = ()
+        context_trace: tuple[dict[str, Any], ...] = (
+            {
+                "section": "retrieved_memory",
+                "trace_id": memory_retrieval.trace_id,
+                "mode": memory_retrieval.mode,
+                "time_intent": memory_retrieval.time_intent,
+                "memory_ids": tuple(item.memory_id for item in memory_retrieval.items),
+                "injected_tokens": memory_retrieval.injected_tokens,
+            },
+        )
+        conversation_compacted = False
+        if task.conversation_id is not None:
+            from assistant_api.conversation_memory import ConversationMemoryService
+            from assistant_api.conversations import ConversationService
+            from packages.memory.working_set import (
+                ConversationMessageRef,
+                build_context_pack,
+            )
+
+            messages = await ConversationService(self.session).list_messages(
+                conversation_id=task.conversation_id,
+                user_id=task.user_id,
+                limit=200,
+                exclude_task_id=task.id,
+            )
+            conversation_memory = ConversationMemoryService(self.session)
+            summary = await conversation_memory.get_active_summary(
+                conversation_id=task.conversation_id,
+                user_id=task.user_id,
+            )
+            blocks = await conversation_memory.list_blocks(
+                user_id=task.user_id,
+                conversation_id=task.conversation_id,
+            )
+            pack = build_context_pack(
+                memory_blocks=tuple((block.id, block.content) for block in blocks),
+                conversation_summary=summary.summary_text if summary else "",
+                summary_source_ids=(
+                    (summary.source_start_message_id, summary.source_end_message_id)
+                    if summary
+                    else ()
+                ),
+                summary_version=summary.summary_version if summary else None,
+                long_term_memory=memory_summary,
+                messages=tuple(
+                    ConversationMessageRef(message.id, message.role, message.content)
+                    for message in messages
+                ),
+                current_input=str(task.input_text),
+            )
+            conversation_history = tuple(
+                (message.role, message.content) for message in pack.recent_turns
+            )
+            conversation_summary = pack.conversation_summary
+            memory_blocks = pack.memory_blocks
+            context_trace = context_trace + tuple(
+                {
+                    "section": item.section,
+                    "estimated_tokens": item.estimated_tokens,
+                    "source_ids": item.source_ids,
+                    "truncated_source_ids": item.truncated_source_ids,
+                    "version": item.version,
+                }
+                for item in pack.trace
+            )
+            conversation_compacted = pack.compacted
+
         context = self.context_builder.build(
             task=task,
             user=user,
             memory_summary=memory_summary,
             skills=skills,
             capabilities=capabilities,
+            conversation_history=conversation_history,
+            conversation_summary=conversation_summary,
+            memory_blocks=memory_blocks,
+            context_trace=context_trace,
+            conversation_compacted=conversation_compacted,
         )
         plan = self.planning_layer.build_plan(
             task=task,
             profile=profile,
             context=context,
         )
+
+        if self.event_sink is not None:
+            await self.event_sink("plan", {"steps": list(plan.steps)})
 
         task.status = TaskStatus.RUNNING.value
         task.workflow_key = profile.workflow_key
@@ -339,7 +421,9 @@ class AgentHarness:
         task_id: str,
         outcome: ExecutionOutcome,
     ) -> Task:
-        task_service = TaskService(self.session)
+        task_service = TaskService(
+            self.session, success_hook=self.memory_candidate_hook
+        )
         if outcome.status == TaskStatus.WAITING_APPROVAL.value:
             message = (
                 outcome.result_text
@@ -384,13 +468,22 @@ class AgentHarness:
             raise AgentHarnessError(f"User not found: {user_id}")
         return user
 
-    async def _memory_summary(self, user_id: str, *, query: str) -> str:
-        return await load_memory_summary(
+    async def _memory_context(
+        self,
+        user_id: str,
+        *,
+        query: str,
+        task_id: str,
+        conversation_id: str | None,
+    ):
+        return await load_memory_context(
             session=self.session,
             user_id=user_id,
             query=query,
             semantic_memory=self.semantic_memory,
             semantic_limit=self.semantic_memory_limit,
+            task_id=task_id,
+            conversation_id=conversation_id,
         )
 
 

@@ -9,6 +9,22 @@ from urllib.parse import unquote, urlsplit
 COUNTED_TABLES = (
     "users",
     "tasks",
+    "memories",
+    "memory_links",
+    "memory_feedback",
+    "memory_index_outbox",
+    "conversation_summaries",
+    "memory_blocks",
+    "memory_policies",
+    "memory_retrieval_traces",
+    "memory_retrieval_trace_items",
+    "memory_consolidation_runs",
+    "memory_consolidation_digests",
+    "memory_consolidation_decisions",
+    "memory_release_reports",
+    "memory_retrieval_policy_versions",
+    "memory_effectiveness",
+    "memory_effectiveness_events",
     "account_connections",
     "knowledge_documents",
     "knowledge_chunks",
@@ -89,7 +105,13 @@ def table_counts(target: DatabaseTarget) -> dict[str, int]:
     for table in COUNTED_TABLES:
         output = capture(
             target,
-            [*target.command("psql"), "--tuples-only", "--no-align", "--command", f'SELECT COUNT(*) FROM "{table}"'],
+            [
+                *target.command("psql"),
+                "--tuples-only",
+                "--no-align",
+                "--command",
+                f'SELECT COUNT(*) FROM "{table}"',
+            ],
         )
         try:
             counts[table] = int(output)
