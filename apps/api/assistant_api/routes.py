@@ -5,6 +5,7 @@ from .capability_routes import router as capability_router
 from .channel_routes import router as channel_router
 from .conversation_routes import router as conversation_router
 from .knowledge_routes import router as knowledge_router
+from .local_routes import router as local_router
 from .memory_routes import router as memory_router
 from .notification_routes import router as notification_router
 from .skill_routes import router as skill_router
@@ -21,6 +22,7 @@ router.include_router(capability_router)
 router.include_router(skill_router)
 router.include_router(memory_router)
 router.include_router(task_router)
+router.include_router(local_router)
 
 
 @router.get("/health")

@@ -6,8 +6,8 @@ from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import JSONResponse, Response
 
-PUBLIC_PATHS = frozenset({"/health", "/api/webhooks/langbot"})
-PROTECTED_PREFIXES = ("/api/", "/internal/")
+PUBLIC_PATHS = frozenset({"/health", "/local/health", "/api/webhooks/langbot"})
+PROTECTED_PREFIXES = ("/api/", "/internal/", "/local/")
 
 
 class LocalApiAuthMiddleware(BaseHTTPMiddleware):

@@ -2,11 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from docx import Document
-from openpyxl import load_workbook  # type: ignore[import-untyped]
-from pypdf import PdfReader
-from pptx import Presentation
-
 
 PARSER_VERSION = "extract-v1"
 SUPPORTED_MEDIA_TYPES = {
@@ -23,14 +18,28 @@ class ExtractionError(RuntimeError):
     pass
 
 
+class OptionalOfficeDependencyError(ExtractionError):
+    pass
+
+
 def extract_text(path: Path) -> str:
     suffix = path.suffix.lower()
     try:
         if suffix in {".txt", ".md"}:
             text = path.read_text(encoding="utf-8")
         elif suffix == ".pdf":
+            try:
+                from pypdf import PdfReader
+            except ImportError as exc:
+                raise OptionalOfficeDependencyError("knowledge_optional_office_missing") from exc
+
             text = "\n".join(page.extract_text() or "" for page in PdfReader(str(path)).pages)
         elif suffix == ".docx":
+            try:
+                from docx import Document
+            except ImportError as exc:
+                raise OptionalOfficeDependencyError("knowledge_optional_office_missing") from exc
+
             text = "\n".join(paragraph.text for paragraph in Document(str(path)).paragraphs)
         elif suffix == ".xlsx":
             text = _xlsx_text(path)
@@ -49,6 +58,11 @@ def extract_text(path: Path) -> str:
 
 
 def _xlsx_text(path: Path) -> str:
+    try:
+        from openpyxl import load_workbook  # type: ignore[import-untyped]
+    except ImportError as exc:
+        raise OptionalOfficeDependencyError("knowledge_optional_office_missing") from exc
+
     workbook = load_workbook(path, read_only=True, data_only=True)
     try:
         lines: list[str] = []
@@ -64,6 +78,11 @@ def _xlsx_text(path: Path) -> str:
 
 
 def _pptx_text(path: Path) -> str:
+    try:
+        from pptx import Presentation
+    except ImportError as exc:
+        raise OptionalOfficeDependencyError("knowledge_optional_office_missing") from exc
+
     lines: list[str] = []
     for slide in Presentation(str(path)).slides:
         for shape in slide.shapes:

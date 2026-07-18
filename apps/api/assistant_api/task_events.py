@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -26,7 +27,11 @@ class TaskEventRepository:
     async def append(
         self, *, task_id: str, user_id: str, event_type: str, payload: dict[str, object]
     ) -> TaskEvent:
-        safe = sanitize_text(json.dumps(payload, ensure_ascii=False, default=str))[:16000]
+        safe = json.dumps(
+            _safe_json_value(payload),
+            ensure_ascii=False,
+            default=str,
+        )[:16000]
         last_error: IntegrityError | None = None
         for _ in range(TASK_EVENT_APPEND_ATTEMPTS):
             sequence = int(
@@ -104,3 +109,27 @@ def event_record(item: TaskEvent) -> dict[str, object]:
         "payload": payload,
         "created_at": item.created_at.isoformat(),
     }
+
+
+def _safe_json_value(value: Any) -> Any:
+    if isinstance(value, str):
+        return sanitize_text(value)
+    if isinstance(value, dict):
+        return {
+            str(key): _safe_json_value(item)
+            for key, item in value.items()
+            if not _is_sensitive_key(str(key))
+        }
+    if isinstance(value, list | tuple | set | frozenset):
+        return [_safe_json_value(item) for item in value]
+    if value is None or isinstance(value, bool | int | float):
+        return value
+    return sanitize_text(value)
+
+
+def _is_sensitive_key(key: str) -> bool:
+    normalized = key.casefold()
+    return any(
+        marker in normalized
+        for marker in ("authorization", "cookie", "api_key", "apikey", "token", "secret")
+    )

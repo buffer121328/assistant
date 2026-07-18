@@ -9,11 +9,6 @@ import re
 import tempfile
 from typing import Callable, TypeVar
 
-from docx import Document
-from openpyxl import Workbook  # type: ignore[import-untyped]
-from pptx import Presentation
-
-
 _SAFE_TASK_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
 _SAFE_FILENAME = re.compile(r"^[^/\\\x00]{1,128}$")
 _T = TypeVar("_T")
@@ -21,6 +16,14 @@ _T = TypeVar("_T")
 
 class ArtifactPathError(ValueError):
     pass
+
+
+class OptionalOfficeDependencyError(RuntimeError):
+    def __init__(self) -> None:
+        super().__init__(
+            "Optional Office dependencies are not installed. "
+            "Install with: uv sync --extra office"
+        )
 
 
 @dataclass(frozen=True)
@@ -194,6 +197,11 @@ class ProductivityTools:
         title: str,
         paragraphs: tuple[str, ...],
     ) -> Artifact:
+        try:
+            from docx import Document
+        except ImportError as exc:
+            raise OptionalOfficeDependencyError() from exc
+
         document = Document()
         document.add_heading(_bounded_text(title, "title", 500), level=0)
         for paragraph in paragraphs[:100]:
@@ -213,6 +221,11 @@ class ProductivityTools:
         sheet_name: str,
         rows: tuple[tuple[object, ...], ...],
     ) -> Artifact:
+        try:
+            from openpyxl import Workbook  # type: ignore[import-untyped]
+        except ImportError as exc:
+            raise OptionalOfficeDependencyError() from exc
+
         workbook = Workbook()
         worksheet = workbook.active
         worksheet.title = _bounded_text(sheet_name, "sheet name", 31)
@@ -233,6 +246,11 @@ class ProductivityTools:
         title: str,
         slides: tuple[tuple[str, tuple[str, ...]], ...],
     ) -> Artifact:
+        try:
+            from pptx import Presentation
+        except ImportError as exc:
+            raise OptionalOfficeDependencyError() from exc
+
         presentation = Presentation()
         title_slide = presentation.slides.add_slide(presentation.slide_layouts[0])
         title_slide.shapes.title.text = _bounded_text(title, "title", 500)

@@ -1,0 +1,32 @@
+{
+  "name": "assistant-desktop-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Electron Web desktop shell for the local Assistant agent server.",
+  "main": "dist/main/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "tsc --noEmit && electron-vite build",
+    "dist": "npm run build && electron-builder --config electron-builder.json",
+    "dist:dir": "npm run build && electron-builder --dir --config electron-builder.json",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.2.0",
+    "electron": "^43.1.1",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^7.3.6"
+  }
+}

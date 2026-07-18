@@ -6,8 +6,6 @@ from contextlib import AbstractContextManager, contextmanager
 from types import TracebackType
 from typing import Any, Callable, Protocol, cast
 
-from langfuse import Langfuse
-
 from packages.observability import (
     NoopObservability,
     NoopObservation,
@@ -195,6 +193,8 @@ def build_observability(
     if not settings.langfuse_public_key or not settings.langfuse_secret_key:
         return NoopObservability()
     try:
+        from langfuse import Langfuse
+
         factory = client_factory or Langfuse
         client = cast(
             LangfuseClient,

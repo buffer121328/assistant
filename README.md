@@ -2,10 +2,12 @@
 
 个人 Agent 助手系统后端。这个项目的目标不是做一个“简单聊天机器人”，而是做一个**可长期演进、可控、可审计、可接入个人工具链的本机 Agent 助手系统**。
 
-当前产品入口保留两类：
+当前产品入口状态：
 
 - **LangBot**：主消息入口和结果回推通道。
-- **PySide6 桌面小窗口**：本机 GUI，用于提交任务、查看结果、处理审批、管理账号、知识库、提醒、Skills 和 Memory Center。
+- **本地 Agent API**：V7 新桌面端契约，提供 `/local/*` 任务、事件、审批和配置接口，供后续 Electron 桌面端使用。
+- **Electron Web 桌面端**：V7 新桌面主线，当前已具备安全隔离工程骨架、三栏任务控制台、任务/事件/审批摘要、运行日志、审批/只读 diff 和验证式设置源码。
+- **PySide6 桌面小窗口**：历史本机 GUI，V7 期间保留为 legacy/可选能力，不再作为复杂桌面 UI 的新功能主线。
 
 后端由 FastAPI、PostgreSQL、Redis、Celery 和 LangGraph Agent Runtime 组成。所有模型任务统一进入受控 LangGraph 执行层，工具调用经过 ToolRegistry、风险等级、审批和审计约束。
 
@@ -130,9 +132,9 @@
 
 ### 桌面端
 
-- PySide6
-- QSettings
-- keyring
+- V7 新主线：Electron Web 桌面端，源码在 `apps/desktop-web`
+- 本地通信：`/local/*` HTTP API + WebSocket 事件流
+- Legacy 可选入口：PySide6、QSettings、keyring
 
 ### 测试与质量
 
@@ -163,6 +165,7 @@
 │   │   ├── notification_routes.py   # 提醒和桌面通知
 │   │   ├── skill_routes.py          # Skills 生命周期
 │   │   ├── task_routes.py           # 任务、事件流、审批
+│   │   ├── local_routes.py          # V7 Electron 本地 Agent API 契约
 │   │   ├── models.py                # SQLAlchemy ORM 模型
 │   │   ├── repositories.py          # 数据访问层
 │   │   ├── services.py              # 记忆、状态、分发等服务兼容入口
@@ -171,7 +174,8 @@
 │   │   ├── worker_runtime.py        # worker 执行编排
 │   │   ├── agent_ports.py           # API 层对 Agent Harness ports 的适配器
 │   │   └── task_events.py           # 任务事件持久化与事件流记录
-│   ├── desktop/assistant_desktop/    # PySide6 桌面端
+│   ├── desktop/assistant_desktop/    # Legacy PySide6 桌面端，可选能力
+│   ├── desktop-web/                  # V7 Electron + Vite + React 桌面端源码
 │   └── scheduler/                   # 定时维护、监控和心跳入口
 ├── packages/
 │   ├── agent_harness/               # Agent Profile、Planning、Execution、Ports、Compat
@@ -236,7 +240,9 @@
 - **知识库**：文件上传、解析、分块、去重、搜索。
 - **账号连接**：加密保存账号凭据，支持 SMTP、CalDAV、browser provider。
 - **提醒通知**：提醒创建、取消、通知 outbox、桌面 poll/ack、LangBot 投递。
-- **桌面端**：任务、审批、账号、知识库、提醒、Skills、Memory Center。
+- **本地桌面契约**：`/local/*` 支持任务创建、任务快照、事件游标、WebSocket 事件流、日志和审批决策。
+- **Electron 控制台**：三栏任务队列、活动线程和检查器，支持任务/事件/审批摘要、继续对话、运行日志、工具审批、文件引用、只读 diff、命令输出、空态和设置验证。
+- **Legacy 桌面端**：PySide6 入口仍可选保留，用于任务、审批、账号、知识库、提醒、Skills、Memory Center。
 
 ## 后续如何扩展新功能
 
@@ -326,12 +332,29 @@ API 路由已按领域拆分，Agent Harness 通过 ports 依赖抽象，API 层
 
 ## 如何部署启动
 
+更完整的配置说明见 [`docs/mvp-startup-config.md`](docs/mvp-startup-config.md)。如果想从桌面端按钮一路追到后端 API、服务函数和 Agent 执行层，见 [`docs/frontend-backend-flow.md`](docs/frontend-backend-flow.md)。
+
 ### 1. 准备环境
 
 Python 版本由 `.python-version` 固定为 3.12，依赖使用 `uv` 管理。
 
 ```bash
 uv sync
+```
+
+核心后端默认不安装 PySide6、Playwright、Office 解析/生成和观测 SDK。按能力安装可选依赖：
+
+```bash
+uv sync --extra desktop-pyside
+uv sync --extra browser-automation
+uv sync --extra office
+uv sync --extra observability
+```
+
+常用组合示例：
+
+```bash
+uv sync --extra office --extra browser-automation
 ```
 
 复制示例配置：
@@ -415,7 +438,57 @@ PYTHONPATH=apps/api:. uv run celery -A assistant_api.worker:celery_app worker --
 PYTHONPATH=apps/api:. uv run celery -A assistant_api.worker:celery_app beat --loglevel=INFO
 ```
 
-### 4. 启动桌面端
+### 4. 启动 Electron 桌面端
+
+V7 的新桌面主线是 Electron Web 桌面端。当前工程位于 `apps/desktop-web`，开发模式需要先安装 Node 依赖，并确保 Python API 已按前文启动。
+
+```bash
+cd apps/desktop-web
+npm ci
+npm run dev
+```
+
+当前 Electron 源码覆盖：
+
+- 主窗口、菜单、托盘占位和安全隔离基线。
+- 本地 API 连接状态、API 地址和用户设置。
+- 三栏任务控制台：任务队列、活动线程和检查器。
+- 任务数量、运行中任务、待审批任务、已完成任务、事件数和变更数摘要。
+- 任务详情、继续对话、WebSocket 事件流恢复、空态和刷新入口。
+- 运行日志、审批面板、审批原因、风险等级、文件引用、只读 diff、命令输出和验证式设置保存。
+
+### 5. 打包 Electron 桌面端
+
+V7-06 采用 **external installed mode**：Electron 安装包只包含桌面壳和 Web UI，不内置 Python runtime、`.venv`、PostgreSQL、Redis、PySide6、Playwright、Office 依赖或本地模型。用户需要单独启动 Python Agent Server。
+
+```bash
+cd apps/desktop-web
+npm ci
+npm run build
+npm run dist:dir
+```
+
+生成平台安装包：
+
+```bash
+npm run dist
+```
+
+发布边界检查：
+
+```bash
+uv run python scripts/ops/desktop_web_release_check.py
+```
+
+打包配置见 `apps/desktop-web/electron-builder.json`，发布记录见 `apps/desktop-web/RELEASE.md`。当前尚未在本工作区实际生成安装包，因此包体、冷启动耗时和空闲内存仍记录为 `not measured`，不能声明生产自动更新或跨平台签名已完成。
+
+### 6. 启动 Legacy PySide6 桌面端
+
+旧 PySide6 入口保留为可选能力。使用前需安装：
+
+```bash
+uv sync --extra desktop-pyside
+```
 
 ```bash
 uv run assistant-desktop
@@ -431,7 +504,7 @@ uv run assistant-desktop
 - 数据库中已准备用户。
 - 本机 API token 已配置。
 
-### 5. 常用验证命令
+### 7. 常用验证命令
 
 ```bash
 uv run pytest
@@ -439,6 +512,7 @@ uv run pytest --cov
 uv run ruff check .
 uv run mypy .
 uv lock --check
+uv run python scripts/ops/desktop_web_release_check.py
 ```
 
 可选 smoke：

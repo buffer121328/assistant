@@ -1,0 +1,35 @@
+{
+  "appId": "local.assistant.desktop",
+  "productName": "Assistant",
+  "asar": true,
+  "directories": {
+    "output": "release"
+  },
+  "files": [
+    "dist/**",
+    "package.json",
+    "RELEASE.md",
+    "!**/.venv/**",
+    "!**/.git/**",
+    "!**/.mypy_cache/**",
+    "!**/.pytest_cache/**",
+    "!**/.ruff_cache/**",
+    "!**/.vite/**",
+    "!**/.DS_Store",
+    "!**/node_modules/.cache/**",
+    "!**/tests/**",
+    "!**/*.map"
+  ],
+  "mac": {
+    "category": "public.app-category.productivity",
+    "target": ["dmg", "zip"]
+  },
+  "win": {
+    "target": ["nsis"]
+  },
+  "linux": {
+    "target": ["AppImage"]
+  },
+  "npmRebuild": false,
+  "publish": null
+}
