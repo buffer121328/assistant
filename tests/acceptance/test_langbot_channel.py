@@ -723,5 +723,7 @@ async def test_15_langbot_dispatch_failure_is_sanitized(
 def test_16_readme_documents_current_entry_surfaces() -> None:
     readme = (Path(__file__).parents[2] / "README.md").read_text(encoding="utf-8")
 
-    assert "LangBot 作为主消息通道和响应通道" in readme
-    assert "PySide6" in readme
+    assert "LangBot" in readme
+    assert "主消息入口和结果回推通道" in readme
+    assert "Electron Web 桌面端" in readme
+    assert "`/local/*`" in readme

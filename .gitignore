@@ -31,4 +31,6 @@ var/
 /openspec/changes/*
 !/openspec/changes/polish-electron-desktop-ui/
 !/openspec/changes/polish-electron-desktop-ui/**
+!/openspec/changes/remove-legacy-qt-dependency/
+!/openspec/changes/remove-legacy-qt-dependency/**
 AGENTS.md

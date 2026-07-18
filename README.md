@@ -7,7 +7,7 @@
 - **LangBot**：主消息入口和结果回推通道。
 - **本地 Agent API**：V7 新桌面端契约，提供 `/local/*` 任务、事件、审批和配置接口，供后续 Electron 桌面端使用。
 - **Electron Web 桌面端**：V7 新桌面主线，当前已具备安全隔离工程骨架、三栏任务控制台、任务/事件/审批摘要、运行日志、审批/只读 diff 和验证式设置源码。
-- **PySide6 桌面小窗口**：历史本机 GUI，V7 期间保留为 legacy/可选能力，不再作为复杂桌面 UI 的新功能主线。
+- **Legacy Python 桌面源码**：历史 Qt GUI 源码保留在仓库中用于参考和旧测试，不再作为当前安装或启动入口。
 
 后端由 FastAPI、PostgreSQL、Redis、Celery 和 LangGraph Agent Runtime 组成。所有模型任务统一进入受控 LangGraph 执行层，工具调用经过 ToolRegistry、风险等级、审批和审计约束。
 
@@ -134,7 +134,7 @@
 
 - V7 新主线：Electron Web 桌面端，源码在 `apps/desktop-web`
 - 本地通信：`/local/*` HTTP API + WebSocket 事件流
-- Legacy 可选入口：PySide6、QSettings、keyring
+- Legacy Python 桌面源码：历史 Qt GUI 代码仍保留，但当前依赖契约不再声明旧 Qt 安装入口
 
 ### 测试与质量
 
@@ -174,7 +174,7 @@
 │   │   ├── worker_runtime.py        # worker 执行编排
 │   │   ├── agent_ports.py           # API 层对 Agent Harness ports 的适配器
 │   │   └── task_events.py           # 任务事件持久化与事件流记录
-│   ├── desktop/assistant_desktop/    # Legacy PySide6 桌面端，可选能力
+│   ├── desktop/assistant_desktop/    # Legacy Qt 桌面端源码，当前不再声明安装入口
 │   ├── desktop-web/                  # V7 Electron + Vite + React 桌面端源码
 │   └── scheduler/                   # 定时维护、监控和心跳入口
 ├── packages/
@@ -242,7 +242,7 @@
 - **提醒通知**：提醒创建、取消、通知 outbox、桌面 poll/ack、LangBot 投递。
 - **本地桌面契约**：`/local/*` 支持任务创建、任务快照、事件游标、WebSocket 事件流、日志和审批决策。
 - **Electron 控制台**：三栏任务队列、活动线程和检查器，支持任务/事件/审批摘要、继续对话、运行日志、工具审批、文件引用、只读 diff、命令输出、空态和设置验证。
-- **Legacy 桌面端**：PySide6 入口仍可选保留，用于任务、审批、账号、知识库、提醒、Skills、Memory Center。
+- **Legacy 桌面源码**：历史 Qt GUI 代码仍保留用于参考和旧测试，但当前安装、启动和依赖说明以 Electron 桌面端为准。
 
 ## 后续如何扩展新功能
 
@@ -342,10 +342,9 @@ Python 版本由 `.python-version` 固定为 3.12，依赖使用 `uv` 管理。
 uv sync
 ```
 
-核心后端默认不安装 PySide6、Playwright、Office 解析/生成和观测 SDK。按能力安装可选依赖：
+核心后端默认不安装 Playwright、Office 解析/生成和观测 SDK。按能力安装可选依赖：
 
 ```bash
-uv sync --extra desktop-pyside
 uv sync --extra browser-automation
 uv sync --extra office
 uv sync --extra observability
@@ -459,7 +458,7 @@ npm run dev
 
 ### 5. 打包 Electron 桌面端
 
-V7-06 采用 **external installed mode**：Electron 安装包只包含桌面壳和 Web UI，不内置 Python runtime、`.venv`、PostgreSQL、Redis、PySide6、Playwright、Office 依赖或本地模型。用户需要单独启动 Python Agent Server。
+V7-06 采用 **external installed mode**：Electron 安装包只包含桌面壳和 Web UI，不内置 Python runtime、`.venv`、PostgreSQL、Redis、Playwright、Office 依赖、历史 Qt 桌面依赖或本地模型。用户需要单独启动 Python Agent Server。
 
 ```bash
 cd apps/desktop-web
@@ -482,29 +481,7 @@ uv run python scripts/ops/desktop_web_release_check.py
 
 打包配置见 `apps/desktop-web/electron-builder.json`，发布记录见 `apps/desktop-web/RELEASE.md`。当前尚未在本工作区实际生成安装包，因此包体、冷启动耗时和空闲内存仍记录为 `not measured`，不能声明生产自动更新或跨平台签名已完成。
 
-### 6. 启动 Legacy PySide6 桌面端
-
-旧 PySide6 入口保留为可选能力。使用前需安装：
-
-```bash
-uv sync --extra desktop-pyside
-```
-
-```bash
-uv run assistant-desktop
-```
-
-桌面端不会自动启动后端。使用桌面端前需要确保：
-
-- PostgreSQL 已启动。
-- Redis 已启动。
-- Alembic 迁移已完成。
-- FastAPI 已启动。
-- Celery worker 已启动。
-- 数据库中已准备用户。
-- 本机 API token 已配置。
-
-### 7. 常用验证命令
+### 6. 常用验证命令
 
 ```bash
 uv run pytest

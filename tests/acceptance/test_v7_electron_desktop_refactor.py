@@ -74,12 +74,15 @@ def test_v7_optional_capabilities_are_not_main_runtime_dependencies() -> None:
 
     for dependency in OPTIONAL_RUNTIME_DEPENDENCIES:
         assert dependency.lower() not in main_dependencies
+    assert "keyring" not in main_dependencies
 
-    assert "desktop-pyside" in optional_dependencies
+    assert "desktop-pyside" not in optional_dependencies
     assert "browser-automation" in optional_dependencies
     assert "office" in optional_dependencies
     assert "observability" in optional_dependencies
-    assert any("pyside6" in item.lower() for item in optional_dependencies["desktop-pyside"])
+    assert "pyside6" not in "\n".join(
+        dependency for items in optional_dependencies.values() for dependency in items
+    ).lower()
     assert any("playwright" in item.lower() for item in optional_dependencies["browser-automation"])
     assert any("python-docx" in item.lower() for item in optional_dependencies["office"])
 
