@@ -194,6 +194,35 @@ def test_desktop_web_renderer_polishes_console_information_architecture() -> Non
     assert "linear-gradient" not in styles
 
 
+def test_current_environment_docs_match_electron_desktop_boundary() -> None:
+    startup_doc = (ROOT / "docs" / "mvp-startup-config.md").read_text(encoding="utf-8")
+
+    for required in (
+        "Python 3.12",
+        "uv sync",
+        "cp .env.example .env",
+        "uv sync --extra browser-automation",
+        "uv sync --extra office",
+        "uv sync --extra observability",
+        "cd apps/desktop-web",
+        "npm ci",
+        "npm run dev",
+        "desktop-settings.json",
+    ):
+        assert required in startup_doc
+
+    for retired in (
+        "desktop-pyside",
+        "pyside6",
+        "PySide6",
+        "PyQt",
+        "assistant-desktop",
+        "keyring",
+        "QSettings",
+    ):
+        assert retired not in startup_doc
+
+
 def test_desktop_web_release_configuration_excludes_runtime_bloat_and_documents_mode() -> None:
     desktop_root = ROOT / "apps" / "desktop-web"
     package_text = (desktop_root / "package.json").read_text()

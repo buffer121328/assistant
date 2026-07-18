@@ -23,6 +23,9 @@ apps/desktop-web/release/
 apps/desktop-web/.vite/
 var/
 /docs
+!/docs/
+/docs/*
+!/docs/mvp-startup-config.md
 /openspec
 !/openspec/
 /openspec/*
@@ -33,4 +36,6 @@ var/
 !/openspec/changes/polish-electron-desktop-ui/**
 !/openspec/changes/remove-legacy-qt-dependency/
 !/openspec/changes/remove-legacy-qt-dependency/**
+!/openspec/changes/update-environment-config-docs/
+!/openspec/changes/update-environment-config-docs/**
 AGENTS.md
