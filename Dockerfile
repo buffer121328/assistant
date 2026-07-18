@@ -5,7 +5,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     PATH="/app/.venv/bin:${PATH}" \
-    PYTHONPATH="/app/apps/api:/app"
+    PYTHONPATH="/app/backend:/app"
 
 WORKDIR /app
 
@@ -14,10 +14,7 @@ COPY pyproject.toml uv.lock .python-version ./
 RUN uv sync --frozen --no-dev
 
 COPY alembic.ini ./
-COPY apps ./apps
-COPY migrations ./migrations
-COPY packages ./packages
-COPY prompts ./prompts
+COPY backend ./backend
 
 RUN groupadd --gid 10001 assistant \
     && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin assistant \
@@ -28,4 +25,4 @@ USER assistant
 
 EXPOSE 8000
 
-CMD ["uvicorn", "--app-dir", "apps/api", "assistant_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "--app-dir", "backend", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

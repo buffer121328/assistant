@@ -4,10 +4,10 @@ from fastapi.testclient import TestClient
 import httpx
 from pydantic import SecretStr
 
-from assistant_api.config import Settings
-from assistant_api.main import create_app
+from infrastructure.config import Settings
+from app.main import create_app
 from assistant_desktop.client import DesktopApiClient
-from packages.integrations import CredentialCipher, CredentialError
+from integrations import CredentialCipher, CredentialError
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -69,7 +69,7 @@ def test_compose_and_ci_define_engineering_boundaries() -> None:
 
 def test_agent_engineering_packages_have_explicit_owners() -> None:
     for package in ("integrations", "knowledge", "notifications"):
-        assert (ROOT / "packages" / package / "__init__.py").is_file()
+        assert (ROOT / "backend" / package / "__init__.py").is_file()
     assert (ROOT / "tests/integration/README.md").is_file()
 
 

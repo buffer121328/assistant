@@ -16,11 +16,11 @@ __pycache__/
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
-apps/desktop-web/node_modules/
-apps/desktop-web/out/
-apps/desktop-web/dist/
-apps/desktop-web/release/
-apps/desktop-web/.vite/
+frontend/desktop/node_modules/
+frontend/desktop/out/
+frontend/desktop/dist/
+frontend/desktop/release/
+frontend/desktop/.vite/
 var/
 /docs
 !/docs/
@@ -38,4 +38,6 @@ var/
 !/openspec/changes/remove-legacy-qt-dependency/**
 !/openspec/changes/update-environment-config-docs/
 !/openspec/changes/update-environment-config-docs/**
+!/openspec/changes/restructure-project-layout/
+!/openspec/changes/restructure-project-layout/**
 AGENTS.md

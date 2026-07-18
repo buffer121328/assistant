@@ -15,16 +15,16 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from assistant_api.config import Settings
-from assistant_api.main import create_app
-from assistant_api.models import Base, SkillAuditLog, User
-from packages.agent_harness import (
+from infrastructure.config import Settings
+from app.main import create_app
+from domain.models import Base, SkillAuditLog, User
+from agent import (
     InvalidSkillPackageError,
     ManagedSkillConflictError,
     ManagedSkillStore,
     SkillDefinition,
 )
-from packages.capabilities import CapabilityDisabledError, build_default_registry
+from capabilities import CapabilityDisabledError, build_default_registry
 
 
 ROOT = Path(__file__).parents[2]
@@ -59,7 +59,7 @@ def test_managed_store_creates_disabled_skill_and_controls_lifecycle(
     tmp_path: Path,
 ) -> None:
     store = ManagedSkillStore(
-        builtin_root=ROOT / "prompts" / "skills",
+        builtin_root=ROOT / "backend" / "resources" / "skillpacks",
         managed_root=tmp_path / "managed",
     )
 
@@ -79,12 +79,12 @@ def test_managed_store_creates_disabled_skill_and_controls_lifecycle(
     }
     with pytest.raises(CapabilityDisabledError):
         build_default_registry(
-            ROOT / "prompts" / "skills", managed_store=store
+            ROOT / "backend" / "resources" / "skillpacks", managed_store=store
         ).resolve("skill.meeting-notes")
 
     enabled = store.set_enabled("meeting-notes", enabled=True)
     registry = build_default_registry(
-        ROOT / "prompts" / "skills", managed_store=store
+        ROOT / "backend" / "resources" / "skillpacks", managed_store=store
     )
     resolved = registry.resolve("skill.meeting-notes")
 
@@ -104,7 +104,7 @@ def test_managed_store_rejects_unsafe_package_and_builtin_collision_atomically(
     tmp_path: Path,
 ) -> None:
     store = ManagedSkillStore(
-        builtin_root=ROOT / "prompts" / "skills",
+        builtin_root=ROOT / "backend" / "resources" / "skillpacks",
         managed_root=tmp_path / "managed",
     )
 
@@ -125,7 +125,7 @@ def test_managed_store_rejects_unsafe_package_and_builtin_collision_atomically(
 
 def test_managed_store_installs_exact_package_disabled(tmp_path: Path) -> None:
     store = ManagedSkillStore(
-        builtin_root=ROOT / "prompts" / "skills",
+        builtin_root=ROOT / "backend" / "resources" / "skillpacks",
         managed_root=tmp_path / "managed",
     )
 
@@ -364,7 +364,8 @@ def test_desktop_skill_client_contract(tmp_path: Path) -> None:
 
 def test_native_skill_dialog_has_safe_lifecycle_controls(tmp_path: Path) -> None:
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    pytest.importorskip("PySide6")
+    pytest.importorskip("PySide6.QtCore")
+    pytest.importorskip("PySide6.QtWidgets")
     from PySide6.QtCore import QSettings
     from PySide6.QtWidgets import QApplication, QWidget
 

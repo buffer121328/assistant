@@ -7,7 +7,7 @@ import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
-from assistant_api.models import (
+from domain.models import (
     Base,
     Memory,
     MemoryConsolidationDigest,
@@ -16,8 +16,8 @@ from assistant_api.models import (
     MemoryLink,
     User,
 )
-from assistant_api.services import MemoryService
-from packages.memory.consolidation import (
+from domain.services import MemoryService
+from agent.memory.consolidation import (
     MemoryConsolidationService,
     ReconciliationReport,
 )
@@ -174,7 +174,7 @@ def test_consolidation_migration_and_backup_contract() -> None:
     from scripts.ops.db_common import COUNTED_TABLES
 
     migration = importlib.import_module(
-        "migrations.versions.202607160003_v6_memory_consolidation"
+        "backend.migrations.versions.202607160003_v6_memory_consolidation"
     )
     assert (
         migration.revision == "202607160003"
@@ -192,8 +192,8 @@ async def test_digest_api_does_not_cross_user_boundary(
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> None:
     from fastapi.testclient import TestClient
-    from assistant_api.config import Settings
-    from assistant_api.main import create_app
+    from infrastructure.config import Settings
+    from app.main import create_app
 
     first = await owner(sessionmaker)
     async with sessionmaker() as session:

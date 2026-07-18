@@ -12,9 +12,9 @@ import pytest_asyncio
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from assistant_api.config import Settings
-from assistant_api.main import create_app
-from assistant_api.models import (
+from infrastructure.config import Settings
+from app.main import create_app
+from domain.models import (
     Approval,
     ApprovalStatus,
     Base,
@@ -22,7 +22,7 @@ from assistant_api.models import (
     TaskStatus,
     User,
 )
-from assistant_api.task_events import TaskEventRepository
+from domain.task_events import TaskEventRepository
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -88,7 +88,7 @@ def test_v7_optional_capabilities_are_not_main_runtime_dependencies() -> None:
 
 
 def test_desktop_web_project_declares_electron_vite_react_shell() -> None:
-    desktop_root = ROOT / "apps" / "desktop-web"
+    desktop_root = ROOT / "frontend" / "desktop"
     package_json = tomllib.loads(
         (desktop_root / "package.toml").read_text()
     ) if (desktop_root / "package.toml").exists() else None
@@ -119,7 +119,7 @@ def test_desktop_web_project_declares_electron_vite_react_shell() -> None:
 
 
 def test_desktop_web_renderer_covers_task_console_and_developer_workflow() -> None:
-    renderer_root = ROOT / "apps" / "desktop-web" / "src" / "renderer"
+    renderer_root = ROOT / "frontend" / "desktop" / "src" / "renderer"
     app_source = (renderer_root / "App.tsx").read_text()
     api_source = (renderer_root / "api.ts").read_text()
     styles = (renderer_root / "styles.css").read_text()
@@ -156,7 +156,7 @@ def test_desktop_web_renderer_covers_task_console_and_developer_workflow() -> No
 
 
 def test_desktop_web_renderer_polishes_console_information_architecture() -> None:
-    renderer_root = ROOT / "apps" / "desktop-web" / "src" / "renderer"
+    renderer_root = ROOT / "frontend" / "desktop" / "src" / "renderer"
     app_source = (renderer_root / "App.tsx").read_text()
     styles = (renderer_root / "styles.css").read_text()
 
@@ -204,7 +204,7 @@ def test_current_environment_docs_match_electron_desktop_boundary() -> None:
         "uv sync --extra browser-automation",
         "uv sync --extra office",
         "uv sync --extra observability",
-        "cd apps/desktop-web",
+        "cd frontend/desktop",
         "npm ci",
         "npm run dev",
         "desktop-settings.json",
@@ -224,7 +224,7 @@ def test_current_environment_docs_match_electron_desktop_boundary() -> None:
 
 
 def test_desktop_web_release_configuration_excludes_runtime_bloat_and_documents_mode() -> None:
-    desktop_root = ROOT / "apps" / "desktop-web"
+    desktop_root = ROOT / "frontend" / "desktop"
     package_text = (desktop_root / "package.json").read_text()
     builder_config = json.loads((desktop_root / "electron-builder.json").read_text())
     release_notes = (desktop_root / "RELEASE.md").read_text()
@@ -266,10 +266,10 @@ class BlockOptional(importlib.abc.MetaPathFinder):
         return None
 
 sys.meta_path.insert(0, BlockOptional())
-sys.path.insert(0, "apps/api")
+sys.path.insert(0, "backend")
 sys.path.insert(0, ".")
 
-from assistant_api.main import create_app
+from app.main import create_app
 
 create_app()
 """

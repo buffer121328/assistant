@@ -9,10 +9,10 @@ from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from assistant_api.config import Settings
-from assistant_api.main import create_app
-from assistant_api.models import Base, TaskStatus, User
-from assistant_api.services import TaskService
+from infrastructure.config import Settings
+from app.main import create_app
+from domain.models import Base, TaskStatus, User
+from domain.services import TaskService
 
 
 @pytest_asyncio.fixture
@@ -196,7 +196,7 @@ async def test_langbot_reuses_conversation_per_user(
     client: TestClient, sessionmaker: async_sessionmaker[AsyncSession]
 ) -> None:
     from sqlalchemy import select
-    from assistant_api.models import Conversation, PlatformAccount, Task
+    from domain.models import Conversation, PlatformAccount, Task
 
     first = await create_user(sessionmaker, "LangBot One")
     second = await create_user(sessionmaker, "LangBot Two")
@@ -258,10 +258,10 @@ async def test_langbot_reuses_conversation_per_user(
 def test_agent_model_request_uses_prebudgeted_conversation_history_without_second_slice() -> (
     None
 ):
-    from packages.agent_harness.agent_model import build_agent_model_request
-    from packages.agent_harness.context import TaskContext
-    from packages.agent_harness.executors import AgentRunInput
-    from packages.agent_harness.planner import ExecutionPlan
+    from agent.modeling.agent_model import build_agent_model_request
+    from agent.planning.context import TaskContext
+    from agent.modeling.executors import AgentRunInput
+    from agent.planning.planner import ExecutionPlan
 
     context = TaskContext(
         task_id="task-1",
@@ -302,8 +302,8 @@ def test_agent_model_request_uses_prebudgeted_conversation_history_without_secon
 async def test_conversation_message_api_reports_active_compaction_metadata(
     client: TestClient, sessionmaker: async_sessionmaker[AsyncSession]
 ) -> None:
-    from assistant_api.conversations import ConversationService
-    from assistant_api.models import ConversationSummary
+    from domain.conversations import ConversationService
+    from domain.models import ConversationSummary
 
     owner = await create_user(sessionmaker, "Compacted Owner")
     async with sessionmaker() as session:

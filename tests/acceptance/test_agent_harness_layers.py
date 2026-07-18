@@ -9,8 +9,8 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from assistant_api.models import Base, Memory, Task, TaskStatus, User
-from packages.agent_harness import (
+from domain.models import Base, Memory, Task, TaskStatus, User
+from agent import (
     AgentHarness,
     CapabilitiesBuilder,
     CapabilitySnapshot,
@@ -25,7 +25,7 @@ from packages.agent_harness import (
     ToolCapability,
     UnsupportedModelClassError,
 )
-from packages.tools import NormalizedSearchSource, SearchWebResult
+from agent.tool_management import NormalizedSearchSource, SearchWebResult
 
 
 @pytest_asyncio.fixture
@@ -141,7 +141,7 @@ def test_04_context_builder_includes_user_memory_skills_and_capabilities() -> No
         SkillDefinition(
             name="search",
             instructions="# Search\n\nPrefer primary sources.",
-            source="prompts/skills/search/SKILL.md",
+            source="backend/resources/skillpacks/search/SKILL.md",
         ),
     )
     capabilities = CapabilitySnapshot(
@@ -292,5 +292,5 @@ def test_07_readme_preserves_v2_02_planning_layer_details() -> None:
 
     assert "v2.planner" in readme
     assert "v2.researcher" in readme
-    assert "prompts/skills/*/SKILL.md" in readme
+    assert "backend/resources/skillpacks/*/SKILL.md" in readme
     assert "不会自动启用" in readme

@@ -85,7 +85,7 @@ def _worker_ping(run: Run) -> None:
         "celery-worker",
         "celery",
         "-A",
-        "assistant_api.worker:celery_app",
+        "workers.worker:celery_app",
         "inspect",
         "ping",
         "--timeout",

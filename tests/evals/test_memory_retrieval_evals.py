@@ -1,5 +1,5 @@
 from pathlib import Path
-from packages.evaluation.memory_retrieval import evaluate_memory_retrieval_fixture
+from evaluation.memory_retrieval import evaluate_memory_retrieval_fixture
 
 DATASET = Path(__file__).parent / "datasets/memory_retrieval_v6_04.json"
 

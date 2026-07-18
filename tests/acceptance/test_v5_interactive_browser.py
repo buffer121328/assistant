@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from assistant_api.models import (
+from domain.models import (
     AccountConnection,
     Approval,
     Base,
@@ -20,15 +20,15 @@ from assistant_api.models import (
     ToolLog,
     User,
 )
-from packages.integrations import (
+from integrations import (
     AccountBackedBrowserSessions,
     BrowserSession,
     CredentialCipher,
     ProviderError,
 )
-from packages.tools import ToolInvocation, ToolRegistry, external_approval_binding
-from packages.tools.browser import BrowserDestinationError, PublicUrlPolicy
-from packages.tools.browser_interact import (
+from agent.tool_management import ToolInvocation, ToolRegistry, external_approval_binding
+from agent.tool_management.browser import BrowserDestinationError, PublicUrlPolicy
+from agent.tool_management.browser_interact import (
     BrowserInteractionResult,
     BrowserInteractor,
     build_browser_tool_descriptors,

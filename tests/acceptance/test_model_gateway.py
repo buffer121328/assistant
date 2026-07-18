@@ -14,9 +14,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from assistant_api.config import Settings
-from assistant_api.main import create_app
-from assistant_api.models import Base, ModelLog, Task, TaskStatus, ToolLog, User
+from infrastructure.config import Settings
+from app.main import create_app
+from domain.models import Base, ModelLog, Task, TaskStatus, ToolLog, User
 
 
 DEEPSEEK_URL = "https://deepseek.invalid/v1/chat/completions"
@@ -491,7 +491,7 @@ async def test_task_event_stream_is_owner_scoped_and_resumable(
     client: TestClient,
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> None:
-    from assistant_api.task_events import TaskEventPublisher
+    from domain.task_events import TaskEventPublisher
 
     user, task = await create_task(sessionmaker, task_type="plan")
     async with sessionmaker() as session:

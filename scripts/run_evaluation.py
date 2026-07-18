@@ -25,7 +25,7 @@ def main() -> int:
     if str(ROOT) not in sys.path:
         sys.path.insert(0, str(ROOT))
 
-    from packages.evaluation import EvaluationDataError, evaluate_dataset
+    from evaluation import EvaluationDataError, evaluate_dataset
 
     args = parse_args()
     try:

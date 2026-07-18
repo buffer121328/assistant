@@ -12,10 +12,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from assistant_api.config import Settings
-from assistant_api.models import Base, Task, TaskStatus, ToolLog, User
-from assistant_api.worker_runtime import execute_task_by_id
-from packages.agent_harness import (
+from infrastructure.config import Settings
+from domain.models import Base, Task, TaskStatus, ToolLog, User
+from workers.runtime import execute_task_by_id
+from agent import (
     AgentDecision,
     AgentModelRequest,
     AgentRunInput,
@@ -24,7 +24,7 @@ from packages.agent_harness import (
     WorkPlan,
     WorkPlanStep,
 )
-from packages.tools import (
+from agent.tool_management import (
     MCPToolAdapter,
     MCPToolDescription,
     SearchWebTool,

@@ -32,8 +32,8 @@ services:
     command:
       - uvicorn
       - --app-dir
-      - apps/api
-      - assistant_api.main:app
+      - backend
+      - app.main:app
       - --host
       - 0.0.0.0
       - --port
@@ -118,7 +118,7 @@ services:
     command:
       - celery
       - -A
-      - assistant_api.worker:celery_app
+      - workers.worker:celery_app
       - worker
       - --loglevel=INFO
     environment:
@@ -185,7 +185,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "celery", "-A", "assistant_api.worker:celery_app", "inspect", "ping", "--timeout", "5"]
+      test: ["CMD", "celery", "-A", "workers.worker:celery_app", "inspect", "ping", "--timeout", "5"]
       interval: 20s
       timeout: 10s
       retries: 5
@@ -198,7 +198,7 @@ services:
     command:
       - celery
       - -A
-      - assistant_api.worker:celery_app
+      - workers.worker:celery_app
       - beat
       - --loglevel=INFO
       - --schedule=/app/run/celerybeat-schedule

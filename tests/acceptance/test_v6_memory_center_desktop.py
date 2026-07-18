@@ -69,7 +69,7 @@ def test_memory_center_is_non_blocking_accessible_and_refreshes_after_success(
     tmp_path: Path,
 ) -> None:
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    pytest.importorskip("PySide6")
+    pytest.importorskip("PySide6.QtWidgets")
     from PySide6.QtWidgets import QApplication, QPushButton, QTabWidget, QWidget
 
     from assistant_desktop.client import DesktopApiError

@@ -4,7 +4,7 @@ from collections.abc import AsyncIterator
 
 import pytest
 
-from packages.model_gateway import (
+from model_gateway import (
     GatewayMessage,
     GatewayRequest,
     GatewayResult,
@@ -113,7 +113,8 @@ def test_desktop_event_renderer_shows_plan_and_appends_content(tmp_path) -> None
     import os
 
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    pytest.importorskip("PySide6")
+    pytest.importorskip("PySide6.QtCore")
+    pytest.importorskip("PySide6.QtWidgets")
     from PySide6.QtCore import QSettings
     from PySide6.QtWidgets import QApplication
     from assistant_desktop.window import TaskWindow
@@ -139,7 +140,7 @@ def test_desktop_event_renderer_shows_plan_and_appends_content(tmp_path) -> None
 
 
 def test_final_answer_decoder_emits_only_answer_text() -> None:
-    from assistant_api.answer_stream import FinalAnswerDeltaDecoder
+    from app.support.answer_stream import FinalAnswerDeltaDecoder
 
     decoder = FinalAnswerDeltaDecoder()
     assert decoder.feed('{"action":"tool_call","tool_name":"search.web"}') == ""

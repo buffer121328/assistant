@@ -12,14 +12,13 @@ from time import monotonic
 from typing import Any
 
 import httpx
-from playwright.async_api import async_playwright
 
-API_ROOT = Path(__file__).resolve().parents[2] / "apps" / "api"
+API_ROOT = Path(__file__).resolve().parents[2] / "backend" / "api"
 if str(API_ROOT) not in sys.path:
     sys.path.insert(0, str(API_ROOT))
 
-from packages.integrations import CalDavProvider, ProviderError, SmtpProvider  # noqa: E402
-from packages.tools import (  # noqa: E402
+from integrations import CalDavProvider, ProviderError, SmtpProvider  # noqa: E402
+from agent.tool_management import (  # noqa: E402
     TavilyApiClient,
     TavilyConfig,
     TavilySearchRequest,
@@ -181,6 +180,11 @@ async def _probe_caldav(values: Mapping[str, str]) -> None:
 
 
 async def _probe_browser(values: Mapping[str, str]) -> None:
+    try:
+        from playwright.async_api import async_playwright
+    except ModuleNotFoundError as exc:
+        raise ProviderError("browser_smoke_dependency_missing") from exc
+
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True)
         try:

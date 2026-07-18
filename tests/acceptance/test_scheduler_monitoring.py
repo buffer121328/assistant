@@ -10,10 +10,10 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from apps.scheduler.cron import CronScheduler, ScheduledTaskDefinition
-from apps.scheduler.heartbeat import run_v2_maintenance
-from assistant_api.config import Settings
-from assistant_api.models import (
+from scheduler.cron import CronScheduler, ScheduledTaskDefinition
+from scheduler.heartbeat import run_v2_maintenance
+from infrastructure.config import Settings
+from domain.models import (
     Base,
     ScheduledTaskRun,
     Task,
@@ -21,7 +21,7 @@ from assistant_api.models import (
     ToolLog,
     User,
 )
-from assistant_api.monitoring import (
+from workers.monitoring import (
     PENDING_COMPENSATION_TOOL_NAME,
     RUNNING_TIMEOUT_TOOL_NAME,
     compensate_overdue_pending_tasks,
@@ -311,12 +311,12 @@ async def test_04_cron_creates_one_pending_task_per_schedule_slot(
 
 
 def test_05_celery_beat_has_one_v2_maintenance_entry_for_existing_worker() -> None:
-    from assistant_api.worker import celery_app
+    from workers.worker import celery_app
 
     entries = [
         entry
         for entry in celery_app.conf.beat_schedule.values()
-        if entry["task"] == "assistant_api.run_v2_maintenance"
+        if entry["task"] == "workers.run_v2_maintenance"
     ]
 
     assert len(entries) == 1

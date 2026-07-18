@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from packages.evaluation.candidate_memory import evaluate_candidate_memory_fixture
+from evaluation.candidate_memory import evaluate_candidate_memory_fixture
 
 
 DATASET = Path(__file__).parent / "datasets/memory_candidates_v6_03.json"

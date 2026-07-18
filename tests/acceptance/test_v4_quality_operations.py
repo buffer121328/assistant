@@ -10,9 +10,9 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from assistant_api.models import Base, Task, User
-from packages.observability import NoopObservation
-from packages.quality import (
+from domain.models import Base, Task, User
+from observability import NoopObservation
+from agent.review import (
     JudgeDecision,
     JudgeRequest,
     QualityEvaluator,

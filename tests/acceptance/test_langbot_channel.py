@@ -11,10 +11,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from assistant_api.config import Settings
-from assistant_api.main import create_app
-from assistant_api.models import Base, PlatformAccount, ProcessedMessage, Task, TaskStatus, ToolLog, User
-from assistant_api.services import ResultDispatcher
+from infrastructure.config import Settings
+from app.main import create_app
+from domain.models import Base, PlatformAccount, ProcessedMessage, Task, TaskStatus, ToolLog, User
+from domain.services import ResultDispatcher
 
 
 WEBHOOK_PATH = "/api/webhooks/langbot"
@@ -43,7 +43,7 @@ async def sessionmaker(
 @pytest.fixture
 def client(sessionmaker: async_sessionmaker, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setattr(
-        "assistant_api.langbot.enqueue_task_execution",
+        "channels.langbot.service.enqueue_task_execution",
         lambda _task_id, **_kwargs: True,
     )
     settings = Settings(
@@ -455,7 +455,7 @@ async def test_10_supported_task_triggers_only_lightweight_handoff_before_ack(
         handoff_calls.append(task_id)
         return True
 
-    monkeypatch.setattr("assistant_api.langbot.enqueue_task_execution", record_handoff)
+    monkeypatch.setattr("channels.langbot.service.enqueue_task_execution", record_handoff)
 
     response = client.post(
         WEBHOOK_PATH,

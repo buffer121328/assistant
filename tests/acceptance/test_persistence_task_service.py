@@ -10,9 +10,9 @@ from sqlalchemy import inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session
 
-from assistant_api.main import create_app
-from assistant_api.models import Base, Task, TaskStatus, User
-from assistant_api.services import TaskService
+from app.main import create_app
+from domain.models import Base, Task, TaskStatus, User
+from domain.services import TaskService
 
 
 @pytest_asyncio.fixture

@@ -9,6 +9,17 @@
 - **Electron Web 桌面端**：V7 新桌面主线，当前已具备安全隔离工程骨架、三栏任务控制台、任务/事件/审批摘要、运行日志、审批/只读 diff 和验证式设置源码。
 - **Legacy Python 桌面源码**：历史 Qt GUI 源码保留在仓库中用于参考和旧测试，不再作为当前安装或启动入口。
 
+阶段状态索引：
+
+- **MVP 阶段 09**：真实 LangBot 通过 `POST /api/webhooks/langbot` 接入；Docker Compose 使用 `celery-worker` 和 `workers.worker:celery_app` 跑后台任务；`/learn` 通过 `search.web` 检索，`/daily` 通过 `search.web` 获取日常信息，`/office` 默认不执行搜索。
+- **V2-03 在 V2-02 规划层上**接入执行层；`ToolRegistry`、MCP Server、LangGraph 保持受控边界，高风险能力默认不启用。
+- **V2-04**：Celery Beat 负责维护扫描，`TaskService` 保持单实例任务入口；维护逻辑只处理 `waiting_approval`、超时 `running` 任务失败、`pending` 任务补偿和 `access_count`，不会自动修改用户数据。
+- **V2-05 评测与回归阶段**：`run_evaluation.py`、`core_commands.json`、`v2-05.json` 用于回归，不替代真实端到端验收。
+- **V3-08 已移除 Deepeval**，评测继续使用仓库内轻量数据集和 pytest。
+- **V6-00**：`run_memory_baseline.py` 生成 `adaptive_memory_v6_00.json` 基线；自适应记忆策略仍标记为尚未上线。
+- 后续外部能力边界：完整 MCP Gateway、深度浏览、真实 Office 文件生成、邮件/日历接入都必须经过工具治理、审批和验收测试。
+- 搜索配置使用 `TAVILY_BASE_URL` 和 `TAVILY_API_KEY`；质量命令保留 `uv run pytest`、`uv run ruff check .`、`uv run mypy .`。
+
 后端由 FastAPI、PostgreSQL、Redis、Celery 和 LangGraph Agent Runtime 组成。所有模型任务统一进入受控 LangGraph 执行层，工具调用经过 ToolRegistry、风险等级、审批和审计约束。
 
 ## 项目介绍
@@ -132,7 +143,7 @@
 
 ### 桌面端
 
-- V7 新主线：Electron Web 桌面端，源码在 `apps/desktop-web`
+- V7 新主线：Electron Web 桌面端，源码在 `frontend/desktop`
 - 本地通信：`/local/*` HTTP API + WebSocket 事件流
 - Legacy Python 桌面源码：历史 Qt GUI 代码仍保留，但当前依赖契约不再声明旧 Qt 安装入口
 
@@ -152,45 +163,52 @@
 
 ```text
 .
-├── apps/
-│   ├── api/assistant_api/
-│   │   ├── main.py                  # FastAPI 应用创建与运行态初始化
-│   │   ├── routes.py                # API 路由聚合入口与 /health
-│   │   ├── account_routes.py        # 账号连接
-│   │   ├── capability_routes.py     # 能力目录
-│   │   ├── channel_routes.py        # LangBot webhook、内部模型网关
-│   │   ├── conversation_routes.py   # 会话与消息
-│   │   ├── knowledge_routes.py      # 知识库
-│   │   ├── memory_routes.py         # Memory Center、policy、retrieval trace
-│   │   ├── notification_routes.py   # 提醒和桌面通知
-│   │   ├── skill_routes.py          # Skills 生命周期
-│   │   ├── task_routes.py           # 任务、事件流、审批
-│   │   ├── local_routes.py          # V7 Electron 本地 Agent API 契约
-│   │   ├── models.py                # SQLAlchemy ORM 模型
-│   │   ├── repositories.py          # 数据访问层
-│   │   ├── services.py              # 记忆、状态、分发等服务兼容入口
-│   │   ├── task_lifecycle.py        # 任务/审批服务与状态迁移
-│   │   ├── worker.py                # Celery app 与任务入队
-│   │   ├── worker_runtime.py        # worker 执行编排
-│   │   ├── agent_ports.py           # API 层对 Agent Harness ports 的适配器
-│   │   └── task_events.py           # 任务事件持久化与事件流记录
-│   ├── desktop/assistant_desktop/    # Legacy Qt 桌面端源码，当前不再声明安装入口
-│   ├── desktop-web/                  # V7 Electron + Vite + React 桌面端源码
-│   └── scheduler/                   # 定时维护、监控和心跳入口
-├── packages/
-│   ├── agent_harness/               # Agent Profile、Planning、Execution、Ports、Compat
-│   ├── capabilities/                # Capability Registry
-│   ├── evaluation/                  # 离线评测与发布门禁
-│   ├── integrations/                # 账号、凭据、SMTP/CalDAV/browser provider
-│   ├── knowledge/                   # 知识库导入、解析、检索
-│   ├── memory/                      # 记忆安全、召回、候选、consolidation、release
-│   ├── model_gateway/               # 模型网关、模型池、脱敏
-│   ├── notifications/               # 提醒、通知 outbox、投递租约
-│   ├── observability/               # 观测抽象
-│   ├── quality/                     # LLM Judge 与质量抽样
-│   └── tools/                       # 工具目录、注册、搜索、浏览器、个人工具、沙箱
-├── migrations/versions/             # Alembic 迁移
-├── prompts/skills/                  # 内置 Skills
+├── backend/                         # 后端工程边界
+│   ├── app/                          # FastAPI 应用壳
+│   │   ├── api/routers/              # 普通 HTTP APIRouter 模块
+│   │   ├── api/schemas/              # request / response DTO
+│   │   ├── api/router.py             # router 汇总和 `/health`
+│   │   ├── dependencies.py           # FastAPI Depends 入口
+│   │   ├── support/                  # errors、commands、stream decoder 等小型支撑模块
+│   │   └── main.py                   # create_app、lifespan、应用组装
+│   ├── channels/                     # 协议通道适配
+│   │   ├── langbot/                  # LangBot webhook、消息解析、结果回推
+│   │   └── desktop/                  # `/local/*`、WebSocket 事件流、审批桥接
+│   ├── domain/                       # SQLAlchemy models、业务服务、任务生命周期
+│   ├── infrastructure/               # config、database、auth、logging、observability
+│   ├── agent/                        # Agent 核心
+│   │   ├── core/                     # runner、LangGraph executor、loop、subagents
+│   │   ├── governance/               # routing 和 governed evolution
+│   │   ├── memory/                   # 记忆安全、召回、候选、consolidation、release
+│   │   ├── modeling/                 # agent model request/response 和 executor contract
+│   │   ├── planning/                 # profiles、planner、context、capability snapshot
+│   │   ├── review/                   # LLM Judge 与质量抽样
+│   │   ├── skill_management/         # Skill loader、managed store、lifecycle
+│   │   ├── tool_management/          # 工具目录、注册、搜索、浏览器、个人工具、沙箱
+│   │   └── ports.py                  # Agent 依赖端口
+│   ├── capabilities/                 # Capability Registry
+│   ├── evaluation/                   # 离线评测与发布门禁
+│   ├── features/                     # 四个核心 Agent 场景和未来场景的扩展入口
+│   │   ├── plan/                     # task_type=plan，计划和任务拆解
+│   │   ├── learn/                    # task_type=learn，学习、搜索、知识理解
+│   │   ├── daily/                    # task_type=daily，提醒、状态、日常助理
+│   │   └── office/                   # task_type=office，邮件、日历、浏览器、办公动作
+│   ├── integrations/                 # 账号、凭据、SMTP/CalDAV/browser provider
+│   ├── knowledge/                    # 知识库导入、解析、检索
+│   ├── model_gateway/                # 模型网关、模型池、脱敏
+│   ├── notifications/                # 提醒、通知 outbox、投递租约
+│   ├── observability/                # 观测抽象
+│   ├── resources/                    # 运行时资源
+│   │   ├── prompts/                  # prompt 模板
+│   │   └── skillpacks/               # 内置 Skill 包，每个目录包含 SKILL.md
+│   ├── migrations/versions/          # Alembic 迁移
+│   ├── config/                       # 后端示例配置
+│   ├── scheduler/                    # 定时维护、监控和心跳入口
+│   └── workers/                      # Celery app 和后台任务入口
+├── frontend/
+│   └── desktop/                      # V7 Electron + Vite + React 桌面端源码
+├── legacy/
+│   └── desktop-qt/                   # 历史 Qt 桌面端源码，当前不再声明安装入口
 ├── docs/                            # 方案、MVP/V2/V3/V4/V5/V6 文档
 ├── scripts/                         # 运维、评测、smoke 脚本
 ├── tests/                           # acceptance / evals / integration / unit
@@ -256,13 +274,16 @@
 
 建议步骤：
 
-1. 新增或调整 Agent Profile。
-2. 明确输入命令、任务类型和 workflow key。
-3. 声明该场景允许使用哪些工具。
-4. 如需要新知识，新增 Skill。
-5. 如需要新动作，新增 ToolSpec 并注册到 ToolRegistry。
-6. 补 acceptance 测试，覆盖用户可见行为。
-7. 更新 README 或对应 docs。
+1. 先创建 `backend/features/<task_type>/README.md`，写清用户场景、边界和验收行为。
+2. 在 `backend/features/<task_type>/definition.py` 声明 command、task type、profile、默认 skill 和允许工具。
+3. 如需要调整命令解析入口，改 `backend/app/support/commands.py`。
+4. 如需要调整 profile 适配逻辑，改 `backend/agent/planning/profiles.py`。
+5. 共享工具放在 `backend/agent/tool_management`。
+6. 如需要新的 prompt 模板，放到 `backend/resources/prompts`。
+7. 如需要新的 Skill 包，放到 `backend/resources/skillpacks/<skill_name>/SKILL.md`。
+8. 如需要新外部 provider，放到 `backend/integrations`。
+9. 补 `tests/acceptance`，覆盖用户可见行为。
+10. 更新 README 或对应 docs。
 
 ### 扩展一个新工具
 
@@ -282,7 +303,7 @@
 
 例如新增一个新的邮件、日历或文档 provider：
 
-1. 在 `packages/integrations` 中实现 provider。
+1. 在 `backend/integrations` 中实现 provider。
 2. 通过 `AccountConnectionService` 加密保存凭据。
 3. 在工具层暴露受控动作。
 4. 在 ToolRegistry 中设置风险等级和审批策略。
@@ -290,15 +311,23 @@
 
 ### 扩展一组新 API
 
-新增 API 时优先按领域创建新的 `*_routes.py`，不要继续膨胀 `routes.py`。
+新增 API 时优先按领域创建新的 router 模块，不要继续膨胀 `backend/app/api/router.py`。
 
 推荐结构：
 
 ```text
-apps/api/assistant_api/new_feature_routes.py
-packages/new_feature/
+backend/app/api/routers/new_feature.py
+backend/app/api/schemas/new_feature.py
+backend/new_feature/
 tests/acceptance/test_new_feature.py
 ```
+
+### Agent Harness 分层约定
+
+- 场景运行时默认配置在 `backend/features/<task_type>/definition.py`，`backend/agent/planning/profiles.py` 只负责把 feature definition 适配成 AgentProfile；当前保留 `v2.planner`、`v2.researcher` 等 profile 名称。
+- 规划层负责把任务拆成受控步骤，执行层只按 plan 和 allowed tools 调用边界能力。
+- LangBot 通道代码在 `backend/channels/langbot`，桌面本地 `/local/*` 和 WebSocket 事件流代码在 `backend/channels/desktop`。
+- 内置 Skills 从 `backend/resources/skillpacks/*/SKILL.md` 读取；新增 Skill 或工具声明后不会自动启用，必须经过 profile、工具目录和验收测试显式接入。
 
 ## 项目优势
 
@@ -422,27 +451,27 @@ uv run alembic upgrade head
 启动 API：
 
 ```bash
-uv run uvicorn --app-dir apps/api assistant_api.main:app --reload
+uv run uvicorn --app-dir backend app.main:app --reload
 ```
 
 启动 Celery worker：
 
 ```bash
-PYTHONPATH=apps/api:. uv run celery -A assistant_api.worker:celery_app worker --loglevel=INFO
+PYTHONPATH=backend:. uv run celery -A workers.worker:celery_app worker --loglevel=INFO
 ```
 
 启动单实例 Beat：
 
 ```bash
-PYTHONPATH=apps/api:. uv run celery -A assistant_api.worker:celery_app beat --loglevel=INFO
+PYTHONPATH=backend:. uv run celery -A workers.worker:celery_app beat --loglevel=INFO
 ```
 
 ### 4. 启动 Electron 桌面端
 
-V7 的新桌面主线是 Electron Web 桌面端。当前工程位于 `apps/desktop-web`，开发模式需要先安装 Node 依赖，并确保 Python API 已按前文启动。
+V7 的新桌面主线是 Electron Web 桌面端。当前工程位于 `frontend/desktop`，开发模式需要先安装 Node 依赖，并确保 Python API 已按前文启动。
 
 ```bash
-cd apps/desktop-web
+cd frontend/desktop
 npm ci
 npm run dev
 ```
@@ -461,7 +490,7 @@ npm run dev
 V7-06 采用 **external installed mode**：Electron 安装包只包含桌面壳和 Web UI，不内置 Python runtime、`.venv`、PostgreSQL、Redis、Playwright、Office 依赖、历史 Qt 桌面依赖或本地模型。用户需要单独启动 Python Agent Server。
 
 ```bash
-cd apps/desktop-web
+cd frontend/desktop
 npm ci
 npm run build
 npm run dist:dir
@@ -479,7 +508,7 @@ npm run dist
 uv run python scripts/ops/desktop_web_release_check.py
 ```
 
-打包配置见 `apps/desktop-web/electron-builder.json`，发布记录见 `apps/desktop-web/RELEASE.md`。当前尚未在本工作区实际生成安装包，因此包体、冷启动耗时和空闲内存仍记录为 `not measured`，不能声明生产自动更新或跨平台签名已完成。
+打包配置见 `frontend/desktop/electron-builder.json`，发布记录见 `frontend/desktop/RELEASE.md`。当前尚未在本工作区实际生成安装包，因此包体、冷启动耗时和空闲内存仍记录为 `not measured`，不能声明生产自动更新或跨平台签名已完成。
 
 ### 6. 常用验证命令
 

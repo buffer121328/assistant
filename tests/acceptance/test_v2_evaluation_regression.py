@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from packages.evaluation import (
+from evaluation import (
     DatasetSecurityError,
     DeterministicRubricMetric,
     evaluate_dataset,

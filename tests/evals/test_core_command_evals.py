@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from packages.evaluation import (
+from evaluation import (
     DeterministicRubricMetric,
     EvaluationCase,
     load_cases,

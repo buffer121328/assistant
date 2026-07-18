@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import NullPool
 
-from assistant_api.models import (
+from domain.models import (
     Base,
     Memory,
     MemoryFeedback,
@@ -18,8 +18,8 @@ from assistant_api.models import (
     MemoryLink,
     User,
 )
-from assistant_api.services import ForbiddenMemoryContentError, MemoryService
-from packages.memory.semantic import SemanticMemoryResult
+from domain.services import ForbiddenMemoryContentError, MemoryService
+from agent.memory.semantic import SemanticMemoryResult
 
 
 class FailingSemanticMemory:
@@ -247,7 +247,7 @@ async def test_enabled_semantic_failure_creates_one_pending_outbox(
 ) -> None:
     owner = await create_user(sessionmaker, "owner")
     async with sessionmaker() as session:
-        from assistant_api.models import Task, TaskStatus
+        from domain.models import Task, TaskStatus
 
         task = Task(
             user_id=owner.id,
@@ -279,7 +279,7 @@ async def test_disabled_semantic_memory_stays_sql_only(
 ) -> None:
     owner = await create_user(sessionmaker, "owner")
     async with sessionmaker() as session:
-        from assistant_api.models import Task, TaskStatus
+        from domain.models import Task, TaskStatus
 
         task = Task(
             user_id=owner.id,
@@ -301,7 +301,7 @@ def test_v6_migration_has_linear_upgrade_and_downgrade_contract() -> None:
     import importlib
 
     migration = importlib.import_module(
-        "migrations.versions.202607150004_v6_memory_contract_safety"
+        "backend.migrations.versions.202607150004_v6_memory_contract_safety"
     )
     assert migration.revision == "202607150004"
     assert migration.down_revision == "202607150003"

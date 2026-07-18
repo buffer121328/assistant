@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
-from assistant_api.main import create_app
-from packages.capabilities import (
+from app.main import create_app
+from capabilities import (
     CapabilityDisabledError,
     CapabilityKind,
     CapabilityLoaderMissingError,
@@ -19,7 +19,7 @@ from packages.capabilities import (
     build_default_registry,
     discover_skill_metadata,
 )
-from packages.tools import (
+from agent.tool_management import (
     ToolInvocation,
     ToolNotAllowedError,
     ToolRegistry,
@@ -49,7 +49,7 @@ def metadata(
 
 
 def test_default_catalog_maps_current_four_capability_kinds() -> None:
-    registry = build_default_registry(ROOT / "prompts" / "skills")
+    registry = build_default_registry(ROOT / "backend" / "resources" / "skillpacks")
 
     items = registry.list()
     ids = [item.id for item in items]

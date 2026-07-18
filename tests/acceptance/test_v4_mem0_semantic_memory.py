@@ -9,9 +9,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from assistant_api.models import Base, Memory, Task, User
-from assistant_api.services import MemoryService
-from packages.memory import SemanticMemoryResult, load_memory_summary
+from domain.models import Base, Memory, Task, User
+from domain.services import MemoryService
+from agent.memory import SemanticMemoryResult, load_memory_summary
 
 
 @pytest_asyncio.fixture

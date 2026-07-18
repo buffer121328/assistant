@@ -15,7 +15,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from assistant_api.models import (
+from domain.models import (
     Base,
     DeliveryAttempt,
     NotificationOutbox,
@@ -23,10 +23,10 @@ from assistant_api.models import (
     Task,
     User,
 )
-from assistant_api.config import Settings
-from assistant_api.langbot import LangBotResultClient
-from assistant_api.main import create_app
-from packages.notifications import NotificationError, ReminderService, deliver_langbot_due
+from infrastructure.config import Settings
+from channels.langbot.service import LangBotResultClient
+from app.main import create_app
+from notifications import NotificationError, ReminderService, deliver_langbot_due
 
 
 @pytest_asyncio.fixture
@@ -409,6 +409,8 @@ def test_desktop_reminder_client_dialog_and_notification_ack_contract(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
+    pytest.importorskip("PySide6.QtCore")
+    pytest.importorskip("PySide6.QtWidgets")
     from PySide6.QtCore import QSettings
     from PySide6.QtWidgets import QApplication
 

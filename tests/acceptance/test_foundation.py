@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from assistant_api.config import load_settings
-from assistant_api.errors import AppError
-from assistant_api.logging import configure_logging
-from assistant_api.main import create_app
+from infrastructure.config import load_settings
+from app.support.errors import AppError
+from infrastructure.logging import configure_logging
+from app.main import create_app
 
 
 EXTERNAL_ENV_VARS = (

@@ -23,8 +23,8 @@ def main() -> int:
     if str(ROOT) not in sys.path:
         sys.path.insert(0, str(ROOT))
 
-    from packages.evaluation import EvaluationDataError
-    from packages.evaluation.memory_release import evaluate_memory_release_fixture
+    from evaluation import EvaluationDataError
+    from evaluation.memory_release import evaluate_memory_release_fixture
 
     try:
         args = parse_args()

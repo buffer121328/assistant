@@ -10,15 +10,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from assistant_api.models import (
+from domain.models import (
     Base,
     MemoryRetrievalTrace,
     MemoryRetrievalTraceItem,
     User,
 )
-from assistant_api.services import MemoryService
-from packages.memory.retrieval import RetrievalWeights, retrieve_memories
-from packages.memory.semantic import SemanticMemoryResult
+from domain.services import MemoryService
+from agent.memory.retrieval import RetrievalWeights, retrieve_memories
+from agent.memory.semantic import SemanticMemoryResult
 
 
 class FakeSemantic:
@@ -155,7 +155,7 @@ def test_retrieval_migration_and_backup_contract() -> None:
     from scripts.ops.db_common import COUNTED_TABLES
 
     migration = importlib.import_module(
-        "migrations.versions.202607160002_v6_hybrid_memory_retrieval"
+        "backend.migrations.versions.202607160002_v6_hybrid_memory_retrieval"
     )
     assert migration.revision == "202607160002"
     assert migration.down_revision == "202607160001"
@@ -169,9 +169,9 @@ async def test_retrieval_api_is_owner_scoped_and_returns_safe_metadata(
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> None:
     from fastapi.testclient import TestClient
-    from assistant_api.config import Settings
-    from assistant_api.main import create_app
-    from assistant_api.models import Task, TaskStatus
+    from infrastructure.config import Settings
+    from app.main import create_app
+    from domain.models import Task, TaskStatus
 
     owner = await user(sessionmaker, "owner")
     other = await user(sessionmaker, "other")

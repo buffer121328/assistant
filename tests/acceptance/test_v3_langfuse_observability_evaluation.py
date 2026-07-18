@@ -6,15 +6,15 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from assistant_api.config import Settings
-from assistant_api.main import create_app
-from assistant_api.observability import (
+from infrastructure.config import Settings
+from app.main import create_app
+from infrastructure.observability import (
     LangfuseObservability,
     build_observability,
 )
-from packages.evaluation import run_langfuse_experiment
-from packages.evaluation.loader import DatasetSecurityError
-from packages.observability import NoopObservability, sanitize_telemetry_value
+from evaluation import run_langfuse_experiment
+from evaluation.loader import DatasetSecurityError
+from observability import NoopObservability, sanitize_telemetry_value
 
 
 class FakeSdkObservation:

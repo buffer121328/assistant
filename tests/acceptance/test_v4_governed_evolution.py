@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from assistant_api.models import (
+from domain.models import (
     Approval,
     ApprovalStatus,
     ApprovalType,
@@ -22,12 +22,12 @@ from assistant_api.models import (
     Task,
     User,
 )
-from packages.agent_harness.governed_evolution import (
+from agent.governance.governed_evolution import (
     EvolutionStaleError,
     EvolutionValidationError,
     GovernedEvolutionService,
 )
-from packages.agent_harness.skill_store import (
+from agent.skill_management.store import (
     ManagedSkillNotFoundError,
     ManagedSkillStore,
 )

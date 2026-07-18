@@ -1,22 +1,29 @@
 from __future__ import annotations
 
+# ruff: noqa: E402
+
 from collections.abc import AsyncIterator
 from hashlib import sha256
 from pathlib import Path
 
-from docx import Document
 import httpx
-from openpyxl import Workbook  # type: ignore[import-untyped]
 import pytest
 import pytest_asyncio
-from pptx import Presentation
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from assistant_api.models import (
+docx_module = pytest.importorskip("docx")
+openpyxl_module = pytest.importorskip("openpyxl")
+pptx_module = pytest.importorskip("pptx")
+
+Document = docx_module.Document
+Workbook = openpyxl_module.Workbook
+Presentation = pptx_module.Presentation
+
+from domain.models import (
     Base,
     ImportAudit,
     KnowledgeChunk,
@@ -24,12 +31,12 @@ from assistant_api.models import (
     User,
     Task,
 )
-from assistant_api.config import Settings
-from assistant_api.main import create_app
-from packages.knowledge import KnowledgeError, KnowledgeService, SUPPORTED_MEDIA_TYPES
-from packages.knowledge.extractors import PARSER_VERSION
-from packages.tools import ToolInvocation, ToolRegistry
-from packages.tools.knowledge import (
+from infrastructure.config import Settings
+from app.main import create_app
+from knowledge import KnowledgeError, KnowledgeService, SUPPORTED_MEDIA_TYPES
+from knowledge.extractors import PARSER_VERSION
+from agent.tool_management import ToolInvocation, ToolRegistry
+from agent.tool_management.knowledge import (
     build_knowledge_tool_descriptor,
     build_knowledge_tool_spec,
 )
@@ -316,6 +323,7 @@ async def test_knowledge_api_and_tool_return_sourced_results_without_raw_paths(
 
 
 def test_desktop_knowledge_client_and_dialog_use_safe_file_contract(tmp_path: Path) -> None:
+    pytest.importorskip("PySide6.QtWidgets")
     from PySide6.QtWidgets import QApplication
 
     from assistant_desktop.client import DesktopApiClient

@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from packages.integrations import CalDavProvider, ProviderError, SmtpProvider
+from integrations import CalDavProvider, ProviderError, SmtpProvider
 
 
 class FakeSmtpSession:

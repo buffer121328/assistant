@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from packages.evaluation import DatasetSecurityError, EvaluationDataError
-from packages.evaluation.memory_baseline import load_memory_baseline_fixture
+from evaluation import DatasetSecurityError, EvaluationDataError
+from evaluation.memory_baseline import load_memory_baseline_fixture
 
 
 ROOT = Path(__file__).resolve().parents[2]

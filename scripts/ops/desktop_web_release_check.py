@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-DESKTOP_ROOT = ROOT / "apps" / "desktop-web"
+DESKTOP_ROOT = ROOT / "frontend" / "desktop"
 
 REQUIRED_EXCLUDES = {
     "!**/.venv/**",

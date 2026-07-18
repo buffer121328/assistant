@@ -13,19 +13,19 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from assistant_api.config import Settings
-from assistant_api.main import create_app
-from assistant_api.models import Base, Memory, Task, TaskStatus, ToolLog, User
-from assistant_api.worker_runtime import execute_task_by_id
-from packages.agent_harness import (
+from infrastructure.config import Settings
+from app.main import create_app
+from domain.models import Base, Memory, Task, TaskStatus, ToolLog, User
+from workers.runtime import execute_task_by_id
+from agent import (
     AgentDecision,
     AgentModelRequest,
     ReviewDecision,
     WorkPlan,
     WorkPlanStep,
 )
-from packages.model_gateway.deepseek import DeepSeekAdapter
-from packages.tools import (
+from model_gateway.deepseek import DeepSeekAdapter
+from agent.tool_management import (
     NormalizedSearchSource,
     SearchWebTool,
     TavilyClientError,

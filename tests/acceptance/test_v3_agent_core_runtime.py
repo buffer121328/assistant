@@ -19,17 +19,17 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.pool import NullPool
 
-from assistant_api.agent_model import AgentGatewayModel
-from assistant_api.checkpoints import (
+from model_gateway.agent_model import AgentGatewayModel
+from infrastructure.checkpoints import (
     AgentCheckpointConfigurationError,
     build_checkpoint_serializer,
     normalize_checkpoint_database_url,
     open_agent_checkpointer,
 )
-from assistant_api.config import Settings
-from assistant_api.models import AgentRun, Approval, Base, ModelLog, Task, ToolLog, User
-from assistant_api.worker_runtime import execute_task_by_id
-from packages.agent_harness import (
+from infrastructure.config import Settings
+from domain.models import AgentRun, Approval, Base, ModelLog, Task, ToolLog, User
+from workers.runtime import execute_task_by_id
+from agent import (
     AgentDecision,
     AgentModelRequest,
     AgentRunInput,
@@ -40,14 +40,14 @@ from packages.agent_harness import (
     TaskContext,
     WorkPlan,
 )
-from packages.agent_harness.agent_model import (
+from agent.modeling.agent_model import (
     AgentDecisionError,
     build_agent_model_request,
     parse_agent_decision,
 )
-from packages.model_gateway import GatewayResult, GatewayUsage
-from packages.observability import NoopObservation
-from packages.tools import (
+from model_gateway import GatewayResult, GatewayUsage
+from observability import NoopObservation
+from agent.tool_management import (
     ToolCatalog,
     ToolDescriptor,
     ToolInvocation,

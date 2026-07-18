@@ -6,10 +6,10 @@ import pytest_asyncio
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
-from assistant_api.config import Settings
-from assistant_api.main import create_app
-from assistant_api.models import Base, User
-from assistant_api.services import MemoryService
+from infrastructure.config import Settings
+from app.main import create_app
+from domain.models import Base, User
+from domain.services import MemoryService
 
 
 @pytest_asyncio.fixture
@@ -107,7 +107,7 @@ async def test_memory_actions_refresh_server_state_only_after_success(
 async def test_memory_detail_exposes_owned_links_feedback_usage_without_foreign_ids(
     client: TestClient, sessionmaker: async_sessionmaker[AsyncSession]
 ) -> None:
-    from assistant_api.models import (
+    from domain.models import (
         MemoryLink,
         MemoryRetrievalTrace,
         MemoryRetrievalTraceItem,
@@ -207,7 +207,7 @@ async def test_complete_memory_actions_create_policy_retrieval_and_digest_are_ow
 ) -> None:
     from datetime import UTC, datetime, timedelta
 
-    from assistant_api.models import (
+    from domain.models import (
         Memory,
         MemoryConsolidationDigest,
         MemoryIndexOutbox,
@@ -362,8 +362,8 @@ async def test_complete_memory_actions_create_policy_retrieval_and_digest_are_ow
 async def test_langbot_aliases_why_policy_and_sensitive_list_are_safe(
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> None:
-    from assistant_api.memory_candidates import MemoryPolicyService
-    from assistant_api.models import MemoryRetrievalTrace, Task, TaskStatus
+    from domain.memory_candidates import MemoryPolicyService
+    from domain.models import MemoryRetrievalTrace, Task, TaskStatus
 
     owner, other = await users(sessionmaker)
     async with sessionmaker() as session:

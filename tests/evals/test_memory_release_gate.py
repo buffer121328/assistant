@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from packages.evaluation import EvaluationDataError
-from packages.evaluation.memory_release import evaluate_memory_release_fixture
+from evaluation import EvaluationDataError
+from evaluation.memory_release import evaluate_memory_release_fixture
 
 
 ROOT = Path(__file__).resolve().parents[2]

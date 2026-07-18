@@ -13,11 +13,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from assistant_api.main import create_app
-from assistant_api.models import Approval, Base, Task, TaskStatus, ToolLog, User
-from assistant_api.services import TaskService
-from packages.agent_harness import HumanApprovalRequest
-from packages.tools import (
+from app.main import create_app
+from domain.models import Approval, Base, Task, TaskStatus, ToolLog, User
+from domain.services import TaskService
+from agent import HumanApprovalRequest
+from agent.tool_management import (
     ToolApprovalRequiredError,
     ToolInvocation,
     ToolRegistry,
@@ -92,7 +92,7 @@ async def test_interactive_submit_enqueues_without_changing_create_only_api(
         queued_task_ids.append(task_id)
         return True
 
-    monkeypatch.setattr("assistant_api.routes.enqueue_task_execution", fake_enqueue)
+    monkeypatch.setattr("app.api.router.enqueue_task_execution", fake_enqueue)
     payload = {
         "user_id": user_id,
         "platform": "desktop",
@@ -119,7 +119,7 @@ async def test_interactive_submit_reports_unavailable_queue(
 ) -> None:
     user_id = await create_user(sessionmaker)
     monkeypatch.setattr(
-        "assistant_api.routes.enqueue_task_execution",
+        "app.api.router.enqueue_task_execution",
         lambda task_id, *, runtime_settings=None: False,
     )
 
@@ -169,7 +169,7 @@ async def test_approval_is_owned_audited_idempotent_and_resumes_once(
         queued_task_ids.append(task_id)
         return True
 
-    monkeypatch.setattr("assistant_api.routes.enqueue_task_execution", fake_enqueue)
+    monkeypatch.setattr("app.api.router.enqueue_task_execution", fake_enqueue)
     decision_url = f"/api/tasks/{task.id}/approvals/{approvals[0].id}/decision"
 
     with create_test_client(sessionmaker) as client:
@@ -275,7 +275,7 @@ async def test_rejected_approval_cancels_without_enqueue(
     assert approval is not None
     queued_task_ids: list[str] = []
     monkeypatch.setattr(
-        "assistant_api.routes.enqueue_task_execution",
+        "app.api.router.enqueue_task_execution",
         lambda task_id, *, runtime_settings=None: queued_task_ids.append(task_id),
     )
 
@@ -417,7 +417,8 @@ def test_pyside_window_is_compact_native_and_contains_required_controls(
     tmp_path: Path,
 ) -> None:
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    pytest.importorskip("PySide6")
+    pytest.importorskip("PySide6.QtCore")
+    pytest.importorskip("PySide6.QtWidgets")
     from PySide6.QtCore import QSettings
     from PySide6.QtWidgets import QApplication, QComboBox, QSystemTrayIcon, QWidget
 

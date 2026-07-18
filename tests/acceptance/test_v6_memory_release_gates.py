@@ -11,21 +11,21 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from assistant_api.memory_release import (
+from domain.memory_release import (
     MemoryReleaseError,
     MemoryReleaseService,
     default_policy_config,
 )
-from assistant_api.models import (
+from domain.models import (
     Base,
     MemoryEffectiveness,
     MemoryReleaseReport,
     MemoryRetrievalPolicyVersion,
     User,
 )
-from assistant_api.services import MemoryService, TaskServiceError
-from packages.evaluation.memory_release import evaluate_memory_release_fixture
-from packages.memory.context import load_memory_context
+from domain.services import MemoryService, TaskServiceError
+from evaluation.memory_release import evaluate_memory_release_fixture
+from agent.memory.context import load_memory_context
 
 
 DATASET = Path(__file__).parents[1] / "evals/datasets/memory_release_v6_07.json"
@@ -250,7 +250,7 @@ def test_v6_release_migration_and_backup_contract() -> None:
     from scripts.ops.db_common import COUNTED_TABLES
 
     migration = importlib.import_module(
-        "migrations.versions.202607160004_v6_adaptive_memory_release"
+        "backend.migrations.versions.202607160004_v6_adaptive_memory_release"
     )
     assert migration.revision == "202607160004"
     assert migration.down_revision == "202607160003"

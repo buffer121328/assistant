@@ -8,14 +8,14 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from assistant_api.models import Base, Task, User
-from packages.agent_harness.agent_model import AgentDecisionError, parse_agent_decision
-from packages.agent_harness.subagents import (
+from domain.models import Base, Task, User
+from agent.modeling.agent_model import AgentDecisionError, parse_agent_decision
+from agent.core.subagents import (
     SubAgentCoordinator,
     SubAgentRequest,
     SubAgentResult,
 )
-from packages.tools import ToolInvocation, ToolNotAllowedError, ToolRegistry, ToolSpec
+from agent.tool_management import ToolInvocation, ToolNotAllowedError, ToolRegistry, ToolSpec
 
 
 @pytest_asyncio.fixture

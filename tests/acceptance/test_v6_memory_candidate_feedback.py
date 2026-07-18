@@ -9,10 +9,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from assistant_api.memory_candidates import MemoryCandidatePipeline, MemoryPolicyService
-from assistant_api.models import Base, Memory, MemoryPolicy, User
-from assistant_api.services import MemoryService
-from packages.memory.candidates import CandidateDraft, SourceEvent
+from domain.memory_candidates import MemoryCandidatePipeline, MemoryPolicyService
+from domain.models import Base, Memory, MemoryPolicy, User
+from domain.services import MemoryService
+from agent.memory.candidates import CandidateDraft, SourceEvent
 
 
 class StaticExtractor:
@@ -256,9 +256,9 @@ async def test_never_remember_policy_is_owned_and_extractor_failure_is_safe(
 async def test_fast_pool_adapter_is_strict_and_success_hook_failure_cannot_flip_task(
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> None:
-    from assistant_api.models import Task, TaskStatus
-    from assistant_api.services import TaskService
-    from packages.memory.candidates import FastPoolMemoryCandidateExtractor
+    from domain.models import Task, TaskStatus
+    from domain.services import TaskService
+    from agent.memory.candidates import FastPoolMemoryCandidateExtractor
 
     class Client:
         async def extract_candidate(self, payload: dict[str, object]) -> object:
@@ -313,7 +313,7 @@ async def test_fast_pool_adapter_is_strict_and_success_hook_failure_cannot_flip_
 async def test_memory_candidate_commands_close_confirmation_and_feedback_loop(
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> None:
-    from assistant_api.models import MemoryFeedback, Task, TaskStatus
+    from domain.models import MemoryFeedback, Task, TaskStatus
 
     user = await create_user(sessionmaker, "owner")
     async with sessionmaker() as session:
@@ -366,7 +366,7 @@ def test_v6_candidate_migration_and_backup_contract() -> None:
     from scripts.ops.db_common import COUNTED_TABLES
 
     migration = importlib.import_module(
-        "migrations.versions.202607160001_v6_memory_candidate_feedback"
+        "backend.migrations.versions.202607160001_v6_memory_candidate_feedback"
     )
     assert migration.revision == "202607160001"
     assert migration.down_revision == "202607150005"

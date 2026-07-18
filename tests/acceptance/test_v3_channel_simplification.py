@@ -5,8 +5,8 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from assistant_api.config import Settings
-from assistant_api.main import create_app
+from infrastructure.config import Settings
+from app.main import create_app
 
 
 ROOT = Path(__file__).parents[2]
@@ -38,10 +38,10 @@ def test_runtime_settings_only_expose_supported_channel_configuration() -> None:
 
 
 def test_langbot_command_mapping_has_no_removed_channel_import() -> None:
-    langbot_source = (ROOT / "apps/api/assistant_api/langbot.py").read_text(
+    langbot_source = (ROOT / "backend/channels/langbot/service.py").read_text(
         encoding="utf-8"
     )
-    command_source = (ROOT / "apps/api/assistant_api/commands.py").read_text(
+    command_source = (ROOT / "backend/app/support/commands.py").read_text(
         encoding="utf-8"
     )
     imported_modules = {
@@ -58,8 +58,8 @@ def test_langbot_command_mapping_has_no_removed_channel_import() -> None:
 def test_removed_product_source_and_docker_build_are_absent() -> None:
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
 
-    assert not (ROOT / "frontend").exists()
+    assert (ROOT / "frontend" / "desktop").is_dir()
     assert not (ROOT / "cli").exists()
     assert "node:" not in dockerfile
-    assert "frontend" not in dockerfile
+    assert "frontend/desktop" not in dockerfile
     assert "COPY cli" not in dockerfile

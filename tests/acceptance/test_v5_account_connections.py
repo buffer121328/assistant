@@ -13,9 +13,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from assistant_api.config import Settings
-from assistant_api.main import create_app
-from assistant_api.models import (
+from infrastructure.config import Settings
+from app.main import create_app
+from domain.models import (
     AccountConnection,
     Approval,
     Base,
@@ -24,21 +24,21 @@ from assistant_api.models import (
     ToolLog,
     User,
 )
-from packages.integrations import (
+from integrations import (
     AccountBackedProviders,
     CredentialCipher,
     DefaultConnectionTester,
     ProviderError,
     SmtpProvider,
 )
-from packages.tools import (
+from agent.tool_management import (
     ToolApprovalRequiredError,
     ToolInvocation,
     ToolRegistry,
     ToolSpec,
     external_approval_binding,
 )
-from packages.tools.personal import build_personal_tool_descriptors
+from agent.tool_management.personal import build_personal_tool_descriptors
 
 MASTER_KEY = "test-account-master-key-with-more-than-32-chars"
 
@@ -387,6 +387,7 @@ async def test_account_backed_provider_requires_active_owned_connection(
 def test_desktop_account_client_and_dialog_never_rehydrate_credentials(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    pytest.importorskip("PySide6.QtWidgets")
     from PySide6.QtWidgets import QApplication
 
     from assistant_desktop.account_dialog import AccountManagerDialog

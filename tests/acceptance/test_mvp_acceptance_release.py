@@ -11,8 +11,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from assistant_api.config import Settings
-from assistant_api.models import (
+from infrastructure.config import Settings
+from domain.models import (
     Base,
     ProcessedMessage,
     Task,
@@ -20,13 +20,13 @@ from assistant_api.models import (
     ToolLog,
     User,
 )
-from assistant_api.worker_runtime import execute_task_by_id
-from packages.agent_harness import (
+from workers.runtime import execute_task_by_id
+from agent import (
     AgentRunInput,
     LangGraphExecutionResult,
 )
-from packages.model_gateway.deepseek import DeepSeekAdapter
-from packages.tools import TavilySearchRequest
+from model_gateway.deepseek import DeepSeekAdapter
+from agent.tool_management import TavilySearchRequest
 
 
 TAVILY_API_KEY = "fake-tavily-api-key"
@@ -485,7 +485,7 @@ def test_05_readme_documents_phase09_state() -> None:
     assert "MVP 阶段 08 Acceptance Release" not in readme
     assert "docker compose up --build" in readme
     assert "celery-worker" in readme
-    assert "assistant_api.worker:celery_app" in readme
+    assert "workers.worker:celery_app" in readme
     assert "POST /api/webhooks/langbot" in readme
     assert "LangBot" in readme
     assert "waiting_approval" in readme

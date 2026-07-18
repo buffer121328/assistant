@@ -11,16 +11,16 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from assistant_api.models import Base, Memory, Task, TaskStatus, ToolLog, User
-from assistant_api.services import MemoryService
-from packages.agent_harness.capabilities import CapabilitiesBuilder, ToolCapability
-from packages.agent_harness.context import ContextBuilder
-from packages.agent_harness.evolution import (
+from domain.models import Base, Memory, Task, TaskStatus, ToolLog, User
+from domain.services import MemoryService
+from agent.planning.capabilities import CapabilitiesBuilder, ToolCapability
+from agent.planning.context import ContextBuilder
+from agent.governance.evolution import (
     EVOLUTION_SUGGESTION_TOOL_NAME,
     BehaviorEvolutionService,
 )
-from packages.memory.context import load_memory_summary
-from packages.memory.maintenance import maintain_memories
+from agent.memory.context import load_memory_summary
+from agent.memory.maintenance import maintain_memories
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -217,7 +217,7 @@ async def test_04_evolution_suggestion_is_safe_deduplicated_and_waits_for_approv
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> None:
     now = datetime(2026, 7, 13, 12, 0, tzinfo=UTC)
-    prompt_files = sorted((ROOT / "prompts" / "skills").rglob("*"))
+    prompt_files = sorted((ROOT / "backend" / "skills").rglob("*"))
     before = {path: path.read_bytes() for path in prompt_files if path.is_file()}
 
     async with sessionmaker() as session:
@@ -325,7 +325,7 @@ def test_05_v2_04_runtime_and_readme_match_the_reviewable_boundary() -> None:
     assert beat_services[0]["command"][:4] == [
         "celery",
         "-A",
-        "assistant_api.worker:celery_app",
+        "workers.worker:celery_app",
         "beat",
     ]
     assert "V2-04" in readme

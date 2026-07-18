@@ -9,12 +9,12 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from assistant_api.conversation_memory import (
+from domain.conversation_memory import (
     ConversationMemoryService,
     SummaryDraft,
 )
-from assistant_api.conversations import ConversationError, ConversationService
-from assistant_api.models import Base, ConversationMessage, ConversationSummary, User
+from domain.conversations import ConversationError, ConversationService
+from domain.models import Base, ConversationMessage, ConversationSummary, User
 
 
 class SuccessfulSummarizer:
@@ -212,7 +212,7 @@ def test_v6_short_term_migration_is_linear_and_reversible() -> None:
     import importlib
 
     migration = importlib.import_module(
-        "migrations.versions.202607150005_v6_short_term_memory"
+        "backend.migrations.versions.202607150005_v6_short_term_memory"
     )
     assert migration.revision == "202607150005"
     assert migration.down_revision == "202607150004"

@@ -1,7 +1,7 @@
 from pathlib import Path
 import pytest
-from assistant_api.models import Memory, MemoryLink
-from packages.memory.export import export_memory_notes
+from domain.models import Memory, MemoryLink
+from agent.memory.export import export_memory_notes
 
 
 def test_obsidian_export_is_safe_redacted_linked_and_idempotent(tmp_path: Path) -> None:

@@ -7,13 +7,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from packages.agent_harness import (
+from agent import (
     DefaultPlanningLayer,
     DefaultProfileSelector,
     TaskContext,
 )
-from packages.capabilities import CapabilityKind, build_default_registry
-from packages.tools import (
+from capabilities import CapabilityKind, build_default_registry
+from agent.tool_management import (
     MCPToolDescription,
     MCPToolSource,
     StaticToolSource,
@@ -290,7 +290,7 @@ def test_capability_catalog_projects_one_snapshot_without_loading_handlers() -> 
     )
 
     registry = build_default_registry(
-        ROOT / "prompts" / "skills",
+        ROOT / "backend" / "skills",
         tool_snapshot=snapshot,
     )
     tools = registry.list(kind=CapabilityKind.TOOL)

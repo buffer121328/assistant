@@ -11,9 +11,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from assistant_api.models import Base, Memory, Task, TaskStatus, User
-from assistant_api.services import MemoryService, StatusService
-from packages.agent_harness import AgentHarness, ExecutionOutcome
+from domain.models import Base, Memory, Task, TaskStatus, User
+from domain.services import MemoryService, StatusService
+from agent import AgentHarness, ExecutionOutcome
 
 
 @pytest_asyncio.fixture

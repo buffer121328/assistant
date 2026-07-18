@@ -14,9 +14,9 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.pool import NullPool
 
-from assistant_api.models import Approval, ApprovalType, Base, Task, User
-from assistant_api.services import TaskService
-from packages.agent_harness import (
+from domain.models import Approval, ApprovalType, Base, Task, User
+from domain.services import TaskService
+from agent import (
     AgentDecision,
     AgentModelRequest,
     AgentRunInput,
@@ -32,9 +32,9 @@ from packages.agent_harness import (
     parse_review_decision,
     parse_work_plan,
 )
-from packages.agent_harness.capabilities import CapabilitySnapshot
-from packages.agent_harness.context import ContextBuilder
-from packages.tools import (
+from agent.planning.capabilities import CapabilitySnapshot
+from agent.planning.context import ContextBuilder
+from agent.tool_management import (
     ToolApprovalRequiredError,
     ToolCatalog,
     ToolDescriptor,

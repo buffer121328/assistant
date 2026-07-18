@@ -8,7 +8,7 @@ from typing import Any, cast
 import caldav
 import pytest
 
-from packages.integrations import CalDavProvider, SmtpProvider
+from integrations import CalDavProvider, SmtpProvider
 from tests.integration.protocol_servers import caldav_server, smtp_server
 
 
@@ -19,7 +19,7 @@ async def test_smtp_provider_against_local_starttls_auth_server(
     with smtp_server(tmp_path) as (port, certificate, sink):
         create_context = ssl.create_default_context
         monkeypatch.setattr(
-            "packages.integrations.providers.ssl.create_default_context",
+            "integrations.providers.ssl.create_default_context",
             lambda: create_context(cafile=str(certificate)),
         )
         provider = SmtpProvider()

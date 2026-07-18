@@ -10,21 +10,21 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from assistant_api.config import Settings
-from assistant_api.models import Base, ModelLog, Task, TaskStatus, User
-from assistant_api.worker_runtime import execute_task_by_id
-from packages.agent_harness import AgentRunInput, AgentRunResult
-from packages.agent_harness.routing import (
+from infrastructure.config import Settings
+from domain.models import Base, ModelLog, Task, TaskStatus, User
+from workers.runtime import execute_task_by_id
+from agent import AgentRunInput, AgentRunResult
+from agent.governance.routing import (
     InvalidAgentRouteDecisionError,
     build_agent_route_candidates,
     parse_agent_route_decision,
 )
-from packages.capabilities import (
+from capabilities import (
     CapabilityKind,
     CapabilityMetadata,
     CapabilityRegistry,
 )
-from packages.model_gateway import GatewayResult, GatewayUsage
+from model_gateway import GatewayResult, GatewayUsage
 
 
 @pytest_asyncio.fixture

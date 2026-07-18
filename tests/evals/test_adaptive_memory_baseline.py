@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from packages.evaluation.memory_baseline import (
+from evaluation.memory_baseline import (
     REQUIRED_COGNITIVE_TYPES,
     REQUIRED_SCOPES,
     REQUIRED_TIME_RANGES,

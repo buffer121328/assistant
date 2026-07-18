@@ -10,8 +10,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from assistant_api.models import Base, Memory, Task, TaskStatus, ToolLog, User
-from packages.agent_harness import (
+from domain.models import Base, Memory, Task, TaskStatus, ToolLog, User
+from agent import (
     AgentHarness,
     AgentRunInput,
     AgentProfile,
