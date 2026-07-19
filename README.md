@@ -7,8 +7,8 @@
 - **LangBot**：主消息入口和结果回推通道。
 - **LangBot 意图路由**：进入任务系统前先做结构化 intent 判定，核心四意图直达任务，`needs_confirmation` 和 `needs_new_capability` 走无任务分支。
 - **远程桥接账本**：`/api/remote-control/bridge/sessions` 记录 LangBot 入站、任务绑定、回推状态和重放信息，可供 Electron 读取。
-- **本地 Agent API**：V7 新桌面端契约，提供 `/local/*` 任务、事件、审批和配置接口，供后续 Electron 桌面端使用。
-- **Electron Web 桌面端**：V7 新桌面主线，当前已具备安全隔离工程骨架、三栏任务控制台、核心任务类型选择、任务/事件/审批摘要、运行日志、审批/只读 diff、远程桥接会话视图和验证式设置源码。
+- **本地 Agent API**：V7 新桌面端契约，提供 `/local/*` 任务、结构化 Agent action events、事件流、审批和配置接口，供 Electron 桌面端使用。
+- **Electron Web 桌面端**：V7 新桌面主线，当前已具备安全隔离工程骨架、三栏任务控制台、核心任务类型选择、任务队列搜索/状态筛选、会话 token 消耗卡片、Agent 事件时间线、运行日志、审批/只读 diff、远程桥接会话搜索/状态筛选和验证式设置源码。
 - **Legacy Python 桌面源码**：历史 Qt GUI 源码保留在仓库中用于参考和旧测试，不再作为当前安装或启动入口。
 
 阶段状态索引：
@@ -267,8 +267,8 @@ LangBot 入口会先做结构化 intent 判定：显式 `/plan`、`/learn`、`/d
 - **知识库**：文件上传、解析、分块、去重、搜索。
 - **账号连接**：加密保存账号凭据，支持 SMTP、CalDAV、browser provider。
 - **提醒通知**：提醒创建、取消、通知 outbox、桌面 poll/ack、LangBot 投递。
-- **本地桌面契约**：`/local/*` 支持带核心 `task_type` 的任务创建、任务快照、事件游标、WebSocket 事件流、日志和审批决策。
-- **Electron 控制台**：三栏任务队列、活动线程和检查器，支持 `plan`/`learn`/`daily`/`office` 任务类型选择、任务/事件/审批摘要、继续对话、运行日志、工具审批、文件引用、只读 diff、命令输出、空态和设置验证。
+- **本地桌面契约**：`/local/*` 支持带核心 `task_type` 的任务创建、任务快照、事件游标、WebSocket 事件流、结构化 `task.started`/`task.action.*`/终态事件、日志和审批决策。
+- **Electron 控制台**：三栏任务队列、活动线程和检查器，支持 `plan`/`learn`/`daily`/`office` 任务类型选择、任务队列本地搜索和状态筛选、会话 token 消耗卡片、Agent 事件时间线、任务/事件/审批摘要、继续对话、运行日志、工具审批、文件引用、只读 diff、命令输出、远程桥接会话本地搜索和回推状态筛选、空态和设置验证。
 - **Legacy 桌面源码**：历史 Qt GUI 代码仍保留用于参考和旧测试，但当前安装、启动和依赖说明以 Electron 桌面端为准。
 
 ## 后续如何扩展新功能
@@ -513,10 +513,12 @@ npm run dev
 - 本地 API 连接状态、API 地址和用户设置。
 - 三栏任务控制台：任务队列、活动线程和检查器。
 - 新建任务时可显式选择 `plan`、`learn`、`daily` 或 `office`，默认保持 `plan`。
+- 任务队列支持对已加载任务做本地关键词搜索和状态筛选。
 - 任务数量、运行中任务、待审批任务、已完成任务、事件数和变更数摘要。
 - 任务详情、继续对话、WebSocket 事件流恢复、空态和刷新入口。
+- Inspector `timeline` 面板展示会话 token 消耗、消息计数、用量比例和按序排列的 Agent 事件/动作 payload；后端 Agent runner 会发布 `task.started`、`task.plan.created`、`task.action.started/completed/failed` 和终态事件供时间线展示。
 - 运行日志、审批面板、审批原因、风险等级、文件引用、只读 diff、命令输出和验证式设置保存。
-- 远程桥接 `bridge` 面板：最近 LangBot 会话、任务绑定、回推状态、失败摘要、刷新、跳转任务和失败回放。
+- 远程桥接 `bridge` 面板：最近 LangBot 会话、任务绑定、回推状态、失败摘要、本地搜索、回推状态筛选、刷新、跳转任务和失败回放。
 
 ### 5. 打包 Electron 桌面端
 

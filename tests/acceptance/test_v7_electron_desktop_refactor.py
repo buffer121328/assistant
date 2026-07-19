@@ -148,6 +148,16 @@ def test_desktop_web_renderer_covers_task_console_and_developer_workflow() -> No
         "task-search",
         "task-status-filter",
         "task-filter-empty",
+        "bridge-filters",
+        "bridge-search",
+        "bridge-delivery-filter",
+        "bridge-filter-empty",
+        "timeline-panel",
+        "timeline-event",
+        "timeline-empty",
+        "token-card",
+        "token-meter",
+        "event-sequence",
     ):
         assert ui_token in app_source or ui_token in styles
     for event_type in (
@@ -165,6 +175,15 @@ def test_desktop_web_renderer_covers_task_console_and_developer_workflow() -> No
     assert "taskStatusFilter" in app_source
     assert "filteredTasks" in app_source
     assert "No matching tasks" in app_source
+    assert "bridgeSearchText" in app_source
+    assert "bridgeDeliveryFilter" in app_source
+    assert "filteredBridgeSessions" in app_source
+    assert "No matching bridge sessions" in app_source
+    assert "renderTimelinePanel" in app_source
+    assert "renderTokenUsageCard" in app_source
+    assert "eventActionLabel" in app_source
+    assert "No timeline events yet" in app_source
+    assert "Token usage" in app_source
     assert "api.createTask(inputText.trim(), selectedTaskType)" in app_source
     assert "LocalTaskType" in api_source
     assert 'taskType: LocalTaskType = "plan"' in api_source

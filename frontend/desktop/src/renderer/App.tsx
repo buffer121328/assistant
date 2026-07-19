@@ -8,10 +8,14 @@ import {
   LocalEvent,
   LocalTaskType,
   RemoteControlBridgeSession,
-  Task
+  Task,
+  TaskStatus
 } from "./api";
 
 type ConnectionState = "checking" | "connected" | "disconnected";
+
+type TaskStatusFilter = "all" | TaskStatus;
+type BridgeDeliveryFilter = "all" | "pending" | "succeeded" | "retry" | "failed" | "unknown";
 
 type DerivedItem = {
   id: string;
@@ -27,6 +31,25 @@ const TASK_TYPE_OPTIONS: { value: LocalTaskType; label: string; detail: string }
   { value: "learn", label: "Learn", detail: "搜索、学习和知识理解" },
   { value: "daily", label: "Daily", detail: "提醒、状态和日常助理" },
   { value: "office", label: "Office", detail: "办公、文件和工具动作" }
+];
+
+const TASK_STATUS_FILTERS: { value: TaskStatusFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "pending", label: "Pending" },
+  { value: "running", label: "Running" },
+  { value: "waiting_approval", label: "Approval" },
+  { value: "success", label: "Success" },
+  { value: "failed", label: "Failed" },
+  { value: "cancelled", label: "Cancelled" }
+];
+
+const BRIDGE_DELIVERY_FILTERS: { value: BridgeDeliveryFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "pending", label: "Pending" },
+  { value: "succeeded", label: "Delivered" },
+  { value: "retry", label: "Retry" },
+  { value: "failed", label: "Failed" },
+  { value: "unknown", label: "Unknown" }
 ];
 
 const DEFAULT_SETTINGS: DesktopSettings = {
@@ -47,13 +70,17 @@ export function App(): JSX.Element {
   const [eventsByTask, setEventsByTask] = useState<Record<string, LocalEvent[]>>({});
   const [inputText, setInputText] = useState("");
   const [selectedTaskType, setSelectedTaskType] = useState<LocalTaskType>("plan");
+  const [taskSearchText, setTaskSearchText] = useState("");
+  const [taskStatusFilter, setTaskStatusFilter] = useState<TaskStatusFilter>("all");
   const [messageText, setMessageText] = useState("");
   const [approvalReason, setApprovalReason] = useState("");
   const [bridgeSessions, setBridgeSessions] = useState<RemoteControlBridgeSession[]>([]);
+  const [bridgeSearchText, setBridgeSearchText] = useState("");
+  const [bridgeDeliveryFilter, setBridgeDeliveryFilter] = useState<BridgeDeliveryFilter>("all");
   const [selectedBridgeMessageId, setSelectedBridgeMessageId] = useState<string>("");
   const [selectedBridgeSession, setSelectedBridgeSession] = useState<RemoteControlBridgeSession | null>(null);
   const [tokenStats, setTokenStats] = useState<ConversationTokenStats | null>(null);
-  const [activePanel, setActivePanel] = useState<"logs" | "approvals" | "bridge" | "changes" | "settings">("logs");
+  const [activePanel, setActivePanel] = useState<"timeline" | "logs" | "approvals" | "bridge" | "changes" | "settings">("timeline");
   const [error, setError] = useState<string>("");
 
   const api = useMemo(() => new LocalApiClient(settings), [settings]);
@@ -69,6 +96,46 @@ export function App(): JSX.Element {
   const waitingApprovalCount = tasks.filter((task) => task.status === "waiting_approval").length;
   const finishedCount = tasks.filter((task) => task.status === "success" || task.status === "failed").length;
   const latestEventLabel = selectedEvents.at(-1)?.type || "No events yet";
+  const normalizedTaskSearch = taskSearchText.trim().toLowerCase();
+  const filteredTasks = tasks.filter((task) => {
+    const matchesStatus = taskStatusFilter === "all" || task.status === taskStatusFilter;
+    if (!matchesStatus) return false;
+    if (!normalizedTaskSearch) return true;
+    const searchable = [
+      task.input_text,
+      task.task_type,
+      task.status,
+      formatStatus(task.status),
+      task.workflow_key || "",
+      task.model_class || ""
+    ]
+      .join(" ")
+      .toLowerCase();
+    return searchable.includes(normalizedTaskSearch);
+  });
+  const normalizedBridgeSearch = bridgeSearchText.trim().toLowerCase();
+  const filteredBridgeSessions = bridgeSessions.filter((session) => {
+    const status = knownBridgeDeliveryStatus(session.delivery_status);
+    const matchesStatus = bridgeDeliveryFilter === "all" || status === bridgeDeliveryFilter;
+    if (!matchesStatus) return false;
+    if (!normalizedBridgeSearch) return true;
+    const searchable = [
+      session.message_id,
+      session.message_text || "",
+      session.adapter || "",
+      session.sender_id || "",
+      session.conversation_id || "",
+      session.conversation_type || "",
+      session.intent_outcome || "",
+      session.reason,
+      session.task_id || "",
+      session.task_status || "",
+      session.delivery_status || "unknown"
+    ]
+      .join(" ")
+      .toLowerCase();
+    return searchable.includes(normalizedBridgeSearch);
+  });
   const bridgePendingCount = bridgeSessions.filter((session) => session.delivery_status === "pending").length;
   const bridgeSucceededCount = bridgeSessions.filter((session) => session.delivery_status === "succeeded").length;
   const bridgeRetryCount = bridgeSessions.filter((session) => session.delivery_status === "retry").length;
@@ -341,19 +408,50 @@ export function App(): JSX.Element {
           </p>
         </section>
 
+        <section className="task-filters" aria-label="Task filters">
+          <label className="task-search">
+            Search tasks
+            <input
+              value={taskSearchText}
+              onChange={(event) => setTaskSearchText(event.target.value)}
+              placeholder="Search text, type, status"
+            />
+          </label>
+          <label className="task-status-filter">
+            Status
+            <select
+              value={taskStatusFilter}
+              onChange={(event) => setTaskStatusFilter(event.target.value as TaskStatusFilter)}
+            >
+              {TASK_STATUS_FILTERS.map((filter) => (
+                <option key={filter.value} value={filter.value}>
+                  {filter.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </section>
+
         <nav className="task-nav" aria-label="Tasks">
           {tasks.length ? (
-            tasks.map((task) => (
-              <button
-                key={task.task_id}
-                className={task.task_id === selectedTaskId ? "selected task-row" : "task-row"}
-                onClick={() => setSelectedTaskId(task.task_id)}
-              >
-                <span>{task.input_text}</span>
-                <small>{task.task_type}</small>
-                <strong className={`status ${task.status}`}>{formatStatus(task.status)}</strong>
-              </button>
-            ))
+            filteredTasks.length ? (
+              filteredTasks.map((task) => (
+                <button
+                  key={task.task_id}
+                  className={task.task_id === selectedTaskId ? "selected task-row" : "task-row"}
+                  onClick={() => setSelectedTaskId(task.task_id)}
+                >
+                  <span>{task.input_text}</span>
+                  <small>{task.task_type}</small>
+                  <strong className={`status ${task.status}`}>{formatStatus(task.status)}</strong>
+                </button>
+              ))
+            ) : (
+              <div className="task-filter-empty">
+                <strong>No matching tasks</strong>
+                <p>Clear search or switch status to show more loaded tasks.</p>
+              </div>
+            )
           ) : (
             <div className="task-empty">
               <strong>No tasks yet</strong>
@@ -456,7 +554,7 @@ export function App(): JSX.Element {
         </header>
 
         <div className="tabs">
-          {(["logs", "approvals", "bridge", "changes", "settings"] as const).map((panel) => (
+          {(["timeline", "logs", "approvals", "bridge", "changes", "settings"] as const).map((panel) => (
             <button
               key={panel}
               className={activePanel === panel ? "active" : ""}
@@ -468,6 +566,9 @@ export function App(): JSX.Element {
         </div>
 
         {error ? <p className="error-banner">{error}</p> : null}
+
+
+        {activePanel === "timeline" ? renderTimelinePanel(selectedEvents, tokenStats, selectedTask) : null}
 
         {activePanel === "logs" ? (
           <section className="logs-panel">
@@ -528,26 +629,57 @@ export function App(): JSX.Element {
 
         {activePanel === "bridge" ? (
           <section className="bridge-panel">
+            <section className="bridge-filters" aria-label="Bridge filters">
+              <label className="bridge-search">
+                Search bridge
+                <input
+                  value={bridgeSearchText}
+                  onChange={(event) => setBridgeSearchText(event.target.value)}
+                  placeholder="Search message, sender, conversation"
+                />
+              </label>
+              <label className="bridge-delivery-filter">
+                Delivery
+                <select
+                  value={bridgeDeliveryFilter}
+                  onChange={(event) => setBridgeDeliveryFilter(event.target.value as BridgeDeliveryFilter)}
+                >
+                  {BRIDGE_DELIVERY_FILTERS.map((filter) => (
+                    <option key={filter.value} value={filter.value}>
+                      {filter.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </section>
+
             <div className="bridge-list">
               {bridgeSessions.length ? (
-                bridgeSessions.slice(0, 8).map((session) => (
-                  <button
-                    key={session.bridge_id}
-                    className={
-                      session.message_id === selectedBridgeMessageId ? "bridge-item selected" : "bridge-item"
-                    }
-                    onClick={() => setSelectedBridgeMessageId(session.message_id)}
-                  >
-                    <span className="bridge-item-title">
-                      <strong>{session.message_id}</strong>
-                      <span className={`status ${bridgeStatusClass(session.delivery_status)}`}>
-                        {formatBridgeDeliveryStatus(session.delivery_status)}
+                filteredBridgeSessions.length ? (
+                  filteredBridgeSessions.slice(0, 8).map((session) => (
+                    <button
+                      key={session.bridge_id}
+                      className={
+                        session.message_id === selectedBridgeMessageId ? "bridge-item selected" : "bridge-item"
+                      }
+                      onClick={() => setSelectedBridgeMessageId(session.message_id)}
+                    >
+                      <span className="bridge-item-title">
+                        <strong>{session.message_id}</strong>
+                        <span className={`status ${bridgeStatusClass(session.delivery_status)}`}>
+                          {formatBridgeDeliveryStatus(session.delivery_status)}
+                        </span>
                       </span>
-                    </span>
-                    <small>{bridgeSessionSubtitle(session)}</small>
-                    <p>{session.message_text || "No message body"}</p>
-                  </button>
-                ))
+                      <small>{bridgeSessionSubtitle(session)}</small>
+                      <p>{session.message_text || "No message body"}</p>
+                    </button>
+                  ))
+                ) : (
+                  <div className="bridge-filter-empty">
+                    <strong>No matching bridge sessions</strong>
+                    <p>Clear search or switch delivery status to show more loaded sessions.</p>
+                  </div>
+                )
               ) : (
                 <div className="inspector-empty">
                   <strong>No bridge sessions</strong>
@@ -730,6 +862,83 @@ export function App(): JSX.Element {
   );
 }
 
+
+function renderTimelinePanel(
+  events: LocalEvent[],
+  tokenStats: ConversationTokenStats | null,
+  task: Task | null
+): JSX.Element {
+  return (
+    <section className="timeline-panel">
+      {renderTokenUsageCard(tokenStats, task)}
+      <div className="timeline-events" aria-label="Agent event timeline">
+        {events.length ? (
+          events.map((event) => (
+            <article className="timeline-event" key={event.event_id}>
+              <header>
+                <span className="event-sequence">#{event.sequence}</span>
+                <strong>{eventActionLabel(event)}</strong>
+                <span>{formatEventTime(event.created_at)}</span>
+              </header>
+              <p className="timeline-type">{event.type}</p>
+              <pre className="command-output">{formatPayload(event.payload)}</pre>
+            </article>
+          ))
+        ) : (
+          <div className="timeline-empty">
+            <strong>No timeline events yet</strong>
+            <p>Agent state changes and actions appear here after the backend publishes task events.</p>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function renderTokenUsageCard(stats: ConversationTokenStats | null, task: Task | null): JSX.Element {
+  if (!task?.conversation_id) {
+    return (
+      <article className="token-card">
+        <header>
+          <strong>Token usage</strong>
+          <span>no conversation</span>
+        </header>
+        <p>This task is not linked to a conversation yet.</p>
+      </article>
+    );
+  }
+  if (!stats) {
+    return (
+      <article className="token-card">
+        <header>
+          <strong>Token usage</strong>
+          <span>loading</span>
+        </header>
+        <p>Token stats will appear when the local API returns conversation usage.</p>
+      </article>
+    );
+  }
+  const percent = Math.min(100, Math.max(0, Math.round(stats.usage_ratio * 100)));
+  return (
+    <article className={`token-card ${stats.status}`}>
+      <header>
+        <strong>Token usage</strong>
+        <span>{stats.status}</span>
+      </header>
+      <div className="token-meter" aria-label="Token usage meter">
+        <span style={{ width: `${percent}%` }} />
+      </div>
+      <div className="token-grid">
+        <span>Total {stats.total_estimated_tokens}/{stats.token_limit}</span>
+        <span>Usage {percent}%</span>
+        <span>Messages {stats.message_count}</span>
+        <span>User {stats.user_message_count}</span>
+        <span>Assistant {stats.assistant_message_count}</span>
+      </div>
+    </article>
+  );
+}
+
 function renderAssistantMessages(events: LocalEvent[], task: Task): JSX.Element[] {
   const messages = events
     .filter((event) =>
@@ -825,12 +1034,56 @@ function eventToDerivedItems(event: LocalEvent): DerivedItem[] {
   return items;
 }
 
+
+function eventActionLabel(event: LocalEvent): string {
+  const payload = event.payload;
+  switch (event.type) {
+    case "task.started":
+      return "Agent started";
+    case "task.completed":
+      return "Agent completed";
+    case "task.failed":
+      return "Agent failed";
+    case "task.message.delta":
+      return "Assistant streaming";
+    case "task.message.completed":
+      return "Assistant message";
+    case "task.log.appended":
+      return String(payload.message || payload.text || "Log appended");
+    case "task.tool.requested":
+      return `Tool approval requested: ${String(payload.tool_name || payload.subject || "tool")}`;
+    default:
+      if (payload.tool_name) return `Tool action: ${String(payload.tool_name)}`;
+      if (payload.command) return `Command: ${String(payload.command)}`;
+      if (payload.path) return `File: ${String(payload.path)}`;
+      return event.type.replace(/\./g, " ");
+  }
+}
+
+function formatEventTime(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleString();
+}
+
 function formatPayload(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
 
 function formatStatus(status: Task["status"]): string {
   return status.replace(/_/g, " ");
+}
+
+function knownBridgeDeliveryStatus(status: string | null): BridgeDeliveryFilter {
+  switch (status) {
+    case "pending":
+    case "succeeded":
+    case "retry":
+    case "failed":
+      return status;
+    default:
+      return "unknown";
+  }
 }
 
 function formatBridgeDeliveryStatus(status: string | null): string {

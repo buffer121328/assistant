@@ -407,3 +407,70 @@ async def test_07_unsupported_task_type_is_rejected_without_executor_call(
     stored = await fetch_task(sessionmaker, task.id)
     assert stored.status == TaskStatus.PENDING.value
     assert fake_langgraph.calls == []
+
+
+@pytest.mark.asyncio
+async def test_08_agent_harness_publishes_structured_action_events_for_timeline(
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    _user, task = await create_user_and_task(sessionmaker)
+    fake_langgraph = FakeLangGraphExecutor()
+    published: list[tuple[str, dict[str, object]]] = []
+
+    async def event_sink(event_type: str, payload: dict[str, object]) -> None:
+        published.append((event_type, payload))
+
+    async with sessionmaker() as session:
+        boundary = ExecutionBoundary(
+            session=session,
+            langgraph_executor=fake_langgraph,
+        )
+        result = await AgentHarness(
+            session=session,
+            executor=boundary,
+            event_sink=event_sink,
+        ).execute_task(task.id)
+
+    assert result.status == TaskStatus.SUCCESS.value
+    event_types = [event_type for event_type, _payload in published]
+    assert "task.started" in event_types
+    assert "task.action.started" in event_types
+    assert "task.plan.created" in event_types
+    assert "task.action.completed" in event_types
+    assert "task.completed" in event_types
+    action_started = next(payload for event_type, payload in published if event_type == "task.action.started")
+    assert action_started["action_name"] == "langgraph.executor"
+    assert action_started["workflow_key"] == "langgraph.plan"
+    action_completed = next(payload for event_type, payload in published if event_type == "task.action.completed")
+    assert action_completed["status"] == TaskStatus.SUCCESS.value
+
+
+@pytest.mark.asyncio
+async def test_09_agent_harness_publishes_failed_action_event_for_timeline(
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    _user, task = await create_user_and_task(sessionmaker)
+    fake_langgraph = FakeLangGraphExecutor(error=RuntimeError(f"boom {SECRET_TOKEN}"))
+    published: list[tuple[str, dict[str, object]]] = []
+
+    async def event_sink(event_type: str, payload: dict[str, object]) -> None:
+        published.append((event_type, payload))
+
+    async with sessionmaker() as session:
+        boundary = ExecutionBoundary(
+            session=session,
+            langgraph_executor=fake_langgraph,
+            sensitive_values=[SECRET_TOKEN],
+        )
+        result = await AgentHarness(
+            session=session,
+            executor=boundary,
+            event_sink=event_sink,
+        ).execute_task(task.id)
+
+    assert result.status == TaskStatus.FAILED.value
+    failed = [payload for event_type, payload in published if event_type == "task.action.failed"]
+    assert failed
+    assert failed[0]["action_name"] == "langgraph.executor"
+    assert SECRET_TOKEN not in str(failed[0])
+    assert any(event_type == "task.failed" for event_type, _payload in published)

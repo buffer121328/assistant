@@ -379,9 +379,6 @@ class AgentHarness:
             context=context,
         )
 
-        if self.event_sink is not None:
-            await self.event_sink("plan", {"steps": list(plan.steps)})
-
         if self.task_lifecycle is None:
             task.status = TASK_STATUS_RUNNING
             task.workflow_key = profile.workflow_key
@@ -393,16 +390,79 @@ class AgentHarness:
                 task.id, workflow_key=profile.workflow_key
             )
 
+        await self._publish_event(
+            "task.started",
+            {
+                "status": TASK_STATUS_RUNNING,
+                "task_type": str(task.task_type),
+                "workflow_key": profile.workflow_key,
+                "profile_name": profile.name,
+            },
+        )
+        await self._publish_event(
+            "task.plan.created",
+            {
+                "workflow_key": plan.workflow_key,
+                "profile_name": plan.profile_name,
+                "executor_kind": plan.executor_kind,
+                "risk_level": plan.risk_level,
+                "steps": list(plan.steps),
+                "allowed_tools": list(plan.allowed_tools),
+                "approval_required_tools": list(plan.approval_required_tools),
+            },
+        )
+        await self._publish_event("plan", {"steps": list(plan.steps)})
+
+        action_payload = self._action_payload(task=task, plan=plan)
+        await self._publish_event("task.action.started", action_payload)
         outcome = await self._execute_boundary(
             task=task,
             user=user,
             context=context,
             plan=plan,
         )
+        if outcome.status == TASK_STATUS_FAILED:
+            await self._publish_event(
+                "task.action.failed",
+                {
+                    **action_payload,
+                    "status": outcome.status,
+                    "error_message": outcome.error_message or "任务执行失败。",
+                },
+            )
+        else:
+            await self._publish_event(
+                "task.action.completed",
+                {
+                    **action_payload,
+                    "status": outcome.status,
+                    "requested_tools": list(outcome.metadata.get("requested_tools", [])),
+                    "tool_calls": list(outcome.metadata.get("tool_calls", [])),
+                    "loop_steps": outcome.metadata.get("loop_steps"),
+                    "checkpoint_id": outcome.metadata.get("checkpoint_id"),
+                },
+            )
         return await self._persist_outcome(
             task_id=task.id,
             outcome=outcome,
         )
+
+    async def _publish_event(self, event_type: str, payload: dict[str, object]) -> None:
+        if self.event_sink is None:
+            return
+        try:
+            await self.event_sink(event_type, _safe_event_payload(payload))
+        except Exception:
+            return
+
+    def _action_payload(self, *, task: Any, plan: ExecutionPlan) -> dict[str, object]:
+        return {
+            "action_name": LANGGRAPH_EXECUTOR_TOOL_NAME,
+            "task_type": str(task.task_type),
+            "workflow_key": plan.workflow_key,
+            "profile_name": plan.profile_name,
+            "executor_kind": plan.executor_kind,
+        }
 
     async def _execute_boundary(
         self,
@@ -442,7 +502,7 @@ class AgentHarness:
             )
             requested_tools = outcome.metadata.get("requested_tools", [])
             approval_requests = outcome.metadata.get("approval_requests", [])
-            return await task_lifecycle.save_waiting_approval(
+            stored = await task_lifecycle.save_waiting_approval(
                 task_id,
                 message,
                 requested_tools=(
@@ -454,13 +514,39 @@ class AgentHarness:
                     if isinstance(request, dict)
                 ),
             )
+            await self._publish_event(
+                "task.waiting_approval",
+                {
+                    "status": TASK_STATUS_WAITING_APPROVAL,
+                    "requested_tools": [tool for tool in requested_tools if isinstance(tool, str)],
+                    "approval_request_count": len([request for request in approval_requests if isinstance(request, dict)]),
+                    "message": message,
+                },
+            )
+            return stored
         if outcome.status == TASK_STATUS_FAILED:
-            return await task_lifecycle.save_failure(
+            stored = await task_lifecycle.save_failure(
                 task_id,
                 outcome.error_message or "任务执行失败。",
             )
+            await self._publish_event(
+                "task.failed",
+                {
+                    "status": TASK_STATUS_FAILED,
+                    "error_message": outcome.error_message or "任务执行失败。",
+                },
+            )
+            return stored
         result_text = outcome.result_text or "任务已完成。"
-        return await task_lifecycle.save_success(task_id, result_text)
+        stored = await task_lifecycle.save_success(task_id, result_text)
+        await self._publish_event(
+            "task.completed",
+            {
+                "status": TASK_STATUS_SUCCESS,
+                "result_preview": _truncate(result_text, limit=500),
+            },
+        )
+        return stored
 
     async def _load_pending_task(self, task_id: str) -> Any:
         if self.task_lifecycle is not None:
@@ -601,6 +687,25 @@ def _tool_policy_outcome(
         )
 
     return None
+
+
+def _safe_event_payload(payload: dict[str, object]) -> dict[str, object]:
+    safe = _safe_event_value(payload)
+    if isinstance(safe, dict):
+        return safe
+    return {"value": safe}
+
+
+def _safe_event_value(value: Any) -> Any:
+    if isinstance(value, str):
+        return sanitize_text(value)[:2000]
+    if isinstance(value, dict):
+        return {str(key): _safe_event_value(item) for key, item in value.items()}
+    if isinstance(value, list | tuple | set | frozenset):
+        return [_safe_event_value(item) for item in value]
+    if value is None or isinstance(value, bool | int | float):
+        return value
+    return sanitize_text(value)[:2000]
 
 
 def _truncate(value: str, limit: int = 1000) -> str:
