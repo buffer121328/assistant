@@ -347,6 +347,7 @@ async def test_06_worker_heartbeat_composes_bounded_v2_maintenance(
         },
         "evolution_suggestion_created": False,
         "created_notification_outbox_ids": [],
+        "materialized_schedule_run_ids": [],
         "delivered_notification_outbox_ids": [],
     }
     assert [log.tool_name for log in logs] == ["memory.maintenance"]

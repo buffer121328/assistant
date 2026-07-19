@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Literal, cast
 from urllib.parse import urlsplit, urlunsplit
 
 from fastapi import APIRouter, Depends, Query, Request, WebSocket, WebSocketDisconnect, status
@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from model_gateway import sanitize_text
 
 from domain.conversations import ConversationError, ConversationService
+from agent.tool_management.workspace import SessionWorkspaceStore
 from infrastructure.database import get_session
 from app.support.errors import AppError
 from domain.models import ApprovalStatus, Task, TaskEvent, TaskStatus
@@ -52,6 +53,19 @@ class LocalEventResponse(BaseModel):
 
 class LocalEventListResponse(BaseModel):
     items: list[LocalEventResponse]
+
+
+class LocalConversationTokenStatsResponse(BaseModel):
+    conversation_id: str
+    message_count: int
+    user_message_count: int
+    assistant_message_count: int
+    total_estimated_tokens: int
+    user_estimated_tokens: int
+    assistant_estimated_tokens: int
+    token_limit: int
+    usage_ratio: float
+    status: Literal["ok", "warning", "full"]
 
 
 class LocalMessageAppendRequest(BaseModel):
@@ -146,6 +160,18 @@ async def local_create_task(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> LocalTaskSubmissionResponse:
     try:
+        conversation_id = payload.conversation_id
+        if conversation_id is None:
+            conversation = await ConversationService(session).create(
+                user_id=payload.user_id,
+                title=payload.input_text,
+                channel="desktop",
+                commit=False,
+            )
+            conversation_id = conversation.id
+        SessionWorkspaceStore(request.app.state.settings.session_workspace_root).create(
+            session_id=conversation_id
+        )
         task = await TaskService(session).create_task(
             user_id=payload.user_id,
             platform="local",
@@ -153,7 +179,7 @@ async def local_create_task(
             input_text=payload.input_text,
             workflow_key=payload.workflow_key,
             model_class=payload.model_class,
-            conversation_id=payload.conversation_id,
+            conversation_id=conversation_id,
         )
     except ConversationError as exc:
         raise AppError(exc.code, "Conversation operation failed.", exc.status_code) from exc
@@ -186,12 +212,8 @@ async def local_append_task_message(
     task = await _get_owned_task(session, task_id=task_id, user_id=payload.user_id)
     conversation_id = task.conversation_id
     if conversation_id is not None:
-        await ConversationService(session).append_message(
-            conversation_id=conversation_id,
-            user_id=payload.user_id,
-            role="user",
-            content=payload.content,
-            task_id=task.id,
+        SessionWorkspaceStore(request.app.state.settings.session_workspace_root).create(
+            session_id=conversation_id
         )
     try:
         next_task = await TaskService(session).create_task(
@@ -210,6 +232,35 @@ async def local_append_task_message(
         runtime_settings=request.app.state.settings,
     )
     return LocalTaskSubmissionResponse(task=task_response(next_task), queued=queued)
+
+
+@router.get(
+    "/conversations/{conversation_id}/token-stats",
+    response_model=LocalConversationTokenStatsResponse,
+)
+async def local_conversation_token_stats(
+    conversation_id: str,
+    user_id: Annotated[str, Query(min_length=1)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> LocalConversationTokenStatsResponse:
+    try:
+        stats = await ConversationService(session).token_stats(
+            conversation_id=conversation_id, user_id=user_id
+        )
+    except ConversationError as exc:
+        raise AppError(exc.code, "Conversation operation failed.", exc.status_code) from exc
+    return LocalConversationTokenStatsResponse(
+        conversation_id=stats.conversation_id,
+        message_count=stats.message_count,
+        user_message_count=stats.user_message_count,
+        assistant_message_count=stats.assistant_message_count,
+        total_estimated_tokens=stats.total_estimated_tokens,
+        user_estimated_tokens=stats.user_estimated_tokens,
+        assistant_estimated_tokens=stats.assistant_estimated_tokens,
+        token_limit=stats.token_limit,
+        usage_ratio=round(stats.usage_ratio, 4),
+        status=cast(Literal["ok", "warning", "full"], stats.status),
+    )
 
 
 @router.get("/tasks/{task_id}/events", response_model=LocalEventListResponse)

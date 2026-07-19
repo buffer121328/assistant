@@ -6,7 +6,7 @@ from typing import Literal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent import (
+from agent.skill_management.store import (
     ManagedSkillRecord,
     ManagedSkillStore,
     ManagedSkillStoreError,

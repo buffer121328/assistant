@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, replace
 from io import BytesIO
 import json
@@ -11,7 +12,12 @@ import stat
 import tempfile
 import zipfile
 
-from agent.skill_management.loader import SkillDefinition
+from agent.skill_management.loader import (
+    ALLOWED_SKILL_RESOURCE_DIRS,
+    MAX_SKILL_RESOURCE_BYTES,
+    SkillDefinition,
+    strip_skill_frontmatter,
+)
 
 
 _SAFE_SKILL_NAME = re.compile(r"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$")
@@ -141,20 +147,32 @@ class ManagedSkillStore:
     def install(self, package: bytes) -> ManagedSkillRecord:
         if not package or len(package) > MAX_ARCHIVE_BYTES:
             raise InvalidSkillPackageError("Skill package size is invalid")
+        resources: dict[PurePosixPath, bytes] = {}
         try:
             with zipfile.ZipFile(BytesIO(package)) as archive:
                 infos = archive.infolist()
                 names = [info.filename for info in infos]
-                if len(infos) != 2 or len(set(names)) != 2:
+                if len(set(names)) != len(names):
                     raise InvalidSkillPackageError(
-                        "Skill package must contain exactly two unique files"
+                        "Skill package must contain unique files"
                     )
-                if set(names) != {"manifest.json", "SKILL.md"}:
+                if not {"manifest.json", "SKILL.md"}.issubset(names):
                     raise InvalidSkillPackageError(
-                        "Skill package contains unsupported paths"
+                        "Skill package must contain manifest.json and SKILL.md"
                     )
                 for info in infos:
                     self._validate_zip_member(info)
+                    path = PurePosixPath(info.filename)
+                    if info.filename in {"manifest.json", "SKILL.md"}:
+                        continue
+                    self._validate_resource_member_path(path)
+                    resource_bytes = self._read_zip_member(
+                        archive,
+                        info,
+                        MAX_SKILL_RESOURCE_BYTES,
+                    )
+                    self._validate_resource_content(resource_bytes)
+                    resources[path] = resource_bytes
                 manifest_bytes = self._read_zip_member(
                     archive,
                     archive.getinfo("manifest.json"),
@@ -179,7 +197,7 @@ class ManagedSkillStore:
             ) from exc
         manifest = self._validated_manifest(raw_manifest, stored=False)
         self._validate_skill_content(content, InvalidSkillPackageError)
-        return self._publish(manifest, content.strip() + "\n")
+        return self._publish(manifest, content.strip() + "\n", resources=resources)
 
     def set_enabled(self, name: str, *, enabled: bool) -> ManagedSkillRecord:
         record = self.get(name)
@@ -222,7 +240,9 @@ class ManagedSkillStore:
                 raise InvalidManagedSkillError("Managed Skill path is unsafe")
             if resolved.stat().st_size > MAX_SKILL_BYTES:
                 raise InvalidManagedSkillError("Managed Skill instructions are oversized")
-            instructions = resolved.read_text(encoding="utf-8").strip()
+            instructions = strip_skill_frontmatter(
+                resolved.read_text(encoding="utf-8")
+            )
         except (OSError, UnicodeError) as exc:
             raise InvalidManagedSkillError(
                 "Managed Skill instructions are unavailable"
@@ -233,12 +253,15 @@ class ManagedSkillStore:
             name=record.name,
             instructions=instructions,
             source="managed",
+            resources_root=record.directory,
         )
 
     def _publish(
         self,
         manifest: _SkillManifest,
         content: str,
+        *,
+        resources: Mapping[PurePosixPath, bytes] | None = None,
     ) -> ManagedSkillRecord:
         self._assert_available(manifest.name)
         self.managed_root.mkdir(parents=True, exist_ok=True)
@@ -258,6 +281,10 @@ class ManagedSkillStore:
                 encoding="utf-8",
             )
             (staged / "SKILL.md").write_text(content, encoding="utf-8")
+            for resource_path, resource_content in (resources or {}).items():
+                destination = staged.joinpath(*resource_path.parts)
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes(resource_content)
             self._assert_available(manifest.name)
             staged.rename(target)
         except FileExistsError as exc:
@@ -414,6 +441,27 @@ class ManagedSkillStore:
             or info.file_size < 0
         ):
             raise InvalidSkillPackageError("Skill package member is unsafe")
+
+
+    @staticmethod
+    def _validate_resource_member_path(path: PurePosixPath) -> None:
+        if (
+            len(path.parts) < 2
+            or path.parts[0] not in ALLOWED_SKILL_RESOURCE_DIRS
+            or any(part in {"", ".", ".."} for part in path.parts)
+        ):
+            raise InvalidSkillPackageError(
+                "Skill package contains unsupported resource paths"
+            )
+
+    @staticmethod
+    def _validate_resource_content(content: bytes) -> None:
+        try:
+            content.decode("utf-8")
+        except UnicodeError as exc:
+            raise InvalidSkillPackageError(
+                "Skill package resources must be UTF-8 text"
+            ) from exc
 
     @staticmethod
     def _read_zip_member(

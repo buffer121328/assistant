@@ -65,6 +65,20 @@ export type LocalConfig = {
   features: Record<string, boolean>;
 };
 
+
+export type ConversationTokenStats = {
+  conversation_id: string;
+  message_count: number;
+  user_message_count: number;
+  assistant_message_count: number;
+  total_estimated_tokens: number;
+  user_estimated_tokens: number;
+  assistant_estimated_tokens: number;
+  token_limit: number;
+  usage_ratio: number;
+  status: "ok" | "warning" | "full";
+};
+
 export type RemoteControlBridgeResponseTarget = {
   adapter: string;
   conversation_id: string;
@@ -190,6 +204,15 @@ export class LocalApiClient {
         reason
       }
     });
+  }
+
+
+  async conversationTokenStats(conversationId: string): Promise<ConversationTokenStats> {
+    return this.request(
+      `/local/conversations/${encodeURIComponent(conversationId)}/token-stats?user_id=${encodeURIComponent(
+        this.settings.userId
+      )}`
+    );
   }
 
   async bridgeSessions(limit = 20, conversationId?: string): Promise<RemoteControlBridgeSession[]> {

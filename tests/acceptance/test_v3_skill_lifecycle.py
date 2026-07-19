@@ -23,6 +23,7 @@ from agent import (
     ManagedSkillConflictError,
     ManagedSkillStore,
     SkillDefinition,
+    SkillResourceError,
 )
 from capabilities import CapabilityDisabledError, build_default_registry
 
@@ -54,6 +55,152 @@ def skill_package(
             archive.writestr(filename, content)
     return buffer.getvalue()
 
+
+
+def test_skill_loader_strips_frontmatter_from_builtin_instructions(tmp_path: Path) -> None:
+    skills_root = tmp_path / "skills"
+    skill_dir = skills_root / "portable-skill"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\n"
+        "name: Portable Skill\n"
+        "description: Metadata should stay out of runtime instructions.\n"
+        "---\n\n"
+        "Follow the detailed body instructions.",
+        encoding="utf-8",
+    )
+
+    resolved = build_default_registry(skills_root).resolve("skill.portable-skill")
+
+    assert isinstance(resolved, SkillDefinition)
+    assert resolved.name == "portable-skill"
+    assert resolved.instructions == "Follow the detailed body instructions."
+    assert "---" not in resolved.instructions
+    assert "description:" not in resolved.instructions
+
+
+def test_managed_store_load_strips_frontmatter_from_package_instructions(
+    tmp_path: Path,
+) -> None:
+    manifest = {
+        "schema_version": 1,
+        "name": "portable-skill",
+        "display_name": "Portable Skill",
+        "summary": "Metadata should stay out of runtime instructions.",
+        "version": "1.0.0",
+    }
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("manifest.json", json.dumps(manifest))
+        archive.writestr(
+            "SKILL.md",
+            "---\n"
+            "name: Portable Skill\n"
+            "description: Metadata should stay out of runtime instructions.\n"
+            "---\n\n"
+            "Follow the managed body instructions.",
+        )
+    store = ManagedSkillStore(
+        builtin_root=ROOT / "backend" / "resources" / "skillpacks",
+        managed_root=tmp_path / "managed",
+    )
+
+    store.install(buffer.getvalue())
+    loaded = store.load("portable-skill")
+
+    assert loaded.instructions == "Follow the managed body instructions."
+    assert "---" not in loaded.instructions
+    assert "description:" not in loaded.instructions
+
+
+def test_skill_loader_reads_builtin_resources_lazily_and_safely(
+    tmp_path: Path,
+) -> None:
+    skills_root = tmp_path / "skills"
+    skill_dir = skills_root / "resource-skill"
+    templates_dir = skill_dir / "templates"
+    templates_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "# Resource Skill\n\nUse templates only when requested.\n\n"
+        "Follow the body instructions.",
+        encoding="utf-8",
+    )
+    (templates_dir / "brief.md").write_text(
+        "# Brief Template\n\nUse concise bullets.",
+        encoding="utf-8",
+    )
+    (skill_dir / "too-large.txt").write_text("x" * (64 * 1024 + 1), encoding="utf-8")
+    (skill_dir / "invalid.txt").write_bytes(b"\xff")
+    (skill_dir / "escape").symlink_to(tmp_path / "outside.txt")
+    (tmp_path / "outside.txt").write_text("must not read", encoding="utf-8")
+
+    resolved = build_default_registry(skills_root).resolve("skill.resource-skill")
+
+    assert isinstance(resolved, SkillDefinition)
+    assert "Brief Template" not in resolved.instructions
+    assert resolved.resource("templates/brief.md") == (
+        "# Brief Template\n\nUse concise bullets."
+    )
+    for unsafe in (
+        "../outside.txt",
+        str(tmp_path / "outside.txt"),
+        "missing.txt",
+        "templates",
+        "too-large.txt",
+        "invalid.txt",
+        "escape",
+    ):
+        with pytest.raises(SkillResourceError):
+            resolved.resource(unsafe)
+
+
+def test_managed_store_installs_readonly_resources_and_keeps_legacy_packages(
+    tmp_path: Path,
+) -> None:
+    store = ManagedSkillStore(
+        builtin_root=ROOT / "backend" / "resources" / "skillpacks",
+        managed_root=tmp_path / "managed",
+    )
+
+    installed = store.install(
+        skill_package(
+            name="resource-skill",
+            extra_entries={
+                "templates/brief.md": b"# Brief Template\n\nUse concise bullets.",
+                "data/example.txt": b"example data",
+            },
+        )
+    )
+    loaded = store.load("resource-skill")
+    legacy = store.install(skill_package(name="legacy-skill"))
+
+    assert installed.enabled is False
+    assert loaded.resource("templates/brief.md") == (
+        "# Brief Template\n\nUse concise bullets."
+    )
+    assert loaded.resource("data/example.txt") == "example data"
+    assert legacy.name == "legacy-skill"
+    with pytest.raises(SkillResourceError):
+        loaded.resource("scripts/run.py")
+
+
+def test_managed_store_rejects_unsafe_resource_packages_atomically(
+    tmp_path: Path,
+) -> None:
+    store = ManagedSkillStore(
+        builtin_root=ROOT / "backend" / "resources" / "skillpacks",
+        managed_root=tmp_path / "managed",
+    )
+
+    for name, entries in {
+        "scripted-skill": {"scripts/run.py": b"print('no')"},
+        "dependency-skill": {"requirements.txt": b"requests"},
+        "binary-skill": {"templates/bad.txt": b"\xff"},
+        "large-skill": {"templates/large.txt": b"x" * (64 * 1024 + 1)},
+    }.items():
+        with pytest.raises(InvalidSkillPackageError):
+            store.install(skill_package(name=name, extra_entries=entries))
+        assert not (tmp_path / "managed" / name).exists()
 
 def test_managed_store_creates_disabled_skill_and_controls_lifecycle(
     tmp_path: Path,

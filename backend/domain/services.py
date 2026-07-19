@@ -675,6 +675,7 @@ class LangBotMessageClientProtocol(Protocol):
         conversation_id: str,
         conversation_type: str,
         text: str,
+        idempotency_key: str | None = None,
     ) -> Any:
         pass
 

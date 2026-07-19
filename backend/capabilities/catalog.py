@@ -17,6 +17,11 @@ _SAFE_CAPABILITY_ID = re.compile(
     r"^[a-z][a-z0-9]*(?:[.-][a-z0-9][a-z0-9-]*)+$"
 )
 _MAX_SKILL_METADATA_BYTES = 16 * 1024
+_FRONTMATTER_RE = re.compile(
+    r"\A---[ \t]*(?:\r?\n)(.*?)(?:\r?\n)---[ \t]*(?:\r?\n|\Z)",
+    re.DOTALL,
+)
+_FRONTMATTER_KEY = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*$")
 
 CapabilityLoader = Callable[[], object]
 CapabilityRiskLevel = Literal["L1", "L2", "L3"]
@@ -208,10 +213,12 @@ def discover_skill_metadata(skills_root: Path) -> tuple[CapabilityMetadata, ...]
             resolved_file = skill_file.resolve(strict=True)
             if not resolved_file.is_relative_to(root):
                 continue
-            if resolved_file.stat().st_size > _MAX_SKILL_METADATA_BYTES:
-                continue
-            content = resolved_file.read_text(encoding="utf-8")
-        except (OSError, UnicodeError):
+            with resolved_file.open("rb") as skill_stream:
+                content = skill_stream.read(_MAX_SKILL_METADATA_BYTES + 1).decode(
+                    "utf-8",
+                    errors="ignore",
+                )
+        except OSError:
             continue
         parsed = _parse_skill_metadata(content)
         if parsed is None:
@@ -292,7 +299,17 @@ def _load_builtin_skill(skills_root: Path, name: str) -> object:
 
 
 def _parse_skill_metadata(content: str) -> tuple[str, str] | None:
-    lines = content.splitlines()
+    frontmatter, body = _split_frontmatter(content)
+    display_name = _frontmatter_text(frontmatter, "name") or _frontmatter_text(
+        frontmatter, "display_name"
+    )
+    summary = _frontmatter_text(frontmatter, "description") or _frontmatter_text(
+        frontmatter, "summary"
+    )
+    if display_name and summary:
+        return display_name[:120], summary[:500]
+
+    lines = body.splitlines()
     first_index = next(
         (index for index, line in enumerate(lines) if line.strip()), None
     )
@@ -315,6 +332,44 @@ def _parse_skill_metadata(content: str) -> tuple[str, str] | None:
     if not summary:
         return None
     return display_name[:120], summary[:500]
+
+
+def _split_frontmatter(content: str) -> tuple[dict[str, object], str]:
+    match = _FRONTMATTER_RE.match(content)
+    if match is None:
+        return {}, content
+    return _parse_frontmatter_block(match.group(1)), content[match.end() :]
+
+
+def _parse_frontmatter_block(block: str) -> dict[str, object]:
+    try:
+        import yaml
+
+        parsed = yaml.safe_load(block)
+    except Exception:
+        parsed = _parse_flat_frontmatter(block)
+    if not isinstance(parsed, dict):
+        return {}
+    return {str(key): value for key, value in parsed.items() if isinstance(key, str)}
+
+
+def _parse_flat_frontmatter(block: str) -> dict[str, str]:
+    parsed: dict[str, str] = {}
+    for raw_line in block.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        key = key.strip()
+        if not _FRONTMATTER_KEY.fullmatch(key):
+            continue
+        parsed[key] = value.strip().strip('"\'')
+    return parsed
+
+
+def _frontmatter_text(frontmatter: dict[str, object], key: str) -> str:
+    value = frontmatter.get(key)
+    return value.strip() if isinstance(value, str) else ""
 
 
 def _builtin_metadata() -> tuple[CapabilityMetadata, ...]:

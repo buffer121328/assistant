@@ -8,7 +8,17 @@ FEATURE = FeatureDefinition(
     task_type="daily",
     profile_name="v2.daily_reporter",
     skill_names=("research", "daily-report"),
-    requested_tools=("search.web", "browser.read", "email.draft"),
+    requested_tools=(
+        "search.web",
+        "browser.read",
+        "email.draft",
+        "workspace.list",
+        "workspace.read_file",
+        "workspace.search_text",
+        "workspace.find_files",
+        "workspace.read_doc",
+        "shell.readonly_exec",
+    ),
     default_steps=(
         "读取任务上下文与记忆",
         "检索并整理当日线索",

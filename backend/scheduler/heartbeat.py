@@ -13,6 +13,7 @@ from agent.memory.consolidation import run_memory_consolidation_maintenance
 from agent.memory.maintenance import maintain_memories
 from notifications import ReminderService, deliver_langbot_due
 from channels.langbot.service import LangBotResultClient
+from agent.tool_management.schedule_tools import AgentScheduleService
 
 
 DispatchTask = Callable[[str], Awaitable[None]]
@@ -45,6 +46,9 @@ async def run_v2_maintenance(
         created_outbox_ids = await ReminderService(session).materialize_due(now=now)
 
     async with sessionmaker() as session:
+        schedule_runs = await AgentScheduleService(session).materialize_due(now=now)
+
+    async with sessionmaker() as session:
         delivered_outbox_ids = await deliver_langbot_due(
             session=session,
             client=LangBotResultClient(settings),
@@ -55,5 +59,6 @@ async def run_v2_maintenance(
     result["memory_consolidation"] = consolidation_result
     result["evolution_suggestion_created"] = suggestion is not None
     result["created_notification_outbox_ids"] = list(created_outbox_ids)
+    result["materialized_schedule_run_ids"] = [run.id for run in schedule_runs]
     result["delivered_notification_outbox_ids"] = list(delivered_outbox_ids)
     return result

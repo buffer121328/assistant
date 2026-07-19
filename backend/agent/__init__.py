@@ -76,7 +76,12 @@ from agent.governance.routing import (
     build_agent_route_messages,
     parse_agent_route_decision,
 )
-from agent.skill_management import SkillDefinition, SkillLoadError, SkillsLoader
+from agent.skill_management import (
+    SkillDefinition,
+    SkillLoadError,
+    SkillResourceError,
+    SkillsLoader,
+)
 from agent.skill_management.store import (
     InvalidManagedSkillError,
     InvalidSkillPackageError,
@@ -145,6 +150,7 @@ __all__ = [
     "NoAgentRouteCandidatesError",
     "SkillDefinition",
     "SkillLoadError",
+    "SkillResourceError",
     "SkillsLoader",
     "SubAgentCoordinator",
     "SubAgentRequest",

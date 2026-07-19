@@ -290,6 +290,7 @@ async def test_02_search_web_success_normalizes_deduplicates_and_sanitizes(
     assert result.sources[0].provider_metadata == {
         "provider": "tavily",
         "score": 0.92,
+        "source_rank": 1,
     }
     assert "raw_content" not in str(result.sources)
 

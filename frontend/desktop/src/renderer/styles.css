@@ -345,6 +345,31 @@ p {
   background: var(--surface);
 }
 
+
+.token-state {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: #edf7ed;
+  color: var(--success);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.token-state.warning {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.token-state.full {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
 .thread-meta {
   display: flex;
   flex-wrap: wrap;

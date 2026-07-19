@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 
@@ -30,13 +32,13 @@ def test_golden_command_output_meets_deterministic_rubric(
 
 
 def test_core_command_dataset_can_be_published_as_langfuse_experiment() -> None:
-    calls: list[dict[str, object]] = []
+    calls: list[dict[str, Any]] = []
 
     class Client:
         def run_experiment(self, **kwargs: object) -> dict[str, object]:
             calls.append(kwargs)
-            task = kwargs["task"]
-            data = kwargs["data"]
+            task = cast(Callable[..., dict[str, object]], kwargs["task"])
+            data = cast(list[dict[str, object]], kwargs["data"])
             first = task(item=data[0])
             return {"first": first, "data_count": len(data)}
 

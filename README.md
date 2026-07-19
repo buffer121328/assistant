@@ -19,8 +19,11 @@
 - **V2-05 评测与回归阶段**：`run_evaluation.py`、`core_commands.json`、`v2-05.json` 用于回归，不替代真实端到端验收；`run_evaluation.py --langfuse` 可在配置齐全时把同一批 core command cases 额外上报为 Langfuse experiment。
 - **V3-08 已移除 Deepeval**，评测继续使用仓库内轻量数据集和 pytest。
 - **V6-00**：`run_memory_baseline.py` 生成 `adaptive_memory_v6_00.json` 基线；自适应记忆策略仍标记为尚未上线。
+- **V9-03 已实现最小 Session Workspace / Sandbox 边界**：新增 `SESSION_WORKSPACE_ROOT=var/workspace/sessions` 和 `SessionWorkspaceStore`；本地新建 task 会自动创建 conversation/session，续写 task 复用同一会话，Electron 显示所选会话 token 统计；`var/sandbox` 仍只用于高风险执行 provider，日报和软件操控未上线。
+- **V10-01/02/03 已实现，V10-04/05 仍为规划/待实现**：`search.web` 保持原工具名和风险边界，已支持 Tavily → Brave → DuckDuckGo provider chain；Marketplace-first Skill acquisition 已支持本地优先、市场候选评分、安装 disabled、创建候选走 `EvolutionChange`/Approval；Agent task 工具已支持 `task.start_background`、`task.check_status`、`task.get_result`、`task.cancel` 的 owner-scoped 边界；schedule 工具已支持 `schedule.create/list/toggle/run_now/delete/history`、at/every/cron 和 heartbeat 幂等 materialize。V10 Agentic Memory 工具和动态 Prompt Bootstrap 已拆成后续 OpenSpec implementation changes，但尚未声明运行时上线。
+- **Workspace Context 工具已接入**：新增 `workspace.list`、`workspace.read_file`、`workspace.search_text`、`workspace.find_files`、`workspace.read_doc` 作为 L1 结构化只读本地上下文工具；可选 `shell.readonly_exec` 默认为关闭、风险为 L2；原 `shell.exec` 仍是 L3 Docker sandbox 审批工具。
 - 后续外部能力边界：完整 MCP Gateway、深度浏览、真实 Office 文件生成、邮件/日历接入都必须经过工具治理、审批和验收测试。
-- 搜索配置使用 `TAVILY_BASE_URL` 和 `TAVILY_API_KEY`；质量命令保留 `uv run pytest`、`uv run ruff check .`、`uv run mypy .`。
+- 搜索配置使用 `TAVILY_BASE_URL` / `TAVILY_API_KEY`，可选 `BRAVE_SEARCH_API_KEY` 和显式开启的 `DUCKDUCKGO_SEARCH_ENABLED`；`search.web` 会按 `SEARCH_PROVIDER_ORDER` 做 provider chain 降级。质量命令保留 `uv run pytest`、`uv run ruff check .`、`uv run mypy .`。
 
 后端由 FastAPI、PostgreSQL、Redis、Celery 和 LangGraph Agent Runtime 组成。所有模型任务统一进入受控 LangGraph 执行层，工具调用经过 ToolRegistry、风险等级、审批和审计约束。
 
@@ -141,7 +144,7 @@ LangBot 入口会先做结构化 intent 判定：显式 `/plan`、`/learn`、`/d
 - ToolRegistry
 - Capability Registry
 - DeepSeek 兼容模型网关
-- Tavily 搜索
+- Tavily 搜索；可选 Brave Search 和显式开启的 DuckDuckGo 兜底
 - 可选 Mem0 语义记忆适配
 - Langfuse / Prometheus / Sentry 观测边界
 
@@ -205,7 +208,7 @@ LangBot 入口会先做结构化 intent 判定：显式 `/plan`、`/learn`、`/d
 │   ├── observability/                # 观测抽象
 │   ├── resources/                    # 运行时资源
 │   │   ├── prompts/                  # prompt 模板
-│   │   └── skillpacks/               # 内置 Skill 包，每个目录包含 SKILL.md
+│   │   └── skillpacks/               # 内置 Skill 包，每个目录包含 SKILL.md（可含 YAML frontmatter）
 │   ├── migrations/versions/          # Alembic 迁移
 │   ├── config/                       # 后端示例配置
 │   ├── scheduler/                    # 定时维护、监控和心跳入口
@@ -214,7 +217,7 @@ LangBot 入口会先做结构化 intent 判定：显式 `/plan`、`/learn`、`/d
 │   └── desktop/                      # V7 Electron + Vite + React 桌面端源码
 ├── legacy/
 │   └── desktop-qt/                   # 历史 Qt 桌面端源码，当前不再声明安装入口
-├── docs/                            # 方案、MVP/V2/V3/V4/V5/V6 文档
+├── docs/                            # 方案、MVP/V2/V3/V4/V5/V6/V7/V8/V9/V10 文档
 ├── scripts/                         # 运维、评测、smoke 脚本
 ├── tests/                           # acceptance / evals / integration / unit
 ├── docker-compose.yml
@@ -286,7 +289,7 @@ LangBot 入口会先做结构化 intent 判定：显式 `/plan`、`/learn`、`/d
 4. 如需要调整 profile 适配逻辑，改 `backend/agent/planning/profiles.py`。
 5. 共享工具放在 `backend/agent/tool_management`。
 6. 如需要新的 prompt 模板，放到 `backend/resources/prompts`。
-7. 如需要新的 Skill 包，放到 `backend/resources/skillpacks/<skill_name>/SKILL.md`。
+7. 如需要新的 Skill 包，放到 `backend/resources/skillpacks/<skill_name>/SKILL.md`；推荐在文件开头使用 `---` YAML frontmatter 写 `name` 和 `description`，正文作为触发级指令；只读模板/数据资源可放在同目录的 `templates/` 或 `data/` 下并通过 Skill resource API 按需读取。
 8. 如需要新外部 provider，放到 `backend/integrations`。
 9. 补 `tests/acceptance`，覆盖用户可见行为。
 10. 更新 README 或对应 docs。
@@ -333,7 +336,10 @@ tests/acceptance/test_new_feature.py
 - 场景运行时默认配置在 `backend/features/<task_type>/definition.py`，`backend/agent/planning/profiles.py` 只负责把 feature definition 适配成 AgentProfile；当前保留 `v2.planner`、`v2.researcher` 等 profile 名称。
 - 规划层负责把任务拆成受控步骤，执行层只按 plan 和 allowed tools 调用边界能力。
 - LangBot 通道代码在 `backend/channels/langbot`，桌面本地 `/local/*` 和 WebSocket 事件流代码在 `backend/channels/desktop`。
-- 内置 Skills 从 `backend/resources/skillpacks/*/SKILL.md` 读取；新增 Skill 或工具声明后不会自动启用，必须经过 profile、工具目录和验收测试显式接入。
+- 内置 Skills 从 `backend/resources/skillpacks/*/SKILL.md` 读取；Capability Registry 启动级只暴露 bounded metadata，优先解析 `SKILL.md` 开头的 YAML frontmatter `name`/`description`，无 frontmatter 时兼容 H1 + 首段摘要。显式 resolve/load 时才读取正文，并会剥离 frontmatter；资源级只允许通过 `SkillDefinition.resource("templates/..."|"data/...")` 懒加载 Skill 目录内 UTF-8 文本资源，禁止路径逃逸、符号链接、超大资源和脚本/依赖声明。新增 Skill 或工具声明后不会自动启用，必须经过 profile、工具目录和验收测试显式接入。Marketplace-first Skill acquisition 会先复用 enabled/disabled 本地 Skill，再评分可信 marketplace 候选；安装仍默认 disabled，自主创建只产生受治理候选变更。
+
+
+- 托管 Skill ZIP 安装包必须包含 `manifest.json` 和 `SKILL.md`；兼容旧的两文件包，也允许额外携带 `templates/`、`data/` 下的普通 UTF-8 只读资源文件。安装包仍拒绝脚本、依赖声明、目录穿越、符号链接、二进制和超大资源；资源只作为按需读取的上下文，不会自动执行，也不会授予 Tool 权限。
 
 ## 项目优势
 
@@ -345,7 +351,7 @@ tests/acceptance/test_new_feature.py
 
 模型不能直接执行任意动作。工具必须通过 ToolRegistry，受 allowed tools、risk level、approval、version、source availability 控制。
 
-`shell.exec` 不属于默认本地能力；需要 `SANDBOX_PROVIDER=docker`、`SHELL_EXEC_ENABLED=true` 和允许镜像后才会进入工具目录。Docker 只是高风险命令执行的可选 provider，不是 Agent 的全局运行容器。
+`SESSION_WORKSPACE_ROOT` 用于单个会话的 `input/`、`work/`、`output/` 和 `audit/` 目录；`ARTIFACTS_ROOT` 继续保存最终可见产物。Session Workspace 是普通会话材料边界，`WORKSPACE_CONTEXT_ROOT` 用于 Agent 只读查看本地项目上下文。当前 L1 结构化工具包括 `workspace.list`、`workspace.read_file`、`workspace.search_text`、`workspace.find_files` 和 `workspace.read_doc`，它们只能访问配置 root 内的文本/文档，默认拒绝 `.env`、`.git`、密钥、依赖缓存、二进制和超大文件。`shell.readonly_exec` 是默认关闭的 L2 可选增强，仅允许固定只读 argv 命令。`var/sandbox` 只用于高风险执行 provider；`shell.exec` 不属于默认本地能力，需要 `SANDBOX_PROVIDER=docker`、`SHELL_EXEC_ENABLED=true` 和允许镜像后才会进入工具目录，且仍是 L3 审批工具。Docker 只是高风险命令执行的可选 provider，不是 Agent 的全局运行容器。
 
 ### 3. 支持人工审批和 checkpoint 恢复
 
@@ -417,6 +423,13 @@ LANGBOT_API_KEY=
 DEEPSEEK_API_KEY=
 DEEPSEEK_BASE_URL=
 TAVILY_API_KEY=
+SEARCH_PROVIDER_ORDER=tavily,brave,duckduckgo
+BRAVE_SEARCH_API_KEY=
+DUCKDUCKGO_SEARCH_ENABLED=false
+SEARCH_FALLBACK_ON_EMPTY=true
+WORKSPACE_CONTEXT_ROOT=.
+WORKSPACE_CONTEXT_ENABLED=true
+READONLY_SHELL_ENABLED=false
 LANGFUSE_PUBLIC_KEY=
 LANGFUSE_SECRET_KEY=
 LANGFUSE_BASE_URL=

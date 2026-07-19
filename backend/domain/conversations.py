@@ -1,12 +1,41 @@
 from __future__ import annotations
 
 
+from dataclasses import dataclass
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from agent.memory.working_set import estimate_tokens
 from model_gateway import sanitize_text
 
 from domain.models import Conversation, ConversationMessage, User, utc_now
+
+
+@dataclass(frozen=True)
+class ConversationTokenStats:
+    conversation_id: str
+    message_count: int
+    user_message_count: int
+    assistant_message_count: int
+    total_estimated_tokens: int
+    user_estimated_tokens: int
+    assistant_estimated_tokens: int
+    token_limit: int
+
+    @property
+    def usage_ratio(self) -> float:
+        if self.token_limit <= 0:
+            return 0.0
+        return min(1.0, self.total_estimated_tokens / self.token_limit)
+
+    @property
+    def status(self) -> str:
+        if self.usage_ratio >= 0.9:
+            return "full"
+        if self.usage_ratio >= 0.7:
+            return "warning"
+        return "ok"
 
 
 class ConversationError(RuntimeError):
@@ -168,6 +197,37 @@ class ConversationService:
         )
         newest.reverse()
         return newest
+
+    async def token_stats(
+        self,
+        *,
+        conversation_id: str,
+        user_id: str,
+        token_limit: int = 4_000,
+    ) -> ConversationTokenStats:
+        messages = await self.list_messages(
+            conversation_id=conversation_id, user_id=user_id, limit=200
+        )
+        user_tokens = sum(
+            estimate_tokens(message.content) for message in messages if message.role == "user"
+        )
+        assistant_tokens = sum(
+            estimate_tokens(message.content)
+            for message in messages
+            if message.role == "assistant"
+        )
+        return ConversationTokenStats(
+            conversation_id=conversation_id,
+            message_count=len(messages),
+            user_message_count=sum(1 for message in messages if message.role == "user"),
+            assistant_message_count=sum(
+                1 for message in messages if message.role == "assistant"
+            ),
+            total_estimated_tokens=user_tokens + assistant_tokens,
+            user_estimated_tokens=user_tokens,
+            assistant_estimated_tokens=assistant_tokens,
+            token_limit=max(1, token_limit),
+        )
 
 
 def _title(value: str) -> str:

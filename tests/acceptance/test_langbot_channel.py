@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 import json
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 import pytest_asyncio
@@ -23,7 +24,7 @@ from domain.models import (
     User,
 )
 from domain.services import ResultDispatcher
-from channels.langbot.intent import LangBotIntentDecision
+from channels.langbot.intent import LANGBOT_INTENT_OUTCOMES, LangBotIntentDecision
 
 
 WEBHOOK_PATH = "/api/webhooks/langbot"
@@ -82,7 +83,7 @@ def langbot_payload(
     sender_id: str = "sender_1",
     conversation_id: str = "conv_1",
     conversation_type: str = "group",
-) -> dict[str, object]:
+) -> dict[str, Any]:
     return {
         "message_id": message_id,
         "adapter": adapter,
@@ -127,7 +128,7 @@ def bridge_sessions_response(
     *,
     limit: int = 20,
     conversation_id: str | None = None,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     params: dict[str, object] = {"limit": limit}
     if conversation_id is not None:
         params["conversation_id"] = conversation_id
@@ -136,7 +137,7 @@ def bridge_sessions_response(
     return response.json()
 
 
-def bridge_session_response(client: TestClient, message_id: str) -> dict[str, object]:
+def bridge_session_response(client: TestClient, message_id: str) -> dict[str, Any]:
     response = client.get(f"/api/remote-control/bridge/sessions/{message_id}")
     assert response.status_code == 200
     return response.json()
@@ -226,8 +227,9 @@ class FakeLangBotClient:
         conversation_id: str,
         conversation_type: str,
         text: str,
-        **_kwargs: str,
+        idempotency_key: str | None = None,
     ) -> dict[str, str]:
+        del idempotency_key
         self.calls.append(
             {
                 "adapter": adapter,
@@ -456,7 +458,7 @@ async def test_09_structured_intent_routes_free_text(
         *,
         settings: Settings,
     ) -> LangBotIntentDecision:
-        return LangBotIntentDecision(outcome=outcome, reason=f"stubbed:{outcome}")
+        return LangBotIntentDecision(outcome=cast(LANGBOT_INTENT_OUTCOMES, outcome), reason=f"stubbed:{outcome}")
 
     monkeypatch.setattr(
         "channels.langbot.service.classify_langbot_intent",

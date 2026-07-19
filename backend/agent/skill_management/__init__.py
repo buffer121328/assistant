@@ -1,4 +1,11 @@
-from agent.skill_management.loader import SkillDefinition, SkillLoadError, SkillsLoader
+from agent.skill_management.loader import (
+    ALLOWED_SKILL_RESOURCE_DIRS,
+    MAX_SKILL_RESOURCE_BYTES,
+    SkillDefinition,
+    SkillLoadError,
+    SkillResourceError,
+    SkillsLoader,
+)
 from agent.skill_management.store import (
     MAX_ARCHIVE_BYTES,
     MAX_DISPLAY_NAME_CHARS,
@@ -31,5 +38,8 @@ __all__ = [
     "MAX_SUMMARY_CHARS",
     "SkillDefinition",
     "SkillLoadError",
+    "SkillResourceError",
     "SkillsLoader",
+    "ALLOWED_SKILL_RESOURCE_DIRS",
+    "MAX_SKILL_RESOURCE_BYTES",
 ]

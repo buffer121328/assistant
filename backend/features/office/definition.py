@@ -14,6 +14,12 @@ FEATURE = FeatureDefinition(
         "office.create_docx",
         "office.create_xlsx",
         "office.create_pptx",
+        "workspace.list",
+        "workspace.read_file",
+        "workspace.search_text",
+        "workspace.find_files",
+        "workspace.read_doc",
+        "shell.readonly_exec",
     ),
     default_steps=(
         "读取任务上下文与记忆",

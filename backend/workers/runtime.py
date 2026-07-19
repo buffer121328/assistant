@@ -19,6 +19,8 @@ from agent import (
 )
 from model_gateway import sanitize_text
 from agent.memory import Mem0MemoryAdapter
+from agent.skill_management.acquisition import SkillAcquisitionService
+from agent.skill_management.lifecycle import SkillLifecycleService
 from observability import Observability
 from knowledge import KnowledgeService
 from integrations import (
@@ -31,6 +33,8 @@ from integrations import (
 from agent.review import JudgeModel, QualityEvaluator, SamplingPolicy
 from capabilities import CapabilityRegistry, build_default_registry
 from agent.tool_management import (
+    AgentScheduleService,
+    AgentTaskToolService,
     ArtifactStore,
     DockerSandboxConfig,
     PlaywrightBrowserReader,
@@ -47,10 +51,22 @@ from agent.tool_management import (
     build_personal_tool_specs,
     build_knowledge_tool_descriptor,
     build_knowledge_tool_spec,
+    ReadonlyShellRunner,
+    WorkspaceContextStore,
+    build_workspace_tool_descriptors,
+    build_workspace_tool_specs,
+    parse_deny_globs,
     BrowserInteractor,
     build_browser_tool_descriptors,
     build_browser_tool_specs,
     build_sandbox_runner,
+    build_schedule_tool_descriptors,
+    build_schedule_tool_specs,
+    build_skill_tool_descriptors,
+    build_skill_tool_specs,
+    build_task_tool_descriptors,
+    build_task_tool_specs,
+    build_search_provider_chain,
     build_tavily_config,
 )
 
@@ -323,14 +339,50 @@ async def _execute_with_harness(
         ).route_task(task)
 
     tavily_config = build_tavily_config(settings)
+    search_provider_chain = build_search_provider_chain(
+        tavily_config,
+        tavily_client=tavily_client,
+        sensitive_values=sensitive_values,
+    )
     search_tool = SearchWebTool(
-        client=tavily_client or TavilyApiClient(tavily_config),
         session=session,
         config=tavily_config,
+        client=tavily_client or TavilyApiClient(tavily_config),
+        provider_chain=search_provider_chain,
         sensitive_values=sensitive_values,
     )
     search_descriptor = build_search_tool_descriptor(enabled=True)
     knowledge_descriptor = build_knowledge_tool_descriptor()
+    workspace_context: WorkspaceContextStore | None = None
+    workspace_context_available = False
+    try:
+        workspace_context = WorkspaceContextStore(
+            root=settings.workspace_context_root,
+            deny_globs=parse_deny_globs(settings.workspace_context_deny_globs),
+            max_file_bytes=settings.workspace_context_max_file_bytes,
+            max_results=settings.workspace_context_max_results,
+            sensitive_values=sensitive_values,
+        )
+        workspace_context_available = (
+            settings.workspace_context_enabled and workspace_context.available
+        )
+    except Exception:
+        workspace_context = None
+        workspace_context_available = False
+    readonly_shell = (
+        ReadonlyShellRunner(
+            store=workspace_context,
+            enabled=settings.readonly_shell_enabled,
+            timeout_seconds=settings.readonly_shell_timeout_seconds,
+            max_output_chars=settings.readonly_shell_max_output_chars,
+        )
+        if workspace_context is not None
+        else None
+    )
+    workspace_descriptors = build_workspace_tool_descriptors(
+        enabled=workspace_context_available,
+        readonly_shell_enabled=bool(readonly_shell and readonly_shell.available),
+    )
     sandbox = build_sandbox_runner(
         provider=settings.effective_sandbox_provider,
         docker_config=DockerSandboxConfig(
@@ -366,6 +418,9 @@ async def _execute_with_harness(
             and credential_cipher is not None
         )
     )
+    skill_descriptors = build_skill_tool_descriptors(enabled=True)
+    task_descriptors = build_task_tool_descriptors(enabled=True)
+    schedule_descriptors = build_schedule_tool_descriptors(enabled=True)
     tool_catalog = ToolCatalog(
         (
             StaticToolSource(
@@ -373,8 +428,12 @@ async def _execute_with_harness(
                 (
                     search_descriptor,
                     knowledge_descriptor,
+                    *workspace_descriptors,
                     *personal_descriptors,
                     *browser_interaction_descriptors,
+                    *skill_descriptors,
+                    *task_descriptors,
+                    *schedule_descriptors,
                 ),
             ),
         ),
@@ -421,6 +480,14 @@ async def _execute_with_harness(
         )
         else None
     )
+    workspace_specs = (
+        build_workspace_tool_specs(
+            store=workspace_context,
+            readonly_shell=readonly_shell,
+        )
+        if workspace_context is not None
+        else ()
+    )
     personal_specs = build_personal_tool_specs(
         productivity=productivity,
         browser=browser,
@@ -433,7 +500,26 @@ async def _execute_with_harness(
         if browser_interactor is not None
         else ()
     )
-    for spec in (*personal_specs, *browser_specs):
+    skill_store = ManagedSkillStore(
+        builtin_root=Path(__file__).resolve().parents[2] / "resources" / "skillpacks",
+        managed_root=settings.managed_skills_root,
+    )
+
+    def refresh_skill_registry() -> None:
+        return None
+
+    skill_specs = build_skill_tool_specs(
+        SkillAcquisitionService(
+            lifecycle=SkillLifecycleService(
+                session,
+                store=skill_store,
+                refresh_registry=refresh_skill_registry,
+            )
+        )
+    )
+    task_specs = build_task_tool_specs(AgentTaskToolService(session))
+    schedule_specs = build_schedule_tool_specs(AgentScheduleService(session))
+    for spec in (*workspace_specs, *personal_specs, *browser_specs, *skill_specs, *task_specs, *schedule_specs):
         descriptor = tool_snapshot.get(spec.name)
         if descriptor is None or not descriptor.enabled:
             continue
@@ -649,6 +735,9 @@ def _sensitive_values(settings: Settings) -> tuple[str | None, ...]:
         settings.langbot_api_key,
         settings.tavily_base_url,
         settings.tavily_api_key,
+        settings.brave_search_api_key,
+        settings.brave_search_base_url,
+        settings.duckduckgo_search_base_url,
         settings.deepseek_api_key,
         settings.credential_master_key.get_secret_value(),
         settings.local_api_token.get_secret_value(),

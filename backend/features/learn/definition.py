@@ -8,7 +8,16 @@ FEATURE = FeatureDefinition(
     task_type="learn",
     profile_name="v2.researcher",
     skill_names=("research",),
-    requested_tools=("search.web", "browser.read"),
+    requested_tools=(
+        "search.web",
+        "browser.read",
+        "workspace.list",
+        "workspace.read_file",
+        "workspace.search_text",
+        "workspace.find_files",
+        "workspace.read_doc",
+        "shell.readonly_exec",
+    ),
     default_steps=(
         "读取任务上下文与记忆",
         "检索并核对来源",

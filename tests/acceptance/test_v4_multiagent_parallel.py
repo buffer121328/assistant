@@ -4,6 +4,7 @@ import asyncio
 from collections.abc import AsyncIterator
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, cast
 import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -155,8 +156,8 @@ async def test_gateway_subagent_runner_commits_final_answer(
     monkeypatch.setattr(subagent_gateway_module, "AgentGatewayModel", FakeModel)
 
     runner = subagent_gateway_module.GatewaySubAgentRunner(
-        sessionmaker=FakeSessionmaker(),
-        settings=SimpleNamespace(),
+        sessionmaker=cast(Any, FakeSessionmaker()),
+        settings=cast(Any, SimpleNamespace()),
         observability=SimpleNamespace(),
     )
     request = SubAgentRequest(
@@ -178,7 +179,8 @@ async def test_gateway_subagent_runner_commits_final_answer(
     assert session.commits == 1
     assert session.rollbacks == 0
     assert captured["session"] is session
-    prompt = captured["request"].messages[0].content  # type: ignore[index]
+    request_payload = cast(Any, captured["request"])
+    prompt = request_payload.messages[0].content
     assert "你是受限子 Agent" in prompt
     assert "角色：researcher" in prompt
     assert request.objective[:1000] in prompt
@@ -223,8 +225,8 @@ async def test_gateway_subagent_runner_rejects_non_final_action(
     monkeypatch.setattr(subagent_gateway_module, "AgentGatewayModel", FakeModel)
 
     runner = subagent_gateway_module.GatewaySubAgentRunner(
-        sessionmaker=FakeSessionmaker(),
-        settings=SimpleNamespace(),
+        sessionmaker=cast(Any, FakeSessionmaker()),
+        settings=cast(Any, SimpleNamespace()),
         observability=SimpleNamespace(),
     )
 

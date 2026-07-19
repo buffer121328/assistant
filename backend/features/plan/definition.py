@@ -8,7 +8,15 @@ FEATURE = FeatureDefinition(
     task_type="plan",
     profile_name="v2.planner",
     skill_names=("structured-planning",),
-    requested_tools=("calendar.create_event",),
+    requested_tools=(
+        "calendar.create_event",
+        "workspace.list",
+        "workspace.read_file",
+        "workspace.search_text",
+        "workspace.find_files",
+        "workspace.read_doc",
+        "shell.readonly_exec",
+    ),
     default_steps=(
         "明确目标与约束",
         "拆解阶段步骤",

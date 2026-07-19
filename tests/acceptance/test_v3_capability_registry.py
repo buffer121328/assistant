@@ -117,19 +117,31 @@ def test_registry_rejects_duplicate_unknown_disabled_and_loaderless_entries() ->
         registry.resolve("skill.metadata-only")
 
 
-def test_skill_discovery_is_bounded_to_safe_direct_children(tmp_path: Path) -> None:
+def test_skill_discovery_uses_frontmatter_metadata_with_heading_fallback(
+    tmp_path: Path,
+) -> None:
     skills_root = tmp_path / "skills"
-    valid = skills_root / "safe-skill"
+    frontmatter = skills_root / "frontmatter-skill"
+    fallback = skills_root / "safe-skill"
     invalid = skills_root / "Bad_Name"
     empty = skills_root / "empty"
     nested = skills_root / "container" / "nested"
     outside = tmp_path / "outside"
-    valid.mkdir(parents=True)
+    frontmatter.mkdir(parents=True)
+    fallback.mkdir()
     invalid.mkdir()
     empty.mkdir()
     nested.mkdir(parents=True)
     outside.mkdir()
-    (valid / "SKILL.md").write_text(
+    (frontmatter / "SKILL.md").write_text(
+        "---\n"
+        "name: Portable Skill\n"
+        "description: Startup-level metadata from YAML.\n"
+        "---\n\n"
+        "# Body Heading\n\n" + ("Detailed body instructions are loaded later. " * 600),
+        encoding="utf-8",
+    )
+    (fallback / "SKILL.md").write_text(
         "# Safe Skill\n\nA safe metadata summary.\n\nFull instructions.",
         encoding="utf-8",
     )
@@ -142,7 +154,12 @@ def test_skill_discovery_is_bounded_to_safe_direct_children(tmp_path: Path) -> N
     discovered = discover_skill_metadata(skills_root)
 
     assert [(item.id, item.display_name, item.summary) for item in discovered] == [
-        ("skill.safe-skill", "Safe Skill", "A safe metadata summary.")
+        (
+            "skill.frontmatter-skill",
+            "Portable Skill",
+            "Startup-level metadata from YAML.",
+        ),
+        ("skill.safe-skill", "Safe Skill", "A safe metadata summary."),
     ]
     assert all(str(tmp_path) not in repr(item) for item in discovered)
 

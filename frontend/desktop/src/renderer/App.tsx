@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { JSX } from "react";
 import {
   Approval,
+  ConversationTokenStats,
   DesktopSettings,
   LocalApiClient,
   LocalEvent,
@@ -41,6 +42,7 @@ export function App(): JSX.Element {
   const [bridgeSessions, setBridgeSessions] = useState<RemoteControlBridgeSession[]>([]);
   const [selectedBridgeMessageId, setSelectedBridgeMessageId] = useState<string>("");
   const [selectedBridgeSession, setSelectedBridgeSession] = useState<RemoteControlBridgeSession | null>(null);
+  const [tokenStats, setTokenStats] = useState<ConversationTokenStats | null>(null);
   const [activePanel, setActivePanel] = useState<"logs" | "approvals" | "bridge" | "changes" | "settings">("logs");
   const [error, setError] = useState<string>("");
 
@@ -137,6 +139,27 @@ export function App(): JSX.Element {
       cancelled = true;
     };
   }, [api, selectedBridgeMessageId]);
+
+  useEffect(() => {
+    if (!selectedTask?.conversation_id || !settings.userId) {
+      setTokenStats(null);
+      return;
+    }
+    let cancelled = false;
+    api
+      .conversationTokenStats(selectedTask.conversation_id)
+      .then((stats) => {
+        if (!cancelled) setTokenStats(stats);
+      })
+      .catch((reason: unknown) => {
+        if (cancelled) return;
+        setTokenStats(null);
+        setError(reason instanceof Error ? reason.message : "Unable to load session token stats");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [api, selectedTask?.conversation_id, selectedTaskId, settings.userId]);
 
   useEffect(() => {
     if (!selectedTaskId || !settings.userId) return;
@@ -324,6 +347,11 @@ export function App(): JSX.Element {
                   <span>{selectedTask.task_type}</span>
                   <span>{selectedEvents.length} Events</span>
                   <span>{latestEventLabel}</span>
+                  {tokenStats ? (
+                    <span className={`token-state ${tokenStats.status}`}>
+                      Session tokens {tokenStats.total_estimated_tokens}/{tokenStats.token_limit}
+                    </span>
+                  ) : null}
                 </p>
               </div>
               <button

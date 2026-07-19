@@ -347,3 +347,54 @@ async def test_conversation_message_api_reports_active_compaction_metadata(
     assert response.json()["compacted"] is True
     assert response.json()["summary_version"] == "summary-v1"
     assert response.json()["summary_updated_at"] is not None
+
+
+def test_local_conversation_token_stats_and_session_continuation(
+    client: TestClient, sessionmaker: async_sessionmaker[AsyncSession]
+) -> None:
+    import anyio
+
+    owner = anyio.run(create_user, sessionmaker, "Token Owner")
+
+    first = client.post(
+        "/local/tasks",
+        json={
+            "user_id": owner.id,
+            "task_type": "plan",
+            "input_text": "你好，请做计划",
+            "model_class": "light",
+        },
+    )
+    assert first.status_code == 201
+    first_task = first.json()["task"]
+    conversation_id = first_task["conversation_id"]
+    assert conversation_id
+
+    second = client.post(
+        f"/local/tasks/{first_task['task_id']}/messages",
+        json={"user_id": owner.id, "content": "继续完善第二步"},
+    )
+    assert second.status_code == 200
+    second_task = second.json()["task"]
+    assert second_task["conversation_id"] == conversation_id
+    assert second_task["task_id"] != first_task["task_id"]
+
+    stats = client.get(
+        f"/local/conversations/{conversation_id}/token-stats",
+        params={"user_id": owner.id},
+    )
+    assert stats.status_code == 200
+    payload = stats.json()
+    assert payload["conversation_id"] == conversation_id
+    assert payload["message_count"] == 2
+    assert payload["user_message_count"] == 2
+    assert payload["assistant_message_count"] == 0
+    assert payload["total_estimated_tokens"] > 0
+    assert payload["token_limit"] == 4000
+    assert payload["status"] == "ok"
+
+    denied = client.get(
+        f"/local/conversations/{conversation_id}/token-stats",
+        params={"user_id": "not-owner"},
+    )
+    assert denied.status_code == 404
