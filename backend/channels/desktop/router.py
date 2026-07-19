@@ -100,7 +100,9 @@ def local_config(request: Request) -> dict[str, object]:
         "local_api_auth_required": settings.local_api_auth_required,
         "features": {
             "browser_enabled": settings.browser_enabled,
-            "sandbox_enabled": settings.sandbox_enabled,
+            "sandbox_provider": settings.effective_sandbox_provider,
+            "shell_exec_enabled": settings.effective_shell_exec_enabled,
+            "sandbox_enabled": settings.effective_sandbox_provider != "none",
             "subagent_enabled": settings.subagent_enabled,
         },
     }

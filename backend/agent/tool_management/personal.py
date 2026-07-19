@@ -10,7 +10,7 @@ from .catalog import ToolDescriptor
 from .providers import CalendarProvider, EmailProvider
 from .approval import external_approval_binding
 from .registry import ToolHandler, ToolInvocation, ToolRiskLevel, ToolSpec
-from .sandbox import DockerSandboxRunner
+from .sandbox import SandboxRunner
 
 
 def build_personal_tool_descriptors(
@@ -40,7 +40,7 @@ def build_personal_tool_specs(
     *,
     productivity: ProductivityTools,
     browser: PlaywrightBrowserReader | None = None,
-    sandbox: DockerSandboxRunner | None = None,
+    sandbox: SandboxRunner | None = None,
     email_provider: EmailProvider | None = None,
     calendar_provider: CalendarProvider | None = None,
 ) -> tuple[ToolSpec, ...]:

@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Literal
 
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -44,8 +45,12 @@ class Settings(BaseSettings):
     browser_enabled: bool = False
     browser_timeout_seconds: float = 20.0
     browser_max_text_chars: int = 50_000
-    sandbox_enabled: bool = False
+    sandbox_provider: Literal["none", "docker"] = "none"
+    shell_exec_enabled: bool = False
     sandbox_workspace_root: Path = Path("var/sandbox")
+    sandbox_docker_image: str = ""
+    sandbox_docker_allowed_images: str = ""
+    sandbox_enabled: bool = False
     sandbox_image: str = ""
     sandbox_allowed_images: str = ""
     sandbox_timeout_seconds: float = 30.0
@@ -60,6 +65,34 @@ class Settings(BaseSettings):
     quality_judge_threshold: float = 0.6
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @property
+    def effective_sandbox_provider(self) -> Literal["none", "docker"]:
+        if self.sandbox_provider != "none":
+            return self.sandbox_provider
+        if self.sandbox_enabled:
+            return "docker"
+        return "none"
+
+    @property
+    def effective_shell_exec_enabled(self) -> bool:
+        return self.shell_exec_enabled or self.sandbox_enabled
+
+    @property
+    def effective_sandbox_docker_image(self) -> str:
+        return self.sandbox_docker_image or self.sandbox_image
+
+    @property
+    def effective_sandbox_docker_allowed_images(self) -> str:
+        return self.sandbox_docker_allowed_images or self.sandbox_allowed_images
+
+    @property
+    def effective_sandbox_docker_allowed_images_tuple(self) -> tuple[str, ...]:
+        return tuple(
+            item.strip()
+            for item in self.effective_sandbox_docker_allowed_images.split(",")
+            if item.strip()
+        )
 
 
 def load_settings() -> Settings:

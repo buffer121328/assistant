@@ -33,7 +33,6 @@ from capabilities import CapabilityRegistry, build_default_registry
 from agent.tool_management import (
     ArtifactStore,
     DockerSandboxConfig,
-    DockerSandboxRunner,
     PlaywrightBrowserReader,
     ProductivityTools,
     SearchWebTool,
@@ -51,6 +50,7 @@ from agent.tool_management import (
     BrowserInteractor,
     build_browser_tool_descriptors,
     build_browser_tool_specs,
+    build_sandbox_runner,
     build_tavily_config,
 )
 
@@ -331,15 +331,12 @@ async def _execute_with_harness(
     )
     search_descriptor = build_search_tool_descriptor(enabled=True)
     knowledge_descriptor = build_knowledge_tool_descriptor()
-    sandbox = DockerSandboxRunner(
-        config=DockerSandboxConfig(
-            enabled=settings.sandbox_enabled,
-            image=settings.sandbox_image,
-            allowed_images=tuple(
-                item.strip()
-                for item in settings.sandbox_allowed_images.split(",")
-                if item.strip()
-            ),
+    sandbox = build_sandbox_runner(
+        provider=settings.effective_sandbox_provider,
+        docker_config=DockerSandboxConfig(
+            enabled=settings.effective_shell_exec_enabled,
+            image=settings.effective_sandbox_docker_image,
+            allowed_images=settings.effective_sandbox_docker_allowed_images_tuple,
             timeout_seconds=settings.sandbox_timeout_seconds,
         ),
         workspace_root=settings.sandbox_workspace_root,

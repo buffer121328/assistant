@@ -259,6 +259,7 @@ LangBot 入口会先做结构化 intent 判定：显式 `/plan`、`/learn`、`/d
 - **AgentRun**：记录每次 worker 执行尝试，便于审计和排障。
 - **模型网关**：统一 DeepSeek 兼容模型调用、脱敏、模型日志和模型池。
 - **工具系统**：ToolRegistry 统一管理工具 schema、版本、风险、审批、并行安全。
+- **Sandbox provider**：本地默认 `none`，不暴露任意 shell；Docker 仅作为可选 provider 服务 `shell.exec`，且需要显式启用和审批。
 - **记忆系统**：显式记忆、候选记忆、短期/长期记忆、混合召回、consolidation、policy rollout/rollback。
 - **知识库**：文件上传、解析、分块、去重、搜索。
 - **账号连接**：加密保存账号凭据，支持 SMTP、CalDAV、browser provider。
@@ -343,6 +344,8 @@ tests/acceptance/test_new_feature.py
 ### 2. 模型和工具之间有安全边界
 
 模型不能直接执行任意动作。工具必须通过 ToolRegistry，受 allowed tools、risk level、approval、version、source availability 控制。
+
+`shell.exec` 不属于默认本地能力；需要 `SANDBOX_PROVIDER=docker`、`SHELL_EXEC_ENABLED=true` 和允许镜像后才会进入工具目录。Docker 只是高风险命令执行的可选 provider，不是 Agent 的全局运行容器。
 
 ### 3. 支持人工审批和 checkpoint 恢复
 
