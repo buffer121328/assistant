@@ -414,6 +414,9 @@ LANGBOT_API_KEY=
 DEEPSEEK_API_KEY=
 DEEPSEEK_BASE_URL=
 TAVILY_API_KEY=
+LANGFUSE_PUBLIC_KEY=
+LANGFUSE_SECRET_KEY=
+LANGFUSE_BASE_URL=
 SMTP / CALDAV / Browser / Langfuse / Sentry 等配置
 ```
 
@@ -489,6 +492,7 @@ npm run dev
 - 任务数量、运行中任务、待审批任务、已完成任务、事件数和变更数摘要。
 - 任务详情、继续对话、WebSocket 事件流恢复、空态和刷新入口。
 - 运行日志、审批面板、审批原因、风险等级、文件引用、只读 diff、命令输出和验证式设置保存。
+- 远程桥接 `bridge` 面板：最近 LangBot 会话、任务绑定、回推状态、失败摘要、刷新、跳转任务和失败回放。
 
 ### 5. 打包 Electron 桌面端
 
@@ -532,5 +536,14 @@ uv run python scripts/ops/desktop_web_release_check.py
 uv run python -m scripts.ops.compose_smoke
 uv run python -m scripts.ops.provider_smoke
 ```
+
+本地评测与可选 Langfuse 上报：
+
+```bash
+uv run python scripts/run_evaluation.py
+uv run python scripts/run_evaluation.py --langfuse
+```
+
+`--langfuse` 只有在 `LANGFUSE_PUBLIC_KEY`、`LANGFUSE_SECRET_KEY` 和 `LANGFUSE_BASE_URL` 配置完整时才会上报；未配置时仍保留本地确定性评测输出。
 
 注意：部分集成测试会绑定本地 `127.0.0.1` 临时端口；在受限 sandbox 中运行可能需要放开本地端口绑定权限。
