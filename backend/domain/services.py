@@ -814,6 +814,7 @@ class ResultDispatcher:
                 conversation_id=target["conversation_id"],
                 conversation_type=target["conversation_type"],
                 text=outbound_text,
+                idempotency_key=task.id,
             )
 
         raise RuntimeError(f"Unsupported dispatch platform: {task.platform}")
@@ -852,6 +853,17 @@ class ResultDispatcher:
                     )
                 ),
             )
+        )
+        await self.webhook_repository.record_delivery_attempt(
+            task_id=task.id,
+            status=status,
+            delivery_status=(
+                "succeeded"
+                if status == "succeeded"
+                else ("failed" if target_payload is None else "retry")
+            ),
+            error_summary=error_message,
+            result_json=output_text,
         )
 
 

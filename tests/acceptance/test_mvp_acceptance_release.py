@@ -202,6 +202,7 @@ class FakeLangBotClient:
         conversation_id: str,
         conversation_type: str,
         text: str,
+        **_kwargs: str,
     ) -> dict[str, str]:
         self.calls.append(
             {

@@ -6,6 +6,7 @@ from app.api.routers.conversations import router as conversation_router
 from app.api.routers.knowledge import router as knowledge_router
 from app.api.routers.memories import router as memory_router
 from app.api.routers.model_chat import router as model_chat_router
+from app.api.routers.remote_control import router as remote_control_router
 from app.api.routers.notifications import router as notification_router
 from app.api.routers.skills import router as skill_router
 from app.api.routers.tasks import router as task_router
@@ -18,6 +19,7 @@ router.include_router(account_router)
 router.include_router(notification_router)
 router.include_router(knowledge_router)
 router.include_router(model_chat_router)
+router.include_router(remote_control_router)
 router.include_router(langbot_router)
 router.include_router(conversation_router)
 router.include_router(capability_router)

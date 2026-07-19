@@ -13,8 +13,17 @@ from sqlalchemy.pool import NullPool
 
 from infrastructure.config import Settings
 from app.main import create_app
-from domain.models import Base, PlatformAccount, ProcessedMessage, Task, TaskStatus, ToolLog, User
+from domain.models import (
+    Base,
+    PlatformAccount,
+    ProcessedMessage,
+    Task,
+    TaskStatus,
+    ToolLog,
+    User,
+)
 from domain.services import ResultDispatcher
+from channels.langbot.intent import LangBotIntentDecision
 
 
 WEBHOOK_PATH = "/api/webhooks/langbot"
@@ -41,7 +50,9 @@ async def sessionmaker(
 
 
 @pytest.fixture
-def client(sessionmaker: async_sessionmaker, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+def client(
+    sessionmaker: async_sessionmaker, monkeypatch: pytest.MonkeyPatch
+) -> TestClient:
     monkeypatch.setattr(
         "channels.langbot.service.enqueue_task_execution",
         lambda _task_id, **_kwargs: True,
@@ -109,6 +120,26 @@ async def list_processed_messages(
             select(ProcessedMessage).order_by(ProcessedMessage.created_at)
         )
         return list(result)
+
+
+def bridge_sessions_response(
+    client: TestClient,
+    *,
+    limit: int = 20,
+    conversation_id: str | None = None,
+) -> dict[str, object]:
+    params: dict[str, object] = {"limit": limit}
+    if conversation_id is not None:
+        params["conversation_id"] = conversation_id
+    response = client.get("/api/remote-control/bridge/sessions", params=params)
+    assert response.status_code == 200
+    return response.json()
+
+
+def bridge_session_response(client: TestClient, message_id: str) -> dict[str, object]:
+    response = client.get(f"/api/remote-control/bridge/sessions/{message_id}")
+    assert response.status_code == 200
+    return response.json()
 
 
 async def create_bound_user(
@@ -195,6 +226,7 @@ class FakeLangBotClient:
         conversation_id: str,
         conversation_type: str,
         text: str,
+        **_kwargs: str,
     ) -> dict[str, str]:
         self.calls.append(
             {
@@ -295,7 +327,9 @@ async def test_05_bound_langbot_command_creates_pending_task(
     client: TestClient,
     sessionmaker: async_sessionmaker,
 ) -> None:
-    user_id = await create_bound_user(sessionmaker, adapter="discord", sender_id="sender_1")
+    user_id = await create_bound_user(
+        sessionmaker, adapter="discord", sender_id="sender_1"
+    )
 
     response = client.post(
         WEBHOOK_PATH,
@@ -314,6 +348,16 @@ async def test_05_bound_langbot_command_creates_pending_task(
     assert tasks[0].task_type == "learn"
     assert tasks[0].input_text == "/learn LangGraph checkpoint 是什么"
     assert tasks[0].status == TaskStatus.PENDING
+    processed_messages = await list_processed_messages(sessionmaker)
+    assert len(processed_messages) == 1
+    ledger = processed_messages[0]
+    assert ledger.adapter == "discord"
+    assert ledger.sender_id == "sender_1"
+    assert ledger.conversation_type == "group"
+    assert ledger.message_text == "/learn LangGraph checkpoint 是什么"
+    assert ledger.intent_outcome == "learn"
+    assert ledger.delivery_status == "pending"
+    assert ledger.delivery_attempt_count == 0
 
 
 @pytest.mark.asyncio
@@ -377,10 +421,7 @@ async def test_08_unknown_command_acknowledged_without_executable_task(
 
     response = client.post(
         WEBHOOK_PATH,
-        json=langbot_payload(
-            "/unknown test",
-            message_id="lb_unknown",
-        ),
+        json=langbot_payload("/", message_id="lb_unknown"),
         headers=langbot_headers(),
     )
 
@@ -390,29 +431,59 @@ async def test_08_unknown_command_acknowledged_without_executable_task(
 
 
 @pytest.mark.asyncio
-async def test_09_free_text_creates_pending_agent_task_without_inline_execution(
+@pytest.mark.parametrize(
+    ("outcome", "expected_task_type"),
+    [
+        ("plan", "plan"),
+        ("learn", "learn"),
+        ("daily", "daily"),
+        ("office", "office"),
+        ("needs_confirmation", None),
+        ("needs_new_capability", None),
+    ],
+)
+async def test_09_structured_intent_routes_free_text(
+    outcome: str,
+    expected_task_type: str | None,
+    monkeypatch: pytest.MonkeyPatch,
     client: TestClient,
     sessionmaker: async_sessionmaker,
 ) -> None:
     user_id = await create_bound_user(sessionmaker)
 
+    async def stub_classifier(
+        _text: str,
+        *,
+        settings: Settings,
+    ) -> LangBotIntentDecision:
+        return LangBotIntentDecision(outcome=outcome, reason=f"stubbed:{outcome}")
+
+    monkeypatch.setattr(
+        "channels.langbot.service.classify_langbot_intent",
+        stub_classifier,
+    )
+
     response = client.post(
         WEBHOOK_PATH,
         json=langbot_payload(
-            "帮我规划一个不会越用越重的私人助理",
-            message_id="lb_free_text_agent",
+            "帮我安排一个不会越用越重的私人助理",
+            message_id=f"lb_free_text_{outcome}",
         ),
         headers=langbot_headers(),
     )
 
     assert response.status_code == 200
-    assert response.json()["reason"] == "task_created"
+    expected_reason = "task_created" if expected_task_type is not None else outcome
+    assert response.json()["reason"] == expected_reason
     tasks = await list_tasks(sessionmaker)
-    assert len(tasks) == 1
-    assert tasks[0].user_id == user_id
-    assert tasks[0].task_type == "agent"
-    assert tasks[0].input_text == "帮我规划一个不会越用越重的私人助理"
-    assert tasks[0].status == TaskStatus.PENDING.value
+    if expected_task_type is None:
+        assert tasks == []
+    else:
+        assert len(tasks) == 1
+        assert tasks[0].user_id == user_id
+        assert tasks[0].task_type == expected_task_type
+        assert tasks[0].input_text == "帮我安排一个不会越用越重的私人助理"
+        assert tasks[0].status == TaskStatus.PENDING.value
 
 
 @pytest.mark.asyncio
@@ -455,7 +526,9 @@ async def test_10_supported_task_triggers_only_lightweight_handoff_before_ack(
         handoff_calls.append(task_id)
         return True
 
-    monkeypatch.setattr("channels.langbot.service.enqueue_task_execution", record_handoff)
+    monkeypatch.setattr(
+        "channels.langbot.service.enqueue_task_execution", record_handoff
+    )
 
     response = client.post(
         WEBHOOK_PATH,
@@ -500,12 +573,18 @@ async def test_11_langbot_task_creation_records_dispatch_target(
     assert response.json()["reason"] == "task_created"
     processed_messages = await list_processed_messages(sessionmaker)
     assert len(processed_messages) == 1
-    assert processed_messages[0].task_id == response.json()["task_id"]
-    assert json.loads(processed_messages[0].response_target or "{}") == {
+    ledger = processed_messages[0]
+    assert ledger.task_id == response.json()["task_id"]
+    assert json.loads(ledger.response_target or "{}") == {
         "adapter": "discord",
         "conversation_id": "conv_dispatch",
         "conversation_type": "group",
     }
+    assert ledger.delivery_status == "pending"
+    bridge_sessions = bridge_sessions_response(client)
+    assert bridge_sessions["items"][0]["message_id"] == "lb_dispatch_target"
+    assert bridge_sessions["items"][0]["task_id"] == response.json()["task_id"]
+    assert bridge_sessions["items"][0]["delivery_status"] == "pending"
 
 
 @pytest.mark.asyncio
@@ -576,6 +655,12 @@ async def test_12_result_dispatcher_pushes_langbot_status_updates(
     stored_task = await fetch_task(sessionmaker, task.id)
     assert stored_task.result_text == result_text
     assert stored_task.error_message == error_message
+    processed_messages = await list_processed_messages(sessionmaker)
+    ledger = processed_messages[0]
+    assert ledger.delivery_status == "succeeded"
+    assert ledger.delivery_attempt_count == 1
+    assert ledger.delivery_error_summary is None
+    assert ledger.delivery_result_json is not None
 
 
 @pytest.mark.asyncio
@@ -592,6 +677,18 @@ async def test_13_langbot_dispatch_missing_target_fails_safely_without_send(
         result_text="ok",
     )
 
+    async with sessionmaker() as session:
+        session.add(
+            ProcessedMessage(
+                platform="langbot",
+                message_id="lb_dispatch_missing_target",
+                reason="task_created",
+                task_id=task.id,
+                chat_id="conv_missing_target",
+            )
+        )
+        await session.commit()
+
     fake_langbot = FakeLangBotClient()
     async with sessionmaker() as session:
         result = await ResultDispatcher(
@@ -604,6 +701,12 @@ async def test_13_langbot_dispatch_missing_target_fails_safely_without_send(
     logs = await fetch_tool_logs(sessionmaker)
     assert logs[0].status == "failed"
     assert "目标" in (logs[0].error_message or "")
+    processed_messages = await list_processed_messages(sessionmaker)
+    ledger = processed_messages[0]
+    assert ledger.delivery_status == "failed"
+    assert ledger.delivery_attempt_count == 1
+    assert ledger.delivery_error_summary is not None
+    assert "目标" in ledger.delivery_error_summary
 
 
 @pytest.mark.asyncio
@@ -718,9 +821,116 @@ async def test_15_langbot_dispatch_failure_is_sanitized(
     ]
     assert failed_logs
     assert_no_sensitive_text(failed_logs[0].error_message)
+    processed_messages = await list_processed_messages(sessionmaker)
+    ledger = processed_messages[0]
+    assert ledger.delivery_status == "retry"
+    assert ledger.delivery_attempt_count == 1
+    assert ledger.delivery_error_summary is not None
+    assert_no_sensitive_text(ledger.delivery_error_summary)
 
 
-def test_16_readme_documents_current_entry_surfaces() -> None:
+@pytest.mark.asyncio
+async def test_16_remote_control_bridge_sessions_are_queryable(
+    client: TestClient,
+    sessionmaker: async_sessionmaker,
+) -> None:
+    await create_bound_user(sessionmaker, adapter="discord", sender_id="sender_query")
+
+    response = client.post(
+        WEBHOOK_PATH,
+        json=langbot_payload(
+            "/plan 查询桥接会话",
+            message_id="lb_query_bridge",
+            adapter="discord",
+            sender_id="sender_query",
+            conversation_id="conv_query",
+            conversation_type="group",
+        ),
+        headers=langbot_headers(),
+    )
+
+    assert response.status_code == 200
+    session_json = bridge_session_response(client, "lb_query_bridge")
+    assert session_json["message_id"] == "lb_query_bridge"
+    assert session_json["message_text"] == "/plan 查询桥接会话"
+    assert session_json["intent_outcome"] == "plan"
+    assert session_json["delivery_status"] == "pending"
+
+    listing = bridge_sessions_response(client, conversation_id="conv_query")
+    assert listing["items"]
+    assert listing["items"][0]["message_id"] == "lb_query_bridge"
+    assert listing["items"][0]["conversation_id"] == "conv_query"
+
+
+@pytest.mark.asyncio
+async def test_17_remote_control_bridge_replay_retries_failed_delivery(
+    client: TestClient,
+    sessionmaker: async_sessionmaker,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await create_bound_user(sessionmaker, adapter="discord", sender_id="sender_replay")
+    task = await create_task(
+        sessionmaker,
+        user_id=(await list_users(sessionmaker))[0].id,
+        task_type="plan",
+        input_text="/plan 回放测试",
+        status=TaskStatus.SUCCESS,
+        result_text="replay ok",
+    )
+
+    async with sessionmaker() as session:
+        session.add(
+            ProcessedMessage(
+                platform="langbot",
+                message_id="lb_replay_bridge",
+                adapter="discord",
+                sender_id="sender_replay",
+                conversation_type="group",
+                message_text="/plan 回放测试",
+                intent_outcome="plan",
+                reason="task_created",
+                task_id=task.id,
+                chat_id="conv_replay",
+                response_target=json.dumps(
+                    {
+                        "adapter": "discord",
+                        "conversation_id": "conv_replay",
+                        "conversation_type": "group",
+                    },
+                    ensure_ascii=False,
+                ),
+                delivery_status="retry",
+                delivery_attempt_count=1,
+                delivery_error_summary="temporary failure",
+            )
+        )
+        await session.commit()
+
+    fake_langbot = FakeLangBotClient()
+    monkeypatch.setattr(
+        "app.api.routers.remote_control.LangBotResultClient",
+        lambda _settings: fake_langbot,
+    )
+
+    response = client.post("/api/remote-control/bridge/sessions/lb_replay_bridge/replay")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["dispatch_status"] == "succeeded"
+    assert fake_langbot.calls == [
+        {
+            "adapter": "discord",
+            "conversation_id": "conv_replay",
+            "conversation_type": "group",
+            "text": fake_langbot.calls[0]["text"],
+        }
+    ]
+    assert "任务ID" in fake_langbot.calls[0]["text"]
+    assert payload["session"]["delivery_status"] == "succeeded"
+    assert payload["session"]["delivery_attempt_count"] == 2
+
+
+def test_18_readme_documents_current_entry_surfaces() -> None:
     readme = (Path(__file__).parents[2] / "README.md").read_text(encoding="utf-8")
 
     assert "LangBot" in readme

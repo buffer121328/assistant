@@ -430,7 +430,7 @@ p {
 
 .tabs {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 5px;
   padding: 8px;
   border-bottom: 1px solid var(--border);
@@ -457,11 +457,84 @@ p {
 
 .logs-panel,
 .approval-panel,
+.bridge-panel,
 .diff-panel,
 .settings-panel {
   display: grid;
   gap: 10px;
   padding: 12px;
+}
+
+.bridge-list {
+  display: grid;
+  gap: 8px;
+}
+
+.bridge-item,
+.bridge-detail {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.bridge-item {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  padding: 10px;
+  text-align: left;
+}
+
+.bridge-item.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.bridge-item-title,
+.bridge-detail header,
+.bridge-meta-line,
+.bridge-meta-grid,
+.bridge-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.bridge-item-title,
+.bridge-detail header {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.bridge-item small,
+.bridge-meta-line,
+.bridge-meta-grid {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.bridge-detail {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+}
+
+.bridge-detail strong,
+.bridge-item strong {
+  overflow-wrap: anywhere;
+}
+
+.bridge-message,
+.bridge-error {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.bridge-meta-grid {
+  flex-wrap: wrap;
+}
+
+.bridge-actions {
+  justify-content: flex-end;
 }
 
 .log-card,

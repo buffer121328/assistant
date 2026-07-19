@@ -423,10 +423,27 @@ class ProcessedMessage(TimestampMixin, Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     platform: Mapped[str] = mapped_column(String(64), nullable=False)
     message_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    adapter: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    sender_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    conversation_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    message_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    intent_outcome: Mapped[str | None] = mapped_column(String(64), nullable=True)
     chat_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     response_target: Mapped[str | None] = mapped_column(Text, nullable=True)
     reason: Mapped[str] = mapped_column(String(64), nullable=False)
     task_id: Mapped[str | None] = mapped_column(ForeignKey("tasks.id"), nullable=True)
+    delivery_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    delivery_attempt_count: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+    delivery_error_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    delivery_result_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    delivery_last_attempt_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
 
 
 class Memory(TimestampMixin, Base):

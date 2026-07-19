@@ -17,6 +17,11 @@ from infrastructure.repositories import MessageRepository, ProcessedMessageCreat
 from app.api.schemas import LangBotWebhookRequest
 from domain.services import TaskService, TaskServiceError
 
+from channels.langbot.intent import (
+    ALL_COMMAND_TASK_TYPES,
+    classify_langbot_intent,
+)
+
 PLATFORM = "langbot"
 REASON_TASK_CREATED = "task_created"
 REASON_DUPLICATE = "duplicate_message"
@@ -123,6 +128,7 @@ async def handle_langbot_webhook(
 ) -> dict[str, object]:
     verify_langbot_secret(headers=headers, settings=settings)
     message = normalize_message(payload)
+    normalized_text = message.text.strip()
     repository = MessageRepository(session)
 
     duplicate = await repository.get_processed_message(
@@ -133,16 +139,14 @@ async def handle_langbot_webhook(
         return ack(REASON_DUPLICATE)
 
     task_type = parse_task_type(message.text)
-    if task_type is None:
-        normalized_text = message.text.strip()
-        if not normalized_text or normalized_text.startswith("/"):
-            return await record_no_task_ack(
-                session=session,
-                repository=repository,
-                message=message,
-                reason=REASON_UNKNOWN_COMMAND,
-            )
-        task_type = "agent"
+    if not normalized_text or normalized_text == "/":
+        return await record_no_task_ack(
+            session=session,
+            repository=repository,
+            message=message,
+            reason=REASON_UNKNOWN_COMMAND,
+            intent_outcome=None,
+        )
 
     user_id = await repository.get_user_id_by_platform_account(
         platform=PLATFORM,
@@ -157,14 +161,28 @@ async def handle_langbot_webhook(
             repository=repository,
             message=message,
             reason=REASON_UNBOUND_USER,
+            intent_outcome=None,
         )
+
+    intent_outcome: str | None = task_type
+    if task_type not in ALL_COMMAND_TASK_TYPES:
+        intent = await classify_langbot_intent(message.text, settings=settings)
+        if intent.task_type is None:
+            return await record_no_task_ack(
+                session=session,
+                repository=repository,
+                message=message,
+                reason=str(intent.outcome),
+                intent_outcome=str(intent.outcome),
+            )
+        task_type = intent.task_type
+        intent_outcome = intent.outcome
 
     conversation = await ConversationService(session).resolve_external(
         user_id=user_id,
         channel=PLATFORM,
         external_key=(
-            f"{message.adapter}:{message.conversation_type}:"
-            f"{message.conversation_id}"
+            f"{message.adapter}:{message.conversation_type}:{message.conversation_id}"
         ),
         title=f"LangBot · {message.adapter} · {message.conversation_id}",
     )
@@ -177,6 +195,7 @@ async def handle_langbot_webhook(
         task_type=task_type,
         conversation_id=conversation.id,
         message=message,
+        intent_outcome=intent_outcome,
         task_handoff=task_handoff,
     )
 
@@ -203,12 +222,18 @@ async def record_no_task_ack(
     repository: MessageRepository,
     message: NormalizedLangBotMessage,
     reason: str,
+    intent_outcome: str | None,
 ) -> dict[str, object]:
     try:
         await repository.create_processed_message(
             ProcessedMessageCreate(
                 platform=PLATFORM,
                 message_id=message.message_id,
+                adapter=message.adapter,
+                sender_id=message.sender_id,
+                conversation_type=message.conversation_type,
+                message_text=message.text.strip(),
+                intent_outcome=intent_outcome,
                 chat_id=message.conversation_id,
                 response_target=_response_target(message),
                 reason=reason,
@@ -231,6 +256,7 @@ async def create_task_ack(
     task_type: str,
     conversation_id: str,
     message: NormalizedLangBotMessage,
+    intent_outcome: str | None,
     task_handoff: Callable[[str], bool] | None = None,
 ) -> dict[str, object]:
     try:
@@ -238,9 +264,15 @@ async def create_task_ack(
             ProcessedMessageCreate(
                 platform=PLATFORM,
                 message_id=message.message_id,
+                adapter=message.adapter,
+                sender_id=message.sender_id,
+                conversation_type=message.conversation_type,
+                message_text=message.text.strip(),
+                intent_outcome=intent_outcome,
                 chat_id=message.conversation_id,
                 response_target=_response_target(message),
                 reason=REASON_TASK_CREATED,
+                delivery_status="pending",
             )
         )
         task = await TaskService(session).create_task(

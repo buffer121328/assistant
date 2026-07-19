@@ -5,8 +5,10 @@
 当前产品入口状态：
 
 - **LangBot**：主消息入口和结果回推通道。
+- **LangBot 意图路由**：进入任务系统前先做结构化 intent 判定，核心四意图直达任务，`needs_confirmation` 和 `needs_new_capability` 走无任务分支。
+- **远程桥接账本**：`/api/remote-control/bridge/sessions` 记录 LangBot 入站、任务绑定、回推状态和重放信息，可供 Electron 读取。
 - **本地 Agent API**：V7 新桌面端契约，提供 `/local/*` 任务、事件、审批和配置接口，供后续 Electron 桌面端使用。
-- **Electron Web 桌面端**：V7 新桌面主线，当前已具备安全隔离工程骨架、三栏任务控制台、任务/事件/审批摘要、运行日志、审批/只读 diff 和验证式设置源码。
+- **Electron Web 桌面端**：V7 新桌面主线，当前已具备安全隔离工程骨架、三栏任务控制台、任务/事件/审批摘要、运行日志、审批/只读 diff、远程桥接会话视图和验证式设置源码。
 - **Legacy Python 桌面源码**：历史 Qt GUI 源码保留在仓库中用于参考和旧测试，不再作为当前安装或启动入口。
 
 阶段状态索引：
@@ -40,6 +42,8 @@
 ## 四个核心功能
 
 当前项目主要围绕四个核心 Agent 能力展开：
+
+LangBot 入口会先做结构化 intent 判定：显式 `/plan`、`/learn`、`/daily`、`/office` 直达对应任务；`/memory` 和 `/status` 仍作为独立工具命令处理；自由文本会先归入四个核心意图、人工确认或新增能力三类之一，再决定是否创建任务。
 
 ### 1. `/plan`：计划与任务拆解
 
@@ -276,7 +280,7 @@
 
 1. 先创建 `backend/features/<task_type>/README.md`，写清用户场景、边界和验收行为。
 2. 在 `backend/features/<task_type>/definition.py` 声明 command、task type、profile、默认 skill 和允许工具。
-3. 如需要调整命令解析入口，改 `backend/app/support/commands.py`。
+3. 如需要调整 LangBot 意图分流或命令解析入口，改 `backend/app/support/commands.py` 和 `backend/channels/langbot/intent.py`。
 4. 如需要调整 profile 适配逻辑，改 `backend/agent/planning/profiles.py`。
 5. 共享工具放在 `backend/agent/tool_management`。
 6. 如需要新的 prompt 模板，放到 `backend/resources/prompts`。

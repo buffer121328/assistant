@@ -198,9 +198,17 @@ class ProcessedMessageCreate:
     platform: str
     message_id: str
     reason: str
+    adapter: str | None = None
+    sender_id: str | None = None
+    conversation_type: str | None = None
+    message_text: str | None = None
+    intent_outcome: str | None = None
     chat_id: str | None = None
     response_target: str | None = None
     task_id: str | None = None
+    delivery_status: str | None = None
+    delivery_error_summary: str | None = None
+    delivery_result_json: str | None = None
 
 
 class MessageRepository:
@@ -240,10 +248,18 @@ class MessageRepository:
         processed_message = ProcessedMessage(
             platform=data.platform,
             message_id=data.message_id,
+            adapter=data.adapter,
+            sender_id=data.sender_id,
+            conversation_type=data.conversation_type,
+            message_text=data.message_text,
+            intent_outcome=data.intent_outcome,
             chat_id=data.chat_id,
             response_target=data.response_target,
             reason=data.reason,
             task_id=data.task_id,
+            delivery_status=data.delivery_status,
+            delivery_error_summary=data.delivery_error_summary,
+            delivery_result_json=data.delivery_result_json,
         )
         self.session.add(processed_message)
         await self.session.flush()
@@ -259,6 +275,47 @@ class MessageRepository:
             .order_by(ProcessedMessage.created_at.asc(), ProcessedMessage.id.asc())
             .limit(1)
         )
+
+    async def list_recent_bridge_sessions(
+        self,
+        *,
+        limit: int = 20,
+    ) -> list[ProcessedMessage]:
+        result = await self.session.scalars(
+            select(ProcessedMessage)
+            .where(ProcessedMessage.platform == "langbot")
+            .order_by(ProcessedMessage.created_at.desc(), ProcessedMessage.id.desc())
+            .limit(limit)
+        )
+        return list(result)
+
+    async def get_bridge_session(self, message_id: str) -> ProcessedMessage | None:
+        return await self.session.scalar(
+            select(ProcessedMessage).where(
+                ProcessedMessage.platform == "langbot",
+                ProcessedMessage.message_id == message_id,
+            )
+        )
+
+    async def record_delivery_attempt(
+        self,
+        *,
+        task_id: str,
+        status: str,
+        error_summary: str | None = None,
+        result_json: str | None = None,
+        delivery_status: str | None = None,
+    ) -> ProcessedMessage | None:
+        record = await self.get_task_dispatch_record(task_id)
+        if record is None:
+            return None
+
+        record.delivery_attempt_count += 1
+        record.delivery_status = delivery_status or status
+        record.delivery_error_summary = error_summary
+        record.delivery_result_json = result_json
+        record.delivery_last_attempt_at = utc_now()
+        return record
 
 
 @dataclass(frozen=True)

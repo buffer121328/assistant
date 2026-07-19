@@ -65,6 +65,40 @@ export type LocalConfig = {
   features: Record<string, boolean>;
 };
 
+export type RemoteControlBridgeResponseTarget = {
+  adapter: string;
+  conversation_id: string;
+  conversation_type: string;
+};
+
+export type RemoteControlBridgeSession = {
+  bridge_id: string;
+  platform: string;
+  message_id: string;
+  adapter: string | null;
+  sender_id: string | null;
+  conversation_id: string | null;
+  conversation_type: string | null;
+  message_text: string | null;
+  intent_outcome: string | null;
+  reason: string;
+  task_id: string | null;
+  task_status: string | null;
+  response_target: RemoteControlBridgeResponseTarget | null;
+  delivery_status: string | null;
+  delivery_attempt_count: number;
+  delivery_error_summary: string | null;
+  delivery_result_json: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RemoteControlBridgeReplay = {
+  dispatch_status: string;
+  message: string;
+  session: RemoteControlBridgeSession;
+};
+
 type RequestOptions = {
   method?: string;
   body?: unknown;
@@ -155,6 +189,27 @@ export class LocalApiClient {
         decision,
         reason
       }
+    });
+  }
+
+  async bridgeSessions(limit = 20, conversationId?: string): Promise<RemoteControlBridgeSession[]> {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (conversationId) {
+      params.set("conversation_id", conversationId);
+    }
+    const response = await this.request<{ items: RemoteControlBridgeSession[] }>(
+      `/api/remote-control/bridge/sessions?${params.toString()}`
+    );
+    return response.items;
+  }
+
+  async bridgeSession(messageId: string): Promise<RemoteControlBridgeSession> {
+    return this.request(`/api/remote-control/bridge/sessions/${encodeURIComponent(messageId)}`);
+  }
+
+  async replayBridgeSession(messageId: string): Promise<RemoteControlBridgeReplay> {
+    return this.request(`/api/remote-control/bridge/sessions/${encodeURIComponent(messageId)}/replay`, {
+      method: "POST"
     });
   }
 

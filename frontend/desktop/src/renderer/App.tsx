@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import type { JSX } from "react";
-import { Approval, DesktopSettings, LocalApiClient, LocalEvent, Task } from "./api";
+import {
+  Approval,
+  DesktopSettings,
+  LocalApiClient,
+  LocalEvent,
+  RemoteControlBridgeSession,
+  Task
+} from "./api";
 
 type ConnectionState = "checking" | "connected" | "disconnected";
 
@@ -31,7 +38,10 @@ export function App(): JSX.Element {
   const [inputText, setInputText] = useState("");
   const [messageText, setMessageText] = useState("");
   const [approvalReason, setApprovalReason] = useState("");
-  const [activePanel, setActivePanel] = useState<"logs" | "approvals" | "changes" | "settings">("logs");
+  const [bridgeSessions, setBridgeSessions] = useState<RemoteControlBridgeSession[]>([]);
+  const [selectedBridgeMessageId, setSelectedBridgeMessageId] = useState<string>("");
+  const [selectedBridgeSession, setSelectedBridgeSession] = useState<RemoteControlBridgeSession | null>(null);
+  const [activePanel, setActivePanel] = useState<"logs" | "approvals" | "bridge" | "changes" | "settings">("logs");
   const [error, setError] = useState<string>("");
 
   const api = useMemo(() => new LocalApiClient(settings), [settings]);
@@ -47,6 +57,9 @@ export function App(): JSX.Element {
   const waitingApprovalCount = tasks.filter((task) => task.status === "waiting_approval").length;
   const finishedCount = tasks.filter((task) => task.status === "success" || task.status === "failed").length;
   const latestEventLabel = selectedEvents.at(-1)?.type || "No events yet";
+  const bridgePendingCount = bridgeSessions.filter((session) => session.delivery_status === "pending").length;
+  const bridgeSucceededCount = bridgeSessions.filter((session) => session.delivery_status === "succeeded").length;
+  const bridgeRetryCount = bridgeSessions.filter((session) => session.delivery_status === "retry").length;
 
   useEffect(() => {
     void window.assistantDesktop.loadSettings().then((stored) => {
@@ -82,6 +95,48 @@ export function App(): JSX.Element {
       cancelled = true;
     };
   }, [api, selectedTaskId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .bridgeSessions(20)
+      .then((items) => {
+        if (cancelled) return;
+        setBridgeSessions(items);
+        if (!selectedBridgeMessageId && items[0]) {
+          setSelectedBridgeMessageId(items[0].message_id);
+        }
+      })
+      .catch((reason: unknown) => {
+        if (cancelled) return;
+        setError(reason instanceof Error ? reason.message : "Unable to load bridge sessions");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [api, selectedBridgeMessageId]);
+
+  useEffect(() => {
+    if (!selectedBridgeMessageId) {
+      setSelectedBridgeSession(null);
+      return;
+    }
+    let cancelled = false;
+    api
+      .bridgeSession(selectedBridgeMessageId)
+      .then((session) => {
+        if (!cancelled) {
+          setSelectedBridgeSession(session);
+        }
+      })
+      .catch((reason: unknown) => {
+        if (cancelled) return;
+        setError(reason instanceof Error ? reason.message : "Unable to load bridge session");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [api, selectedBridgeMessageId]);
 
   useEffect(() => {
     if (!selectedTaskId || !settings.userId) return;
@@ -318,17 +373,34 @@ export function App(): JSX.Element {
         <header className="inspector-header">
           <div>
             <span className="eyebrow">Inspector</span>
-            <h2>{selectedTask ? "Run details" : "Waiting for a task"}</h2>
+            <h2>
+              {activePanel === "bridge"
+                ? "Remote bridge"
+                : selectedTask
+                  ? "Run details"
+                  : "Waiting for a task"}
+            </h2>
           </div>
           <div className="panel-summary">
-            <span>{approvalCount} Approvals</span>
-            <span>{selectedEvents.length} Events</span>
-            <span>{derivedItems.length} Changes</span>
+            {activePanel === "bridge" ? (
+              <>
+                <span>{bridgeSessions.length} Sessions</span>
+                <span>{bridgePendingCount} Pending</span>
+                <span>{bridgeSucceededCount} Delivered</span>
+                <span>{bridgeRetryCount} Retry</span>
+              </>
+            ) : (
+              <>
+                <span>{approvalCount} Approvals</span>
+                <span>{selectedEvents.length} Events</span>
+                <span>{derivedItems.length} Changes</span>
+              </>
+            )}
           </div>
         </header>
 
         <div className="tabs">
-          {(["logs", "approvals", "changes", "settings"] as const).map((panel) => (
+          {(["logs", "approvals", "bridge", "changes", "settings"] as const).map((panel) => (
             <button
               key={panel}
               className={activePanel === panel ? "active" : ""}
@@ -393,6 +465,123 @@ export function App(): JSX.Element {
               <div className="inspector-empty">
                 <strong>No pending approvals</strong>
                 <p>Tool requests that need your decision will be listed here.</p>
+              </div>
+            )}
+          </section>
+        ) : null}
+
+        {activePanel === "bridge" ? (
+          <section className="bridge-panel">
+            <div className="bridge-list">
+              {bridgeSessions.length ? (
+                bridgeSessions.slice(0, 8).map((session) => (
+                  <button
+                    key={session.bridge_id}
+                    className={
+                      session.message_id === selectedBridgeMessageId ? "bridge-item selected" : "bridge-item"
+                    }
+                    onClick={() => setSelectedBridgeMessageId(session.message_id)}
+                  >
+                    <span className="bridge-item-title">
+                      <strong>{session.message_id}</strong>
+                      <span className={`status ${bridgeStatusClass(session.delivery_status)}`}>
+                        {formatBridgeDeliveryStatus(session.delivery_status)}
+                      </span>
+                    </span>
+                    <small>{bridgeSessionSubtitle(session)}</small>
+                    <p>{session.message_text || "No message body"}</p>
+                  </button>
+                ))
+              ) : (
+                <div className="inspector-empty">
+                  <strong>No bridge sessions</strong>
+                  <p>Remote-control messages will appear here once LangBot traffic reaches the backend.</p>
+                </div>
+              )}
+            </div>
+
+            {selectedBridgeSession ? (
+              <article className="bridge-detail">
+                <header>
+                  <div>
+                    <strong>{selectedBridgeSession.message_id}</strong>
+                    <p className="bridge-meta-line">
+                      <span>{selectedBridgeSession.intent_outcome || selectedBridgeSession.reason}</span>
+                      <span>{selectedBridgeSession.conversation_id || "no conversation"}</span>
+                    </p>
+                  </div>
+                  <button
+                    className="secondary-action"
+                    onClick={() =>
+                      void api
+                        .bridgeSession(selectedBridgeSession.message_id)
+                        .then((session) => {
+                          setSelectedBridgeSession(session);
+                        })
+                        .catch((reason: unknown) => {
+                          setError(reason instanceof Error ? reason.message : "Unable to refresh bridge session");
+                        })
+                    }
+                  >
+                    Refresh
+                  </button>
+                </header>
+                <p className="bridge-message">{selectedBridgeSession.message_text || "No message body"}</p>
+                <div className="bridge-meta-grid">
+                  <span>Adapter: {selectedBridgeSession.adapter || "-"}</span>
+                  <span>Sender: {selectedBridgeSession.sender_id || "-"}</span>
+                  <span>Conversation: {selectedBridgeSession.conversation_type || "-"}</span>
+                  <span>Task: {selectedBridgeSession.task_status || selectedBridgeSession.task_id || "-"}</span>
+                  <span>Deliveries: {selectedBridgeSession.delivery_attempt_count}</span>
+                  <span>Status: {selectedBridgeSession.delivery_status || "-"}</span>
+                </div>
+                {selectedBridgeSession.response_target ? (
+                  <pre className="command-output">{formatPayload(selectedBridgeSession.response_target)}</pre>
+                ) : null}
+                {selectedBridgeSession.delivery_error_summary ? (
+                  <p className="bridge-error">{selectedBridgeSession.delivery_error_summary}</p>
+                ) : null}
+                <div className="bridge-actions">
+                  {selectedBridgeSession.task_id && selectedBridgeSession.delivery_status !== "succeeded" ? (
+                    <button
+                      className="secondary-action"
+                      onClick={() =>
+                        void api
+                          .replayBridgeSession(selectedBridgeSession.message_id)
+                          .then((result) => {
+                            setSelectedBridgeSession(result.session);
+                            setBridgeSessions((current) =>
+                              current.map((item) =>
+                                item.message_id === result.session.message_id ? result.session : item
+                              )
+                            );
+                            setError(result.dispatch_status === "succeeded" ? "" : result.message);
+                          })
+                          .catch((reason: unknown) => {
+                            setError(reason instanceof Error ? reason.message : "Unable to replay bridge session");
+                          })
+                      }
+                    >
+                      Replay delivery
+                    </button>
+                  ) : null}
+                  {selectedBridgeSession.task_id ? (
+                    <button
+                      className="primary-action"
+                      onClick={() => {
+                        setSelectedTaskId(selectedBridgeSession.task_id || "");
+                        setActivePanel("logs");
+                      }}
+                    >
+                      Open task
+                    </button>
+                  ) : null}
+                </div>
+              </article>
+            ) : (
+              <div className="inspector-empty">
+                <strong>No bridge session selected</strong>
+                <p>Select a remote-control message to inspect its task and delivery state.</p>
               </div>
             )}
           </section>
@@ -586,4 +775,41 @@ function formatPayload(value: unknown): string {
 
 function formatStatus(status: Task["status"]): string {
   return status.replace(/_/g, " ");
+}
+
+function formatBridgeDeliveryStatus(status: string | null): string {
+  if (!status) return "unknown";
+  return status.replace(/_/g, " ");
+}
+
+function bridgeStatusClass(status: string | null): string {
+  switch (status) {
+    case "succeeded":
+      return "success";
+    case "pending":
+      return "running";
+    case "retry":
+      return "waiting_approval";
+    case "failed":
+      return "failed";
+    default:
+      return "";
+  }
+}
+
+function bridgeSessionSubtitle(session: {
+  adapter: string | null;
+  conversation_id: string | null;
+  sender_id: string | null;
+  intent_outcome: string | null;
+  reason: string;
+}): string {
+  return [
+    session.adapter || "unknown adapter",
+    session.conversation_id || "no conversation",
+    session.sender_id || "no sender",
+    session.intent_outcome || session.reason
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
