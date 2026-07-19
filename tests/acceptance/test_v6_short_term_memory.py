@@ -218,3 +218,154 @@ def test_v6_short_term_migration_is_linear_and_reversible() -> None:
     assert migration.down_revision == "202607150004"
     assert callable(migration.upgrade)
     assert callable(migration.downgrade)
+
+
+@pytest.mark.asyncio
+async def test_context_loading_automatically_creates_summary_before_pack(
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    from agent.memory.working_set import ConversationCompactionPolicy
+    from infrastructure.agent_ports import SqlAlchemyConversationContextPort
+
+    user, conversation_id = await create_conversation(sessionmaker)
+    async with sessionmaker() as session:
+        port = SqlAlchemyConversationContextPort(
+            session,
+            compaction_policy=ConversationCompactionPolicy(
+                trigger_token_threshold=1,
+                trigger_message_count=1,
+                stale_after_tokens=999,
+                stale_after_messages=999,
+            ),
+        )
+        pack = await port.load_context(
+            conversation_id=conversation_id,
+            user_id=user.id,
+            task_id="current-task",
+            current_input="继续",
+            long_term_memory="",
+        )
+        await session.commit()
+        active = await ConversationMemoryService(session).get_active_summary(
+            conversation_id=conversation_id,
+            user_id=user.id,
+        )
+        messages = await ConversationService(session).list_messages(
+            conversation_id=conversation_id, user_id=user.id, limit=100
+        )
+
+    assert active is not None
+    assert active.summary_version == "auto-summary-v1"
+    assert active.source_start_message_id == messages[0].id
+    assert active.source_end_message_id == messages[-1].id
+    assert active.source_message_count == 14
+    assert pack.summary == active.summary_text
+    summary_trace = next(
+        item for item in pack.trace if item["section"] == "conversation_summary"
+    )
+    assert summary_trace["version"] == "auto-summary-v1"
+    assert summary_trace["source_ids"] == (
+        active.source_start_message_id,
+        active.source_end_message_id,
+    )
+    assert len(messages) == 14
+
+
+@pytest.mark.asyncio
+async def test_automatic_compaction_reuses_fresh_summary_without_rewrite(
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    from agent.memory.working_set import ConversationCompactionPolicy
+    from infrastructure.agent_ports import SqlAlchemyConversationContextPort
+
+    user, conversation_id = await create_conversation(sessionmaker)
+    async with sessionmaker() as session:
+        service = ConversationMemoryService(session)
+        previous = await service.update_summary(
+            conversation_id=conversation_id,
+            user_id=user.id,
+            summarizer=SuccessfulSummarizer(),
+            summary_version="manual-v1",
+            model_version="synthetic-model-v1",
+        )
+        await session.commit()
+        assert previous is not None
+
+        port = SqlAlchemyConversationContextPort(
+            session,
+            compaction_policy=ConversationCompactionPolicy(
+                trigger_token_threshold=1,
+                trigger_message_count=1,
+                stale_after_tokens=1,
+                stale_after_messages=1,
+            ),
+        )
+        await port.load_context(
+            conversation_id=conversation_id,
+            user_id=user.id,
+            task_id="current-task",
+            current_input="继续",
+            long_term_memory="",
+        )
+        await session.commit()
+        active = await service.get_active_summary(
+            conversation_id=conversation_id,
+            user_id=user.id,
+        )
+        summary_count = await session.scalar(select(func.count(ConversationSummary.id)))
+
+    assert active is not None
+    assert active.id == previous.id
+    assert active.summary_version == "manual-v1"
+    assert summary_count == 1
+
+
+@pytest.mark.asyncio
+async def test_automatic_compaction_failure_preserves_previous_summary(
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    from agent.memory.working_set import ConversationCompactionPolicy
+
+    user, conversation_id = await create_conversation(sessionmaker)
+    async with sessionmaker() as session:
+        service = ConversationMemoryService(session)
+        previous = await service.update_summary(
+            conversation_id=conversation_id,
+            user_id=user.id,
+            summarizer=SuccessfulSummarizer(),
+            summary_version="manual-v1",
+            model_version="synthetic-model-v1",
+        )
+        await ConversationService(session).append_message(
+            conversation_id=conversation_id,
+            user_id=user.id,
+            role="user",
+            content="新增的重要约束",
+        )
+        await session.commit()
+        assert previous is not None
+
+        ensured = await service.ensure_summary_current(
+            conversation_id=conversation_id,
+            user_id=user.id,
+            summarizer=FailingSummarizer(),
+            policy=ConversationCompactionPolicy(
+                trigger_token_threshold=1,
+                trigger_message_count=1,
+                stale_after_tokens=1,
+                stale_after_messages=1,
+            ),
+            summary_version="auto-summary-v2",
+            model_version="failing-model",
+        )
+        await session.commit()
+        active = await service.get_active_summary(
+            conversation_id=conversation_id,
+            user_id=user.id,
+        )
+        message_count = await session.scalar(select(func.count(ConversationMessage.id)))
+
+    assert ensured is not None and ensured.id == previous.id
+    assert active is not None and active.id == previous.id
+    assert active.summary_version == "manual-v1"
+    assert message_count == 15

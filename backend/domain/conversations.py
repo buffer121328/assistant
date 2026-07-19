@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent.memory.working_set import estimate_tokens
@@ -183,7 +183,12 @@ class ConversationService:
         await self.get_owned(conversation_id=conversation_id, user_id=user_id)
         conditions = [ConversationMessage.conversation_id == conversation_id]
         if exclude_task_id:
-            conditions.append(ConversationMessage.task_id != exclude_task_id)
+            conditions.append(
+                or_(
+                    ConversationMessage.task_id.is_(None),
+                    ConversationMessage.task_id != exclude_task_id,
+                )
+            )
         newest = list(
             await self.session.scalars(
                 select(ConversationMessage)
@@ -209,7 +214,9 @@ class ConversationService:
             conversation_id=conversation_id, user_id=user_id, limit=200
         )
         user_tokens = sum(
-            estimate_tokens(message.content) for message in messages if message.role == "user"
+            estimate_tokens(message.content)
+            for message in messages
+            if message.role == "user"
         )
         assistant_tokens = sum(
             estimate_tokens(message.content)

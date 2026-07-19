@@ -240,6 +240,30 @@ p {
   border-bottom: 1px solid var(--border);
 }
 
+.new-task-controls {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 9px;
+}
+
+.task-type-select {
+  display: grid;
+  gap: 5px;
+  color: #455166;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.task-type-select select {
+  font-weight: 400;
+}
+
+.task-type-hint {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .task-nav {
   min-height: 0;
   padding: 8px;

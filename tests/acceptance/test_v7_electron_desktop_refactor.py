@@ -142,6 +142,12 @@ def test_desktop_web_renderer_covers_task_console_and_developer_workflow() -> No
         "settings-panel",
         "risk-level",
         "command-output",
+        "task-type-select",
+        "task-type-hint",
+        "task-filters",
+        "task-search",
+        "task-status-filter",
+        "task-filter-empty",
     ):
         assert ui_token in app_source or ui_token in styles
     for event_type in (
@@ -152,6 +158,16 @@ def test_desktop_web_renderer_covers_task_console_and_developer_workflow() -> No
         "task.completed",
     ):
         assert event_type in app_source
+    for task_type in ("plan", "learn", "daily", "office"):
+        assert f'value: "{task_type}"' in app_source
+    assert "selectedTaskType" in app_source
+    assert "taskSearchText" in app_source
+    assert "taskStatusFilter" in app_source
+    assert "filteredTasks" in app_source
+    assert "No matching tasks" in app_source
+    assert "api.createTask(inputText.trim(), selectedTaskType)" in app_source
+    assert "LocalTaskType" in api_source
+    assert 'taskType: LocalTaskType = "plan"' in api_source
     assert "dangerouslySetInnerHTML" not in app_source
 
 

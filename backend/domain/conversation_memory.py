@@ -8,7 +8,7 @@ from typing import Protocol
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent.memory.working_set import estimate_tokens
+from agent.memory.working_set import ConversationCompactionPolicy, estimate_tokens
 from model_gateway import sanitize_text
 
 from domain.conversations import ConversationError, ConversationService
@@ -65,6 +65,66 @@ class ConversationSummarizer(Protocol):
     ) -> SummaryDraft: ...
 
 
+class HeuristicConversationSummarizer:
+    SUMMARY_VERSION = "auto-summary-v1"
+    MODEL_VERSION = "heuristic-conversation-summary-v1"
+
+    def __init__(self, *, max_items: int = 5, max_item_chars: int = 160) -> None:
+        self.max_items = max(1, max_items)
+        self.max_item_chars = max(40, max_item_chars)
+
+    async def summarize(
+        self,
+        *,
+        messages: Sequence[ConversationMessage],
+        previous: ConversationSummary | None,
+    ) -> SummaryDraft:
+        previous_draft = _draft_from_summary(previous)
+        user_messages = tuple(
+            _bounded_item(message.content, self.max_item_chars)
+            for message in messages
+            if message.role == "user" and message.content.strip()
+        )
+        assistant_messages = tuple(
+            _bounded_item(message.content, self.max_item_chars)
+            for message in messages
+            if message.role == "assistant" and message.content.strip()
+        )
+        current_goal = (
+            user_messages[-1] if user_messages else previous_draft.current_goal
+        )
+        confirmed_facts = _merge_limited(
+            previous_draft.confirmed_facts,
+            user_messages[-self.max_items :],
+            limit=self.max_items,
+        )
+        pending_items = _merge_limited(
+            previous_draft.pending_items,
+            assistant_messages[-self.max_items :],
+            limit=self.max_items,
+        )
+        sources = _merge_limited(
+            previous_draft.sources,
+            (f"conversation_messages:{messages[0].id}..{messages[-1].id}",)
+            if messages
+            else (),
+            limit=self.max_items,
+        )
+        return SummaryDraft(
+            current_goal=current_goal,
+            confirmed_facts=confirmed_facts,
+            pending_items=pending_items,
+            decisions=previous_draft.decisions[: self.max_items],
+            sources=sources,
+            pending_confirmations=previous_draft.pending_confirmations[
+                : self.max_items
+            ],
+            discarded_information=previous_draft.discarded_information[
+                : self.max_items
+            ],
+        )
+
+
 class ConversationMemoryService:
     BLOCK_TYPES = {
         "human_profile",
@@ -102,6 +162,95 @@ class ConversationMemoryService:
             .limit(1)
         )
 
+    async def ensure_summary_current(
+        self,
+        *,
+        conversation_id: str,
+        user_id: str,
+        summarizer: ConversationSummarizer | None = None,
+        policy: ConversationCompactionPolicy | None = None,
+        summary_version: str | None = None,
+        model_version: str | None = None,
+        exclude_task_id: str | None = None,
+    ) -> ConversationSummary | None:
+        active = await self.get_active_summary(
+            conversation_id=conversation_id, user_id=user_id
+        )
+        compaction_policy = policy or ConversationCompactionPolicy()
+        if not compaction_policy.enabled:
+            return active
+
+        messages = await self.conversations.list_messages(
+            conversation_id=conversation_id,
+            user_id=user_id,
+            limit=compaction_policy.max_source_messages,
+            exclude_task_id=exclude_task_id,
+        )
+        if not messages:
+            return active
+
+        should_update = self._summary_needs_update(
+            messages=messages,
+            active=active,
+            policy=compaction_policy,
+        )
+        if not should_update:
+            return active
+
+        summarizer = summarizer or HeuristicConversationSummarizer()
+        resolved_summary_version = summary_version or str(
+            getattr(
+                summarizer,
+                "SUMMARY_VERSION",
+                HeuristicConversationSummarizer.SUMMARY_VERSION,
+            )
+        )
+        resolved_model_version = model_version or str(
+            getattr(
+                summarizer,
+                "MODEL_VERSION",
+                HeuristicConversationSummarizer.MODEL_VERSION,
+            )
+        )
+        updated = await self.update_summary(
+            conversation_id=conversation_id,
+            user_id=user_id,
+            summarizer=summarizer,
+            summary_version=resolved_summary_version,
+            model_version=resolved_model_version,
+            exclude_task_id=exclude_task_id,
+        )
+        return updated or active
+
+    def _summary_needs_update(
+        self,
+        *,
+        messages: Sequence[ConversationMessage],
+        active: ConversationSummary | None,
+        policy: ConversationCompactionPolicy,
+    ) -> bool:
+        total_tokens = sum(estimate_tokens(message.content) for message in messages)
+        crosses_initial_threshold = (
+            total_tokens >= policy.trigger_token_threshold
+            or len(messages) >= policy.trigger_message_count
+        )
+        if active is None:
+            return crosses_initial_threshold
+
+        if active.source_end_message_id == messages[-1].id:
+            return False
+
+        after_summary = _messages_after(messages, active.source_end_message_id)
+        if not after_summary:
+            return crosses_initial_threshold
+        after_tokens = sum(
+            estimate_tokens(message.content) for message in after_summary
+        )
+        return (
+            len(after_summary) >= policy.stale_after_messages
+            or after_tokens >= policy.stale_after_tokens
+        )
+
     async def update_summary(
         self,
         *,
@@ -110,9 +259,13 @@ class ConversationMemoryService:
         summarizer: ConversationSummarizer,
         summary_version: str,
         model_version: str,
+        exclude_task_id: str | None = None,
     ) -> ConversationSummary | None:
         messages = await self.conversations.list_messages(
-            conversation_id=conversation_id, user_id=user_id, limit=200
+            conversation_id=conversation_id,
+            user_id=user_id,
+            limit=200,
+            exclude_task_id=exclude_task_id,
         )
         if not messages:
             raise ConversationError("conversation_summary_empty")
@@ -257,3 +410,59 @@ def _safe(value: str) -> str:
 
 def _safe_items(values: Sequence[str]) -> tuple[str, ...]:
     return tuple(item for value in values if (item := _safe(value)))
+
+
+def _messages_after(
+    messages: Sequence[ConversationMessage], source_end_message_id: str
+) -> tuple[ConversationMessage, ...]:
+    for index, message in enumerate(messages):
+        if message.id == source_end_message_id:
+            return tuple(messages[index + 1 :])
+    return tuple(messages)
+
+
+def _draft_from_summary(summary: ConversationSummary | None) -> SummaryDraft:
+    if summary is None:
+        return SummaryDraft()
+    try:
+        raw = json.loads(summary.content_json)
+    except json.JSONDecodeError:
+        return SummaryDraft(current_goal=summary.summary_text[:300])
+    if not isinstance(raw, dict):
+        return SummaryDraft(current_goal=summary.summary_text[:300])
+    return SummaryDraft(
+        current_goal=_safe(str(raw.get("current_goal") or "")),
+        confirmed_facts=_tuple_from_json(raw.get("confirmed_facts")),
+        pending_items=_tuple_from_json(raw.get("pending_items")),
+        decisions=_tuple_from_json(raw.get("decisions")),
+        sources=_tuple_from_json(raw.get("sources")),
+        pending_confirmations=_tuple_from_json(raw.get("pending_confirmations")),
+        discarded_information=_tuple_from_json(raw.get("discarded_information")),
+    )
+
+
+def _tuple_from_json(value: object) -> tuple[str, ...]:
+    if not isinstance(value, (list, tuple)):
+        return ()
+    return tuple(item for item in (_safe(str(item)) for item in value) if item)
+
+
+def _bounded_item(value: str, limit: int) -> str:
+    safe = _safe(value)
+    if len(safe) <= limit:
+        return safe
+    return f"{safe[:limit]}..."
+
+
+def _merge_limited(
+    existing: Sequence[str], additions: Sequence[str], *, limit: int
+) -> tuple[str, ...]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in tuple(existing) + tuple(additions):
+        item = _safe(value)
+        if not item or item in seen:
+            continue
+        seen.add(item)
+        result.append(item)
+    return tuple(result[-limit:])

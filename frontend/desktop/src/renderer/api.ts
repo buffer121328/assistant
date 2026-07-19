@@ -6,6 +6,8 @@ export type DesktopSettings = {
   approvalPolicy: "ask" | "require_high_risk" | "read_only";
 };
 
+export type LocalTaskType = "plan" | "learn" | "daily" | "office";
+
 export type TaskStatus =
   | "pending"
   | "running"
@@ -136,7 +138,7 @@ export class LocalApiClient {
     return response.items;
   }
 
-  async createTask(inputText: string, taskType = "plan"): Promise<Task> {
+  async createTask(inputText: string, taskType: LocalTaskType = "plan"): Promise<Task> {
     const response = await this.request<{ task: Task; queued: boolean }>("/local/tasks", {
       method: "POST",
       body: {

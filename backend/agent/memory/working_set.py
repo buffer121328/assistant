@@ -17,6 +17,28 @@ SectionName = Literal[
 
 
 @dataclass(frozen=True)
+class ConversationCompactionPolicy:
+    enabled: bool = True
+    trigger_token_threshold: int = 3_000
+    trigger_message_count: int = 48
+    stale_after_tokens: int = 750
+    stale_after_messages: int = 12
+    max_source_messages: int = 200
+
+    def __post_init__(self) -> None:
+        if self.trigger_token_threshold < 1:
+            raise ValueError("trigger_token_threshold must be positive")
+        if self.trigger_message_count < 1:
+            raise ValueError("trigger_message_count must be positive")
+        if self.stale_after_tokens < 1:
+            raise ValueError("stale_after_tokens must be positive")
+        if self.stale_after_messages < 1:
+            raise ValueError("stale_after_messages must be positive")
+        if self.max_source_messages < 1:
+            raise ValueError("max_source_messages must be positive")
+
+
+@dataclass(frozen=True)
 class ConversationMessageRef:
     id: str
     role: str

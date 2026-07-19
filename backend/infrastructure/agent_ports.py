@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Iterable
+from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,6 +24,10 @@ from domain.task_lifecycle import (
     TaskService,
     UserNotFoundError,
 )
+
+if TYPE_CHECKING:
+    from agent.memory.working_set import ConversationCompactionPolicy
+    from domain.conversation_memory import ConversationSummarizer
 
 
 class SqlAlchemyUserLookupPort(UserLookupPort[User]):
@@ -140,8 +145,16 @@ class SqlAlchemyLocalTaskServicePort(LocalTaskServicePort[Task]):
 
 
 class SqlAlchemyConversationContextPort(ConversationContextPort):
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        *,
+        compaction_policy: ConversationCompactionPolicy | None = None,
+        summarizer: ConversationSummarizer | None = None,
+    ) -> None:
         self.session = session
+        self.compaction_policy = compaction_policy
+        self.summarizer = summarizer
 
     async def load_context(
         self,
@@ -167,9 +180,12 @@ class SqlAlchemyConversationContextPort(ConversationContextPort):
             exclude_task_id=task_id,
         )
         conversation_memory = ConversationMemoryService(self.session)
-        summary = await conversation_memory.get_active_summary(
+        summary = await conversation_memory.ensure_summary_current(
             conversation_id=conversation_id,
             user_id=user_id,
+            summarizer=self.summarizer,
+            policy=self.compaction_policy,
+            exclude_task_id=task_id,
         )
         blocks = await conversation_memory.list_blocks(
             user_id=user_id,
@@ -192,7 +208,9 @@ class SqlAlchemyConversationContextPort(ConversationContextPort):
             current_input=current_input,
         )
         return ConversationContextPack(
-            history=tuple((message.role, message.content) for message in pack.recent_turns),
+            history=tuple(
+                (message.role, message.content) for message in pack.recent_turns
+            ),
             summary=pack.conversation_summary,
             memory_blocks=pack.memory_blocks,
             trace=tuple(

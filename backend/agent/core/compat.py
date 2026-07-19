@@ -117,9 +117,10 @@ async def load_conversation_context(
         exclude_task_id=task_id,
     )
     conversation_memory = ConversationMemoryService(session)
-    summary = await conversation_memory.get_active_summary(
+    summary = await conversation_memory.ensure_summary_current(
         conversation_id=conversation_id,
         user_id=user_id,
+        exclude_task_id=task_id,
     )
     blocks = await conversation_memory.list_blocks(
         user_id=user_id,

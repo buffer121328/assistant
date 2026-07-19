@@ -6,6 +6,7 @@ import {
   DesktopSettings,
   LocalApiClient,
   LocalEvent,
+  LocalTaskType,
   RemoteControlBridgeSession,
   Task
 } from "./api";
@@ -19,6 +20,14 @@ type DerivedItem = {
   kind: "file" | "diff" | "command" | "approval";
   risk?: string;
 };
+
+
+const TASK_TYPE_OPTIONS: { value: LocalTaskType; label: string; detail: string }[] = [
+  { value: "plan", label: "Plan", detail: "计划拆解和执行路线" },
+  { value: "learn", label: "Learn", detail: "搜索、学习和知识理解" },
+  { value: "daily", label: "Daily", detail: "提醒、状态和日常助理" },
+  { value: "office", label: "Office", detail: "办公、文件和工具动作" }
+];
 
 const DEFAULT_SETTINGS: DesktopSettings = {
   apiBaseUrl: "http://127.0.0.1:8000",
@@ -37,6 +46,7 @@ export function App(): JSX.Element {
   const [selectedTaskId, setSelectedTaskId] = useState<string>("");
   const [eventsByTask, setEventsByTask] = useState<Record<string, LocalEvent[]>>({});
   const [inputText, setInputText] = useState("");
+  const [selectedTaskType, setSelectedTaskType] = useState<LocalTaskType>("plan");
   const [messageText, setMessageText] = useState("");
   const [approvalReason, setApprovalReason] = useState("");
   const [bridgeSessions, setBridgeSessions] = useState<RemoteControlBridgeSession[]>([]);
@@ -211,7 +221,7 @@ export function App(): JSX.Element {
   async function createTask(): Promise<void> {
     if (!inputText.trim()) return;
     try {
-      const task = await api.createTask(inputText.trim());
+      const task = await api.createTask(inputText.trim(), selectedTaskType);
       setTasks((current) => [task, ...current.filter((item) => item.task_id !== task.task_id)]);
       setSelectedTaskId(task.task_id);
       setInputText("");
@@ -304,13 +314,31 @@ export function App(): JSX.Element {
             onChange={(event) => setInputText(event.target.value)}
             placeholder="Describe a new task for the local agent"
           />
-          <button
-            className="primary-action"
-            disabled={connection !== "connected" || !settings.userId}
-            onClick={() => void createTask()}
-          >
-            Create
-          </button>
+          <div className="new-task-controls">
+            <label className="task-type-select">
+              Task type
+              <select
+                value={selectedTaskType}
+                onChange={(event) => setSelectedTaskType(event.target.value as LocalTaskType)}
+              >
+                {TASK_TYPE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              className="primary-action"
+              disabled={connection !== "connected" || !settings.userId}
+              onClick={() => void createTask()}
+            >
+              Create
+            </button>
+          </div>
+          <p className="task-type-hint">
+            {TASK_TYPE_OPTIONS.find((option) => option.value === selectedTaskType)?.detail}
+          </p>
         </section>
 
         <nav className="task-nav" aria-label="Tasks">
