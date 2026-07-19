@@ -69,6 +69,7 @@ class AgentModelRequest:
     task_type: str
     messages: tuple[GatewayMessage, ...]
     stream_answer: bool = False
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class AgentModelProtocol(Protocol):
@@ -226,6 +227,7 @@ def build_agent_model_request(
     history: tuple[dict[str, Any], ...] = (),
     work_plan: WorkPlan | None = None,
     sensitive_values: tuple[str | None, ...] = (),
+    prompt_builder: Any | None = None,
 ) -> AgentModelRequest:
     plan = run_input.plan
     context = run_input.context
@@ -252,19 +254,25 @@ def build_agent_model_request(
         "tools": list(tool_schemas),
         "work_plan": _work_plan_payload(work_plan) if work_plan else None,
     }
-    system_text = (
-        "你是受控的个人 Agent Core。只能在给定目标、步数、超时和工具范围内工作。\n"
-        "每轮只输出一个 JSON 对象：\n"
-        '- 直接回答：{"action":"final","answer":"...","plan":["..."]}\n'
-        '- 调用工具：{"action":"tool_call","tool_name":"...",'
-        '"arguments":{},"plan":["..."]}\n'
-        '- 并行工具：{"action":"tool_batch","tool_calls":['
-        '{"id":"call-1","tool_name":"...","arguments":{}}],'
-        '"plan":["..."]}\n'
-        "plan 仅是最多 5 条面向用户的简短说明，不能扩大工具权限或执行预算。"
-        "不要输出隐式思维链、凭据、配置或 JSON 之外的文本。\n"
-        f"运行上下文：{_safe_json(system_payload, sensitive_values)}"
-    )
+    prompt_metadata: dict[str, Any] = {}
+    if prompt_builder is not None:
+        built_prompt = prompt_builder.build(system_payload)
+        system_text = built_prompt.system_prompt
+        prompt_metadata = built_prompt.metadata
+    else:
+        system_text = (
+            "你是受控的个人 Agent Core。只能在给定目标、步数、超时和工具范围内工作。\n"
+            "每轮只输出一个 JSON 对象：\n"
+            '- 直接回答：{"action":"final","answer":"...","plan":["..."]}\n'
+            '- 调用工具：{"action":"tool_call","tool_name":"...",'
+            '"arguments":{},"plan":["..."]}\n'
+            '- 并行工具：{"action":"tool_batch","tool_calls":['
+            '{"id":"call-1","tool_name":"...","arguments":{}}],'
+            '"plan":["..."]}\n'
+            "plan 仅是最多 5 条面向用户的简短说明，不能扩大工具权限或执行预算。"
+            "不要输出隐式思维链、凭据、配置或 JSON 之外的文本。\n"
+            f"运行上下文：{_safe_json(system_payload, sensitive_values)}"
+        )
     messages: list[GatewayMessage] = [
         GatewayMessage(
             role="system",
@@ -324,6 +332,7 @@ def build_agent_model_request(
         task_type=context.task_type,
         messages=tuple(messages),
         stream_answer=run_input.plan.execution_mode == "react",
+        metadata=prompt_metadata,
     )
 
 

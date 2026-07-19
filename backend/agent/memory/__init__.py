@@ -6,6 +6,12 @@ from .safety import (
 )
 from .context import load_memory_context, load_memory_summary
 from .maintenance import MemoryMaintenanceResult, maintain_memories
+from .agentic import (
+    classify_memory_query_type,
+    query_type_profile,
+    rrf_weights_for_query,
+    weighted_rrf,
+)
 from .semantic import (
     Mem0MemoryAdapter,
     NoopSemanticMemory,
@@ -26,4 +32,8 @@ __all__ = [
     "classify_memory_sensitivity",
     "MemorySafetyResult",
     "maintain_memories",
+    "classify_memory_query_type",
+    "query_type_profile",
+    "rrf_weights_for_query",
+    "weighted_rrf",
 ]

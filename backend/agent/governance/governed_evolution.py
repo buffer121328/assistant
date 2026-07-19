@@ -35,6 +35,9 @@ _SAFE_PACKAGE = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,119}\.zip$")
 _SENSITIVE_ASSIGNMENT = re.compile(
     r"(?i)(api[_-]?key|access[_-]?token|secret|password)\s*[:=]\s*\S+"
 )
+_POLICY_DOWNGRADE = re.compile(
+    r"(?i)(disable|关闭|绕过|bypass).{0,30}(approval|审批|toolregistry|tool registry|risk|风险|permission|权限)"
+)
 
 
 class EvolutionError(ValueError):
@@ -443,6 +446,7 @@ class GovernedEvolutionService:
     def _target(self, target_kind: str, target_name: str) -> Path:
         if target_kind == "prompt" and _SAFE_PROMPT.fullmatch(target_name):
             root = self.prompt_root
+            root.mkdir(parents=True, exist_ok=True)
             target = root / target_name
         elif target_kind == "skill" and _SAFE_SKILL.fullmatch(target_name):
             root = self.skill_root
@@ -454,13 +458,20 @@ class GovernedEvolutionService:
         try:
             resolved = target.resolve(strict=True)
         except OSError as exc:
-            raise EvolutionValidationError("Evolution target is unavailable") from exc
-        if not resolved.is_relative_to(root) or not resolved.is_file():
+            if target_kind == "prompt":
+                resolved = target.resolve(strict=False)
+            else:
+                raise EvolutionValidationError("Evolution target is unavailable") from exc
+        if not resolved.is_relative_to(root):
             raise EvolutionValidationError("Evolution target escaped managed root")
+        if resolved.exists() and not resolved.is_file():
+            raise EvolutionValidationError("Evolution target is unavailable")
         return resolved
 
     @staticmethod
     def _read_target(target: Path) -> str:
+        if not target.exists():
+            return ""
         if target.stat().st_size > 128 * 1024:
             raise EvolutionValidationError("Evolution target is too large")
         try:
@@ -476,10 +487,13 @@ class GovernedEvolutionService:
             raise EvolutionValidationError("Evolution candidate size is invalid")
         if _SENSITIVE_ASSIGNMENT.search(content) or "PRIVATE KEY-----" in content:
             raise EvolutionValidationError("Evolution candidate contains sensitive data")
+        if _POLICY_DOWNGRADE.search(content):
+            raise EvolutionValidationError("Evolution candidate weakens governance policy")
         return content
 
     @staticmethod
     def _atomic_write(target: Path, content: str) -> None:
+        target.parent.mkdir(parents=True, exist_ok=True)
         descriptor, name = tempfile.mkstemp(
             dir=target.parent,
             prefix=f".{target.name}.",

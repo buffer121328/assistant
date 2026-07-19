@@ -20,7 +20,7 @@
 - **V3-08 已移除 Deepeval**，评测继续使用仓库内轻量数据集和 pytest。
 - **V6-00**：`run_memory_baseline.py` 生成 `adaptive_memory_v6_00.json` 基线；自适应记忆策略仍标记为尚未上线。
 - **V9-03 已实现最小 Session Workspace / Sandbox 边界**：新增 `SESSION_WORKSPACE_ROOT=var/workspace/sessions` 和 `SessionWorkspaceStore`；本地新建 task 会自动创建 conversation/session，续写 task 复用同一会话，Electron 显示所选会话 token 统计；`var/sandbox` 仍只用于高风险执行 provider，日报和软件操控未上线。
-- **V10-01/02/03 已实现，V10-04/05 仍为规划/待实现**：`search.web` 保持原工具名和风险边界，已支持 Tavily → Brave → DuckDuckGo provider chain；Marketplace-first Skill acquisition 已支持本地优先、市场候选评分、安装 disabled、创建候选走 `EvolutionChange`/Approval；Agent task 工具已支持 `task.start_background`、`task.check_status`、`task.get_result`、`task.cancel` 的 owner-scoped 边界；schedule 工具已支持 `schedule.create/list/toggle/run_now/delete/history`、at/every/cron 和 heartbeat 幂等 materialize。V10 Agentic Memory 工具和动态 Prompt Bootstrap 已拆成后续 OpenSpec implementation changes，但尚未声明运行时上线。
+- **V10-01/02/03/04/05 已实现**：`search.web` 保持原工具名和风险边界，已支持 Tavily → Brave → DuckDuckGo provider chain；Marketplace-first Skill acquisition 已支持本地优先、市场候选评分、安装 disabled、创建候选走 `EvolutionChange`/Approval；Agent task 工具已支持 `task.start_background`、`task.check_status`、`task.get_result`、`task.cancel` 的 owner-scoped 边界；schedule 工具已支持 `schedule.create/list/toggle/run_now/delete/history`、at/every/cron 和 heartbeat 幂等 materialize；Agentic Memory 工具已支持 `memory.remember`、`memory.recall`、`memory.forget` 的 owner-scoped、安全分类、bounded trace 与 fallback 语义；动态 Prompt Bootstrap 已支持默认模块、managed override、fingerprint、`prompt.inspect/propose_change/list_versions/rollback` 和受治理 apply/rollback。
 - **Workspace Context 工具已接入**：新增 `workspace.list`、`workspace.read_file`、`workspace.search_text`、`workspace.find_files`、`workspace.read_doc` 作为 L1 结构化只读本地上下文工具；可选 `shell.readonly_exec` 默认为关闭、风险为 L2；原 `shell.exec` 仍是 L3 Docker sandbox 审批工具。
 - 后续外部能力边界：完整 MCP Gateway、深度浏览、真实 Office 文件生成、邮件/日历接入都必须经过工具治理、审批和验收测试。
 - 搜索配置使用 `TAVILY_BASE_URL` / `TAVILY_API_KEY`，可选 `BRAVE_SEARCH_API_KEY` 和显式开启的 `DUCKDUCKGO_SEARCH_ENABLED`；`search.web` 会按 `SEARCH_PROVIDER_ORDER` 做 provider chain 降级。质量命令保留 `uv run pytest`、`uv run ruff check .`、`uv run mypy .`。
@@ -352,6 +352,13 @@ tests/acceptance/test_new_feature.py
 模型不能直接执行任意动作。工具必须通过 ToolRegistry，受 allowed tools、risk level、approval、version、source availability 控制。
 
 `SESSION_WORKSPACE_ROOT` 用于单个会话的 `input/`、`work/`、`output/` 和 `audit/` 目录；`ARTIFACTS_ROOT` 继续保存最终可见产物。Session Workspace 是普通会话材料边界，`WORKSPACE_CONTEXT_ROOT` 用于 Agent 只读查看本地项目上下文。当前 L1 结构化工具包括 `workspace.list`、`workspace.read_file`、`workspace.search_text`、`workspace.find_files` 和 `workspace.read_doc`，它们只能访问配置 root 内的文本/文档，默认拒绝 `.env`、`.git`、密钥、依赖缓存、二进制和超大文件。`shell.readonly_exec` 是默认关闭的 L2 可选增强，仅允许固定只读 argv 命令。`var/sandbox` 只用于高风险执行 provider；`shell.exec` 不属于默认本地能力，需要 `SANDBOX_PROVIDER=docker`、`SHELL_EXEC_ENABLED=true` 和允许镜像后才会进入工具目录，且仍是 L3 审批工具。Docker 只是高风险命令执行的可选 provider，不是 Agent 的全局运行容器。
+
+
+### 2.1 V10 Agentic Memory 与 Dynamic Prompt
+
+Agent 记忆现在通过 ToolRegistry 暴露三类受治理工具：`memory.remember` 是 L2 写入工具，用户显式记住的安全偏好可成为 active memory，Agent 推断或外部未信任内容只能进入 candidate 或被拒绝；`memory.recall` 是 L1 owner-scoped bounded read，会返回 `query_type`、`retrieval_mode`、token/item budget 和 trace id；`memory.forget` 是 L2，默认 archive owned memory 并记录 forgotten feedback，不做跨用户删除。 forbidden 凭据类内容仍由 MemoryService 拒绝，语义检索失败时降级为 keyword/recency fallback，不让任务仅因 semantic provider 不可用而失败。
+
+运行时 prompt 现在可由只读默认模块 `backend/resources/prompts/defaults/` 加 managed override 组成。`PromptBuilder` 计算模块和整体 fingerprint，并只注入有界、脱敏 runtime context。`prompt.inspect` 只返回模块摘要/fingerprint，`prompt.propose_change` 创建 `EvolutionChange` 和 Approval，不直接写生产 prompt；批准并 apply 后下一次模型请求使用 managed override；`prompt.rollback` 恢复上一版本。prompt 候选会拒绝 secret-like 内容、超大模块、路径逃逸、未知模块和试图关闭审批/降低工具风险的策略降级文本。
 
 ### 3. 支持人工审批和 checkpoint 恢复
 

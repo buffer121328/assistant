@@ -40,6 +40,8 @@ from .browser_interact import (
 )
 from .personal import build_personal_tool_descriptors, build_personal_tool_specs
 from .skills import build_skill_tool_descriptors, build_skill_tool_specs
+from .memory_tools import AgentMemoryToolService, build_memory_tool_descriptors, build_memory_tool_specs
+from .prompt_tools import PromptToolService, build_prompt_tool_descriptors, build_prompt_tool_specs
 from .task_tools import AgentTaskToolService, build_task_tool_descriptors, build_task_tool_specs
 from .schedule_tools import AgentScheduleService, build_schedule_tool_descriptors, build_schedule_tool_specs
 from .knowledge import build_knowledge_tool_descriptor, build_knowledge_tool_spec
@@ -102,6 +104,8 @@ from .sandbox import (
 __all__ = [
     "AgentScheduleService",
     "AgentTaskToolService",
+    "AgentMemoryToolService",
+    "PromptToolService",
     "Artifact",
     "ArtifactPathError",
     "ArtifactStore",
@@ -181,6 +185,10 @@ __all__ = [
     "build_personal_tool_specs",
     "build_knowledge_tool_descriptor",
     "build_knowledge_tool_spec",
+    "build_memory_tool_descriptors",
+    "build_memory_tool_specs",
+    "build_prompt_tool_descriptors",
+    "build_prompt_tool_specs",
     "build_workspace_tool_descriptors",
     "build_workspace_tool_specs",
     "parse_deny_globs",

@@ -21,6 +21,7 @@ from model_gateway import sanitize_text
 from agent.memory import Mem0MemoryAdapter
 from agent.skill_management.acquisition import SkillAcquisitionService
 from agent.skill_management.lifecycle import SkillLifecycleService
+from agent.prompting import PromptBuilder, PromptStore
 from observability import Observability
 from knowledge import KnowledgeService
 from integrations import (
@@ -35,6 +36,8 @@ from capabilities import CapabilityRegistry, build_default_registry
 from agent.tool_management import (
     AgentScheduleService,
     AgentTaskToolService,
+    AgentMemoryToolService,
+    PromptToolService,
     ArtifactStore,
     DockerSandboxConfig,
     PlaywrightBrowserReader,
@@ -62,6 +65,10 @@ from agent.tool_management import (
     build_sandbox_runner,
     build_schedule_tool_descriptors,
     build_schedule_tool_specs,
+    build_memory_tool_descriptors,
+    build_memory_tool_specs,
+    build_prompt_tool_descriptors,
+    build_prompt_tool_specs,
     build_skill_tool_descriptors,
     build_skill_tool_specs,
     build_task_tool_descriptors,
@@ -421,6 +428,8 @@ async def _execute_with_harness(
     skill_descriptors = build_skill_tool_descriptors(enabled=True)
     task_descriptors = build_task_tool_descriptors(enabled=True)
     schedule_descriptors = build_schedule_tool_descriptors(enabled=True)
+    memory_descriptors = build_memory_tool_descriptors(enabled=True)
+    prompt_descriptors = build_prompt_tool_descriptors(enabled=True)
     tool_catalog = ToolCatalog(
         (
             StaticToolSource(
@@ -434,6 +443,8 @@ async def _execute_with_harness(
                     *skill_descriptors,
                     *task_descriptors,
                     *schedule_descriptors,
+                    *memory_descriptors,
+                    *prompt_descriptors,
                 ),
             ),
         ),
@@ -519,7 +530,16 @@ async def _execute_with_harness(
     )
     task_specs = build_task_tool_specs(AgentTaskToolService(session))
     schedule_specs = build_schedule_tool_specs(AgentScheduleService(session))
-    for spec in (*workspace_specs, *personal_specs, *browser_specs, *skill_specs, *task_specs, *schedule_specs):
+    semantic_memory = Mem0MemoryAdapter(settings.mem0_config_path)
+    memory_specs = build_memory_tool_specs(
+        AgentMemoryToolService(session=session, semantic_memory=semantic_memory)
+    )
+    prompt_store = PromptStore(
+        defaults_root=Path(__file__).resolve().parents[1] / "resources" / "prompts" / "defaults",
+        managed_root=settings.managed_prompts_root,
+    )
+    prompt_specs = build_prompt_tool_specs(PromptToolService(session=session, store=prompt_store))
+    for spec in (*workspace_specs, *personal_specs, *browser_specs, *skill_specs, *task_specs, *schedule_specs, *memory_specs, *prompt_specs):
         descriptor = tool_snapshot.get(spec.name)
         if descriptor is None or not descriptor.enabled:
             continue
@@ -568,6 +588,7 @@ async def _execute_with_harness(
             sensitive_values=sensitive_values,
             tool_snapshot=tool_snapshot,
             observability=observability,
+            prompt_builder=PromptBuilder(prompt_store),
             subagent_coordinator=(
                 SubAgentCoordinator(
                     runner=GatewaySubAgentRunner(
@@ -589,7 +610,6 @@ async def _execute_with_harness(
         sensitive_values=sensitive_values,
         trace=SqlAlchemyExecutionTracePort(session),
     )
-    semantic_memory = Mem0MemoryAdapter(settings.mem0_config_path)
     return await AgentHarness(
         session=session,
         executor=executor,

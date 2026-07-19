@@ -80,6 +80,7 @@ class LangGraphExecutor:
         tool_snapshot: ToolCatalogSnapshot | None = None,
         observability: Observability | None = None,
         subagent_coordinator: SubAgentCoordinator | None = None,
+        prompt_builder: Any | None = None,
     ) -> None:
         self.session = session
         self.tool_registry = tool_registry
@@ -89,6 +90,7 @@ class LangGraphExecutor:
         self.tool_snapshot = tool_snapshot
         self.observability = observability or NoopObservability()
         self.subagent_coordinator = subagent_coordinator
+        self.prompt_builder = prompt_builder
 
     async def execute(self, *, run_input: AgentRunInput) -> AgentRunResult:
         loop = ControlledLoop(
@@ -312,6 +314,7 @@ class LangGraphExecutor:
                 history=tuple(state.get("history", [])),
                 work_plan=_work_plan_from_state(state),
                 sensitive_values=self.sensitive_values,
+                prompt_builder=self.prompt_builder,
             )
             decision = await self.model.decide(request)
             update: _ExecutionState = {
