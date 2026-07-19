@@ -62,4 +62,6 @@ var/
 !/openspec/changes/add-agentic-memory-tools/**
 !/openspec/changes/add-dynamic-prompt-bootstrap/
 !/openspec/changes/add-dynamic-prompt-bootstrap/**
+!/openspec/changes/clarify-task-session-workspace-boundary/
+!/openspec/changes/clarify-task-session-workspace-boundary/**
 AGENTS.md
