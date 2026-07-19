@@ -7,6 +7,7 @@ from .loader import (
     validate_safe_text,
 )
 from .experiments import run_langfuse_experiment
+from .langfuse_runner import run_core_command_langfuse_experiment
 from .metrics import DeterministicRubricMetric, RubricScore
 from .models import (
     EvaluationBaseline,
@@ -33,6 +34,7 @@ __all__ = [
     "TaskType",
     "evaluate_dataset",
     "evaluate_memory_release_fixture",
+    "run_core_command_langfuse_experiment",
     "load_baseline",
     "load_candidate_outputs",
     "load_cases",

@@ -14,6 +14,8 @@ class ExperimentClient(Protocol):
         data: list[dict[str, Any]],
         task: Callable[..., Any],
         metadata: dict[str, str] | None = None,
+        run_name: str | None = None,
+        description: str | None = None,
     ) -> Any: ...
 
 
@@ -24,6 +26,8 @@ def run_langfuse_experiment(
     items: Sequence[Mapping[str, Any]],
     task: Callable[..., Any],
     metadata: Mapping[str, str] | None = None,
+    run_name: str | None = None,
+    description: str | None = None,
 ) -> Any:
     """Run safe local items through a caller-supplied real task function."""
 
@@ -61,6 +65,12 @@ def run_langfuse_experiment(
         data=normalized,
         task=task,
         metadata=dict(metadata) if metadata is not None else None,
+        run_name=(run_name.strip() if isinstance(run_name, str) and run_name.strip() else None),
+        description=(
+            description.strip()
+            if isinstance(description, str) and description.strip()
+            else None
+        ),
     )
 
 

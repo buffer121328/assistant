@@ -16,7 +16,7 @@
 - **MVP 阶段 09**：真实 LangBot 通过 `POST /api/webhooks/langbot` 接入；Docker Compose 使用 `celery-worker` 和 `workers.worker:celery_app` 跑后台任务；`/learn` 通过 `search.web` 检索，`/daily` 通过 `search.web` 获取日常信息，`/office` 默认不执行搜索。
 - **V2-03 在 V2-02 规划层上**接入执行层；`ToolRegistry`、MCP Server、LangGraph 保持受控边界，高风险能力默认不启用。
 - **V2-04**：Celery Beat 负责维护扫描，`TaskService` 保持单实例任务入口；维护逻辑只处理 `waiting_approval`、超时 `running` 任务失败、`pending` 任务补偿和 `access_count`，不会自动修改用户数据。
-- **V2-05 评测与回归阶段**：`run_evaluation.py`、`core_commands.json`、`v2-05.json` 用于回归，不替代真实端到端验收。
+- **V2-05 评测与回归阶段**：`run_evaluation.py`、`core_commands.json`、`v2-05.json` 用于回归，不替代真实端到端验收；`run_evaluation.py --langfuse` 可在配置齐全时把同一批 core command cases 额外上报为 Langfuse experiment。
 - **V3-08 已移除 Deepeval**，评测继续使用仓库内轻量数据集和 pytest。
 - **V6-00**：`run_memory_baseline.py` 生成 `adaptive_memory_v6_00.json` 基线；自适应记忆策略仍标记为尚未上线。
 - 后续外部能力边界：完整 MCP Gateway、深度浏览、真实 Office 文件生成、邮件/日历接入都必须经过工具治理、审批和验收测试。
@@ -162,6 +162,7 @@ LangBot 入口会先做结构化 intent 判定：显式 `/plan`、`/learn`、`/d
 - Docker Compose smoke
 - provider smoke
 - 离线评测与 Memory release gate
+- `run_evaluation.py --langfuse` 可选上报 `core_commands.json` 到 Langfuse，不影响本地回归输出
 
 ## 项目目录
 

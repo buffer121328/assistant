@@ -3,18 +3,21 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 from pathlib import Path
+from types import SimpleNamespace
 import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from domain.models import Base, Task, User
+from agent import AgentDecision
 from agent.modeling.agent_model import AgentDecisionError, parse_agent_decision
 from agent.core.subagents import (
     SubAgentCoordinator,
     SubAgentRequest,
     SubAgentResult,
 )
+from agent.core import subagent_gateway as subagent_gateway_module
 from agent.tool_management import ToolInvocation, ToolNotAllowedError, ToolRegistry, ToolSpec
 
 
@@ -109,3 +112,133 @@ async def test_subagent_coordinator_bounds_fanout_and_preserves_order() -> None:
 
     assert [item.step_index for item in results] == [0, 1, 2]
     assert peak == 2
+
+
+@pytest.mark.asyncio
+async def test_gateway_subagent_runner_commits_final_answer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = SimpleNamespace(commits=0, rollbacks=0)
+    captured: dict[str, object] = {}
+
+    class FakeSessionContext:
+        async def __aenter__(self) -> SimpleNamespace:
+            return session
+
+        async def __aexit__(self, exc_type, exc, tb) -> bool:
+            del exc_type, exc, tb
+            return False
+
+    class FakeSessionmaker:
+        def __call__(self) -> FakeSessionContext:
+            return FakeSessionContext()
+
+    class FakeModel:
+        def __init__(self, *, session, settings, observability) -> None:
+            captured["session"] = session
+            captured["settings"] = settings
+            captured["observability"] = observability
+
+        async def decide(self, request):
+            captured["request"] = request
+            return AgentDecision(action="final", answer="subagent-result")
+
+    async def commit() -> None:
+        session.commits += 1
+
+    async def rollback() -> None:
+        session.rollbacks += 1
+
+    session.commit = commit  # type: ignore[assignment]
+    session.rollback = rollback  # type: ignore[assignment]
+
+    monkeypatch.setattr(subagent_gateway_module, "AgentGatewayModel", FakeModel)
+
+    runner = subagent_gateway_module.GatewaySubAgentRunner(
+        sessionmaker=FakeSessionmaker(),
+        settings=SimpleNamespace(),
+        observability=SimpleNamespace(),
+    )
+    request = SubAgentRequest(
+        step_index=7,
+        role="researcher",
+        objective="请归纳这段内容的关键结论",
+        context="上下文" * 6000,
+        task_id="task-1",
+        user_id="user-1",
+    )
+
+    result = await runner.run(request)
+
+    assert result == SubAgentResult(
+        step_index=7,
+        role="researcher",
+        content="subagent-result",
+    )
+    assert session.commits == 1
+    assert session.rollbacks == 0
+    assert captured["session"] is session
+    prompt = captured["request"].messages[0].content  # type: ignore[index]
+    assert "你是受限子 Agent" in prompt
+    assert "角色：researcher" in prompt
+    assert request.objective[:1000] in prompt
+    assert request.context[:20000] in prompt
+
+
+@pytest.mark.asyncio
+async def test_gateway_subagent_runner_rejects_non_final_action(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = SimpleNamespace(commits=0, rollbacks=0)
+
+    class FakeSessionContext:
+        async def __aenter__(self) -> SimpleNamespace:
+            return session
+
+        async def __aexit__(self, exc_type, exc, tb) -> bool:
+            del exc_type, exc, tb
+            return False
+
+    class FakeSessionmaker:
+        def __call__(self) -> FakeSessionContext:
+            return FakeSessionContext()
+
+    class FakeModel:
+        def __init__(self, *, session, settings, observability) -> None:
+            del session, settings, observability
+
+        async def decide(self, request):
+            del request
+            return AgentDecision(action="tool_call", tool_name="search.web", arguments={})
+
+    async def commit() -> None:
+        session.commits += 1
+
+    async def rollback() -> None:
+        session.rollbacks += 1
+
+    session.commit = commit  # type: ignore[assignment]
+    session.rollback = rollback  # type: ignore[assignment]
+
+    monkeypatch.setattr(subagent_gateway_module, "AgentGatewayModel", FakeModel)
+
+    runner = subagent_gateway_module.GatewaySubAgentRunner(
+        sessionmaker=FakeSessionmaker(),
+        settings=SimpleNamespace(),
+        observability=SimpleNamespace(),
+    )
+
+    with pytest.raises(RuntimeError, match="Subagent attempted a non-final action"):
+        await runner.run(
+            SubAgentRequest(
+                step_index=0,
+                role="researcher",
+                objective="检查子任务安全性",
+                context="上下文",
+                task_id="task-2",
+                user_id="user-1",
+            )
+        )
+
+    assert session.commits == 0
+    assert session.rollbacks == 1
