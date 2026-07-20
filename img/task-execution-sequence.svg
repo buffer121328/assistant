@@ -1,90 +1,64 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1220" height="730" viewBox="0 0 1220 730" role="img">
-
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="700" viewBox="0 0 1120 700" role="img">
 <style>
   .bg { fill: #f8fafc; }
-  .title { font: 700 28px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #0f172a; }
-  .label { font: 600 15px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #0f172a; }
+  .title { font: 700 26px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #0f172a; }
+  .label { font: 700 15px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #0f172a; }
   .small { font: 400 13px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #334155; }
   .tiny { font: 400 12px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #475569; }
-  .box { stroke: #2563eb; stroke-width: 1.6; fill: #eff6ff; }
-  .box-green { stroke: #16a34a; fill: #f0fdf4; }
-  .box-orange { stroke: #ea580c; fill: #fff7ed; }
-  .box-purple { stroke: #7c3aed; fill: #f5f3ff; }
-  .box-slate { stroke: #64748b; fill: #f8fafc; }
-  .box-red { stroke: #dc2626; fill: #fef2f2; }
+  .blue { stroke: #2563eb; fill: #eff6ff; }
+  .green { stroke: #16a34a; fill: #f0fdf4; }
+  .orange { stroke: #ea580c; fill: #fff7ed; }
+  .purple { stroke: #7c3aed; fill: #f5f3ff; }
+  .slate { stroke: #64748b; fill: #f8fafc; }
+  .red { stroke: #dc2626; fill: #fef2f2; }
+  .box { stroke-width: 1.6; rx: 14; }
   .arrow { stroke: #334155; stroke-width: 1.8; fill: none; marker-end: url(#arrow); }
   .dash { stroke-dasharray: 6 6; }
-  .lane { stroke: #cbd5e1; stroke-width: 1.2; stroke-dasharray: 5 5; }
+  .lane { stroke: #cbd5e1; stroke-width: 1.2; stroke-dasharray: 5 5; fill: none; }
 </style>
 <defs>
   <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
     <path d="M0,0 L0,6 L9,3 z" fill="#334155" />
   </marker>
 </defs>
-
 <rect width="100%" height="100%" class="bg"/>
-<text x="32" y="44" class="title">任务执行时序：任务化、可审批、可恢复</text>
-<rect x="15" y="70" width="110" height="44" class="box box-slate" rx="14"/>
-<text x="70.0" y="98" text-anchor="middle" class="label">用户</text>
-<line x1="70" y1="120" x2="70" y2="690" class="lane"/>
-<rect x="150" y="70" width="110" height="44" class="box box-slate" rx="14"/>
-<text x="205.0" y="98" text-anchor="middle" class="label">LangBot / Desktop</text>
-<line x1="205" y1="120" x2="205" y2="690" class="lane"/>
-<rect x="285" y="70" width="110" height="44" class="box box-slate" rx="14"/>
-<text x="340.0" y="98" text-anchor="middle" class="label">FastAPI</text>
-<line x1="340" y1="120" x2="340" y2="690" class="lane"/>
-<rect x="420" y="70" width="110" height="44" class="box box-slate" rx="14"/>
-<text x="475.0" y="98" text-anchor="middle" class="label">PostgreSQL</text>
-<line x1="475" y1="120" x2="475" y2="690" class="lane"/>
-<rect x="555" y="70" width="110" height="44" class="box box-slate" rx="14"/>
-<text x="610.0" y="98" text-anchor="middle" class="label">Celery Worker</text>
-<line x1="610" y1="120" x2="610" y2="690" class="lane"/>
-<rect x="690" y="70" width="110" height="44" class="box box-slate" rx="14"/>
-<text x="745.0" y="98" text-anchor="middle" class="label">Agent Harness</text>
-<line x1="745" y1="120" x2="745" y2="690" class="lane"/>
-<rect x="825" y="70" width="110" height="44" class="box box-slate" rx="14"/>
-<text x="880.0" y="98" text-anchor="middle" class="label">LangGraph</text>
-<line x1="880" y1="120" x2="880" y2="690" class="lane"/>
-<rect x="960" y="70" width="110" height="44" class="box box-slate" rx="14"/>
-<text x="1015.0" y="98" text-anchor="middle" class="label">ToolRegistry</text>
-<line x1="1015" y1="120" x2="1015" y2="690" class="lane"/>
-<rect x="1095" y="70" width="110" height="44" class="box box-slate" rx="14"/>
-<text x="1150.0" y="98" text-anchor="middle" class="label">Model Gateway</text>
-<line x1="1150" y1="120" x2="1150" y2="690" class="lane"/>
-<path d="M70,150 L205,150" class="arrow"/>
-<text x="137.5" y="142" class="tiny" text-anchor="middle">提交 /plan /learn /daily /office</text>
-<path d="M205,188 L340,188" class="arrow"/>
-<text x="272.5" y="180" class="tiny" text-anchor="middle">创建或提交任务</text>
-<path d="M340,226 L475,226" class="arrow"/>
-<text x="407.5" y="218" class="tiny" text-anchor="middle">写 Task pending</text>
-<path d="M340,264 L610,264" class="arrow"/>
-<text x="475.0" y="256" class="tiny" text-anchor="middle">enqueue task_id</text>
-<path d="M610,302 L475,302" class="arrow"/>
-<text x="542.5" y="294" class="tiny" text-anchor="middle">创建 AgentRun running</text>
-<path d="M610,340 L745,340" class="arrow"/>
-<text x="677.5" y="332" class="tiny" text-anchor="middle">execute_task</text>
-<path d="M745,378 L475,378" class="arrow"/>
-<text x="610.0" y="370" class="tiny" text-anchor="middle">加载 Task/User/Memory/Conversation</text>
-<path d="M745,416 L880,416" class="arrow"/>
-<text x="812.5" y="408" class="tiny" text-anchor="middle">执行 LangGraph</text>
-<path d="M880,454 L1150,454" class="arrow"/>
-<text x="1015.0" y="446" class="tiny" text-anchor="middle">模型决策</text>
-<path d="M880,492 L1015,492" class="arrow"/>
-<text x="947.5" y="484" class="tiny" text-anchor="middle">受控工具调用</text>
-<path d="M1015,530 L475,530" class="arrow"/>
-<text x="745.0" y="522" class="tiny" text-anchor="middle">ToolLog / Approval</text>
-<path d="M880,568 L475,568" class="arrow"/>
-<text x="677.5" y="560" class="tiny" text-anchor="middle">Checkpoint</text>
-<path d="M610,606 L475,606" class="arrow"/>
-<text x="542.5" y="598" class="tiny" text-anchor="middle">Task success / AgentRun success</text>
-<path d="M610,644 L205,644" class="arrow"/>
-<text x="407.5" y="636" class="tiny" text-anchor="middle">结果回推</text>
-<rect x="392" y="505" width="610" height="120" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5" rx="12"/>
-<text x="412" y="530" class="label" text-anchor="start">可选审批分支：高风险工具 / 计划确认 / 人工复核</text>
-<path d="M880,555 L475,555" class="arrow dash"/>
-<text x="730" y="547" class="tiny" text-anchor="middle">写 checkpoint + approval request</text>
-<path d="M205,585 L70,585" class="arrow dash"/>
-<text x="150" y="577" class="tiny" text-anchor="middle">推送审批</text>
-<path d="M70,615 L340,615" class="arrow dash"/>
-<text x="190" y="607" class="tiny" text-anchor="middle">approve / reject</text>
+<text x="32" y="44" text-anchor="start" class="title">任务执行时序：任务化、可审批、可恢复</text>
+<line x1="70" y1="90" x2="70" y2="670" class="lane"/>
+<rect x="-8" y="70" width="156" height="54" class="box slate" rx="14"/>
+<text x="70.0" y="98" text-anchor="middle" class="label">用户 / LangBot / Electron</text>
+<line x1="260" y1="90" x2="260" y2="670" class="lane"/>
+<rect x="182" y="70" width="156" height="54" class="box slate" rx="14"/>
+<text x="260.0" y="98" text-anchor="middle" class="label">FastAPI</text>
+<line x1="450" y1="90" x2="450" y2="670" class="lane"/>
+<rect x="372" y="70" width="156" height="54" class="box slate" rx="14"/>
+<text x="450.0" y="98" text-anchor="middle" class="label">Task Service</text>
+<line x1="640" y1="90" x2="640" y2="670" class="lane"/>
+<rect x="562" y="70" width="156" height="54" class="box slate" rx="14"/>
+<text x="640.0" y="98" text-anchor="middle" class="label">Celery Worker</text>
+<line x1="830" y1="90" x2="830" y2="670" class="lane"/>
+<rect x="752" y="70" width="156" height="54" class="box slate" rx="14"/>
+<text x="830.0" y="98" text-anchor="middle" class="label">Agent Runtime</text>
+<line x1="1030" y1="90" x2="1030" y2="670" class="lane"/>
+<rect x="952" y="70" width="156" height="54" class="box slate" rx="14"/>
+<text x="1030.0" y="98" text-anchor="middle" class="label">Tool Governance</text>
+<path d="M150,160 L180,160" class="arrow"/>
+<text x="165.0" y="150" text-anchor="middle" class="tiny">创建任务 / 续写 / Webhook</text>
+<path d="M340,210 L370,210" class="arrow"/>
+<text x="355.0" y="200" text-anchor="middle" class="tiny">校验 user_id + 持久化 Task</text>
+<path d="M530,260 L560,260" class="arrow"/>
+<text x="545.0" y="250" text-anchor="middle" class="tiny">入队 Celery / 写 task.queued</text>
+<path d="M720,310 L750,310" class="arrow"/>
+<text x="735.0" y="300" text-anchor="middle" class="tiny">装载会话、workspace、profile</text>
+<path d="M910,360 L950,360" class="arrow"/>
+<text x="930.0" y="350" text-anchor="middle" class="tiny">请求工具：风险分级</text>
+<path d="M950,410 L910,410" class="arrow dash"/>
+<text x="930.0" y="400" text-anchor="middle" class="tiny">低风险执行或高风险等待审批</text>
+<path d="M750,505 L530,505" class="arrow"/>
+<text x="640.0" y="495" text-anchor="middle" class="tiny">写 AgentRun / TaskEvent / Result</text>
+<path d="M370,555 L340,555" class="arrow"/>
+<text x="355.0" y="545" text-anchor="middle" class="tiny">快照、日志、事件游标</text>
+<path d="M180,605 L150,605" class="arrow"/>
+<text x="165.0" y="595" text-anchor="middle" class="tiny">HTTP/WS 返回 + LangBot 回推</text>
+<rect x="330" y="432" width="740" height="46" class="box orange" rx="12"/>
+<text x="700" y="461" text-anchor="middle" class="small">审批分支：高风险工具、计划确认和人工复核会写 checkpoint，批准后由后端恢复执行</text>
 </svg>

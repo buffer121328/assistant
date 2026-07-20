@@ -1,50 +1,48 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1260" height="360" viewBox="0 0 1260 360" role="img">
-
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="430" viewBox="0 0 1180 430" role="img">
 <style>
   .bg { fill: #f8fafc; }
-  .title { font: 700 28px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #0f172a; }
-  .label { font: 600 15px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #0f172a; }
+  .title { font: 700 26px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #0f172a; }
+  .label { font: 700 15px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #0f172a; }
   .small { font: 400 13px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #334155; }
   .tiny { font: 400 12px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #475569; }
-  .box { stroke: #2563eb; stroke-width: 1.6; fill: #eff6ff; }
-  .box-green { stroke: #16a34a; fill: #f0fdf4; }
-  .box-orange { stroke: #ea580c; fill: #fff7ed; }
-  .box-purple { stroke: #7c3aed; fill: #f5f3ff; }
-  .box-slate { stroke: #64748b; fill: #f8fafc; }
-  .box-red { stroke: #dc2626; fill: #fef2f2; }
+  .blue { stroke: #2563eb; fill: #eff6ff; }
+  .green { stroke: #16a34a; fill: #f0fdf4; }
+  .orange { stroke: #ea580c; fill: #fff7ed; }
+  .purple { stroke: #7c3aed; fill: #f5f3ff; }
+  .slate { stroke: #64748b; fill: #f8fafc; }
+  .red { stroke: #dc2626; fill: #fef2f2; }
+  .box { stroke-width: 1.6; rx: 14; }
   .arrow { stroke: #334155; stroke-width: 1.8; fill: none; marker-end: url(#arrow); }
   .dash { stroke-dasharray: 6 6; }
-  .lane { stroke: #cbd5e1; stroke-width: 1.2; stroke-dasharray: 5 5; }
+  .lane { stroke: #cbd5e1; stroke-width: 1.2; stroke-dasharray: 5 5; fill: none; }
 </style>
 <defs>
   <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
     <path d="M0,0 L0,6 L9,3 z" fill="#334155" />
   </marker>
 </defs>
-
 <rect width="100%" height="100%" class="bg"/>
-<text x="32" y="44" class="title">扩展新工具：从实现到审计的受控链路</text>
-<rect x="60" y="160" width="160" height="90" class="box box-orange" rx="14"/>
-<text x="140.0" y="188" text-anchor="middle" class="label">工具实现</text>
-<text x="140.0" y="212" text-anchor="middle" class="small">封装真实动作</text>
-<path d="M220,205 L260,205" class="arrow"/>
-<rect x="260" y="160" width="160" height="90" class="box box-orange" rx="14"/>
-<text x="340.0" y="188" text-anchor="middle" class="label">ToolSpec</text>
-<text x="340.0" y="212" text-anchor="middle" class="small">name / schema / risk</text>
-<path d="M420,205 L460,205" class="arrow"/>
-<rect x="460" y="160" width="160" height="90" class="box box" rx="14"/>
-<text x="540.0" y="188" text-anchor="middle" class="label">ToolCatalog</text>
-<text x="540.0" y="212" text-anchor="middle" class="small">能力发现</text>
-<path d="M620,205 L660,205" class="arrow"/>
-<rect x="660" y="160" width="160" height="90" class="box box" rx="14"/>
-<text x="740.0" y="188" text-anchor="middle" class="label">Planning</text>
-<text x="740.0" y="212" text-anchor="middle" class="small">allowed_tools</text>
-<path d="M820,205 L860,205" class="arrow"/>
-<rect x="860" y="160" width="160" height="90" class="box box-purple" rx="14"/>
-<text x="940.0" y="188" text-anchor="middle" class="label">ToolRegistry</text>
-<text x="940.0" y="212" text-anchor="middle" class="small">审批 / 版本 / 并行</text>
-<path d="M1020,205 L1060,205" class="arrow"/>
-<rect x="1060" y="160" width="160" height="90" class="box box" rx="14"/>
-<text x="1140.0" y="188" text-anchor="middle" class="label">Audit</text>
-<text x="1140.0" y="212" text-anchor="middle" class="small">ToolLog / 脱敏</text>
+<text x="32" y="44" text-anchor="start" class="title">扩展新工具：实现、注册、风险、审批、审计一条链路</text>
+<rect x="70" y="120" width="170" height="90" class="box orange" rx="14"/>
+<text x="155.0" y="148" text-anchor="middle" class="label">Tool 实现</text>
+<text x="155.0" y="172" text-anchor="middle" class="small">小而可测</text>
+<rect x="285" y="120" width="170" height="90" class="box blue" rx="14"/>
+<text x="370.0" y="148" text-anchor="middle" class="label">ToolRegistry</text>
+<text x="370.0" y="172" text-anchor="middle" class="small">名称/参数/说明</text>
+<rect x="500" y="120" width="170" height="90" class="box red" rx="14"/>
+<text x="585.0" y="148" text-anchor="middle" class="label">Risk Policy</text>
+<text x="585.0" y="172" text-anchor="middle" class="small">L1/L2/L3 分级</text>
+<rect x="715" y="120" width="170" height="90" class="box red" rx="14"/>
+<text x="800.0" y="148" text-anchor="middle" class="label">Approval</text>
+<text x="800.0" y="172" text-anchor="middle" class="small">高风险等待确认</text>
+<rect x="930" y="120" width="170" height="90" class="box blue" rx="14"/>
+<text x="1015.0" y="148" text-anchor="middle" class="label">Execution + Audit</text>
+<text x="1015.0" y="172" text-anchor="middle" class="small">执行、事件、日志</text>
+<path d="M240,165 L285,165" class="arrow"/>
+<path d="M455,165 L500,165" class="arrow"/>
+<path d="M670,165 L715,165" class="arrow"/>
+<path d="M885,165 L930,165" class="arrow"/>
+<rect x="90" y="300" width="1010" height="78" class="box red" rx="14"/>
+<text x="595" y="330" text-anchor="middle" class="label">前端、脚本或测试不能绕过工具注册、风险等级、后端审批和审计链路</text>
+<text x="595" y="356" text-anchor="middle" class="small">外部账号、浏览器、Office、shell 等能力必须保持可选边界与 fail-closed 默认值</text>
 </svg>

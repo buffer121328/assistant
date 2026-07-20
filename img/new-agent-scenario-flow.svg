@@ -1,50 +1,48 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1260" height="360" viewBox="0 0 1260 360" role="img">
-
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="430" viewBox="0 0 1200 430" role="img">
 <style>
   .bg { fill: #f8fafc; }
-  .title { font: 700 28px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #0f172a; }
-  .label { font: 600 15px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #0f172a; }
+  .title { font: 700 26px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #0f172a; }
+  .label { font: 700 15px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #0f172a; }
   .small { font: 400 13px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #334155; }
   .tiny { font: 400 12px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #475569; }
-  .box { stroke: #2563eb; stroke-width: 1.6; fill: #eff6ff; }
-  .box-green { stroke: #16a34a; fill: #f0fdf4; }
-  .box-orange { stroke: #ea580c; fill: #fff7ed; }
-  .box-purple { stroke: #7c3aed; fill: #f5f3ff; }
-  .box-slate { stroke: #64748b; fill: #f8fafc; }
-  .box-red { stroke: #dc2626; fill: #fef2f2; }
+  .blue { stroke: #2563eb; fill: #eff6ff; }
+  .green { stroke: #16a34a; fill: #f0fdf4; }
+  .orange { stroke: #ea580c; fill: #fff7ed; }
+  .purple { stroke: #7c3aed; fill: #f5f3ff; }
+  .slate { stroke: #64748b; fill: #f8fafc; }
+  .red { stroke: #dc2626; fill: #fef2f2; }
+  .box { stroke-width: 1.6; rx: 14; }
   .arrow { stroke: #334155; stroke-width: 1.8; fill: none; marker-end: url(#arrow); }
   .dash { stroke-dasharray: 6 6; }
-  .lane { stroke: #cbd5e1; stroke-width: 1.2; stroke-dasharray: 5 5; }
+  .lane { stroke: #cbd5e1; stroke-width: 1.2; stroke-dasharray: 5 5; fill: none; }
 </style>
 <defs>
   <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
     <path d="M0,0 L0,6 L9,3 z" fill="#334155" />
   </marker>
 </defs>
-
 <rect width="100%" height="100%" class="bg"/>
-<text x="32" y="44" class="title">扩展新 Agent 场景：不要塞进 worker，走固定扩展点</text>
-<rect x="60" y="160" width="160" height="90" class="box box-green" rx="14"/>
-<text x="140.0" y="188" text-anchor="middle" class="label">新增 Agent Profile</text>
-<text x="140.0" y="212" text-anchor="middle" class="small">定义场景身份和策略</text>
-<path d="M220,205 L260,205" class="arrow"/>
-<rect x="260" y="160" width="160" height="90" class="box box-green" rx="14"/>
-<text x="340.0" y="188" text-anchor="middle" class="label">注册 task_type</text>
-<text x="340.0" y="212" text-anchor="middle" class="small">绑定命令与 workflow_key</text>
-<path d="M420,205 L460,205" class="arrow"/>
-<rect x="460" y="160" width="160" height="90" class="box box" rx="14"/>
-<text x="540.0" y="188" text-anchor="middle" class="label">声明 Skill</text>
-<text x="540.0" y="212" text-anchor="middle" class="small">补充场景知识</text>
-<path d="M620,205 L660,205" class="arrow"/>
-<rect x="660" y="160" width="160" height="90" class="box box" rx="14"/>
-<text x="740.0" y="188" text-anchor="middle" class="label">声明 Tools</text>
-<text x="740.0" y="212" text-anchor="middle" class="small">最小权限 allowed_tools</text>
-<path d="M820,205 L860,205" class="arrow"/>
-<rect x="860" y="160" width="160" height="90" class="box box" rx="14"/>
-<text x="940.0" y="188" text-anchor="middle" class="label">补验收测试</text>
-<text x="940.0" y="212" text-anchor="middle" class="small">覆盖用户可见行为</text>
-<path d="M1020,205 L1060,205" class="arrow"/>
-<rect x="1060" y="160" width="160" height="90" class="box box" rx="14"/>
-<text x="1140.0" y="188" text-anchor="middle" class="label">接入口</text>
-<text x="1140.0" y="212" text-anchor="middle" class="small">LangBot / Desktop</text>
+<text x="32" y="44" text-anchor="start" class="title">扩展新 Agent 场景：沿 feature 和 profile 扩展，不绕过任务系统</text>
+<rect x="70" y="120" width="170" height="86" class="box blue" rx="14"/>
+<text x="155.0" y="148" text-anchor="middle" class="label">需求/验收标准</text>
+<text x="155.0" y="172" text-anchor="middle" class="small">先写用户可见行为</text>
+<rect x="300" y="120" width="170" height="86" class="box blue" rx="14"/>
+<text x="385.0" y="148" text-anchor="middle" class="label">features/&lt;type&gt;</text>
+<text x="385.0" y="172" text-anchor="middle" class="small">新增场景入口</text>
+<rect x="530" y="120" width="170" height="86" class="box blue" rx="14"/>
+<text x="615.0" y="148" text-anchor="middle" class="label">Profile / Prompt</text>
+<text x="615.0" y="172" text-anchor="middle" class="small">声明能力与上下文</text>
+<rect x="760" y="120" width="170" height="86" class="box blue" rx="14"/>
+<text x="845.0" y="148" text-anchor="middle" class="label">TaskService</text>
+<text x="845.0" y="172" text-anchor="middle" class="small">仍走任务生命周期</text>
+<rect x="990" y="120" width="170" height="86" class="box purple" rx="14"/>
+<text x="1075.0" y="148" text-anchor="middle" class="label">Agent Runtime</text>
+<text x="1075.0" y="172" text-anchor="middle" class="small">复用 Harness 和工具治理</text>
+<path d="M240,163 L300,163" class="arrow"/>
+<path d="M470,163 L530,163" class="arrow"/>
+<path d="M700,163 L760,163" class="arrow"/>
+<path d="M930,163 L990,163" class="arrow"/>
+<rect x="90" y="300" width="1030" height="78" class="box green" rx="14"/>
+<text x="605" y="330" text-anchor="middle" class="label">新增场景不直接塞进 worker，也不绕过 API / TaskService / Approval / Audit</text>
+<text x="605" y="356" text-anchor="middle" class="small">测试优先覆盖 API、服务层或端到端边界，并在阶段完成时同步 README 与阶段文档</text>
 </svg>
