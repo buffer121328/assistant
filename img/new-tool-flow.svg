@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="430" viewBox="0 0 1180 430" role="img">
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="440" viewBox="0 0 1240 440" role="img">
 <style>
   .bg { fill: #f8fafc; }
   .title { font: 700 26px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #0f172a; }
@@ -22,27 +22,27 @@
   </marker>
 </defs>
 <rect width="100%" height="100%" class="bg"/>
-<text x="32" y="44" text-anchor="start" class="title">扩展新工具：实现、注册、风险、审批、审计一条链路</text>
-<rect x="70" y="120" width="170" height="90" class="box orange" rx="14"/>
-<text x="155.0" y="148" text-anchor="middle" class="label">Tool 实现</text>
-<text x="155.0" y="172" text-anchor="middle" class="small">小而可测</text>
-<rect x="285" y="120" width="170" height="90" class="box blue" rx="14"/>
-<text x="370.0" y="148" text-anchor="middle" class="label">ToolRegistry</text>
-<text x="370.0" y="172" text-anchor="middle" class="small">名称/参数/说明</text>
-<rect x="500" y="120" width="170" height="90" class="box red" rx="14"/>
-<text x="585.0" y="148" text-anchor="middle" class="label">Risk Policy</text>
-<text x="585.0" y="172" text-anchor="middle" class="small">L1/L2/L3 分级</text>
-<rect x="715" y="120" width="170" height="90" class="box red" rx="14"/>
-<text x="800.0" y="148" text-anchor="middle" class="label">Approval</text>
-<text x="800.0" y="172" text-anchor="middle" class="small">高风险等待确认</text>
-<rect x="930" y="120" width="170" height="90" class="box blue" rx="14"/>
-<text x="1015.0" y="148" text-anchor="middle" class="label">Execution + Audit</text>
-<text x="1015.0" y="172" text-anchor="middle" class="small">执行、事件、日志</text>
-<path d="M240,165 L285,165" class="arrow"/>
-<path d="M455,165 L500,165" class="arrow"/>
-<path d="M670,165 L715,165" class="arrow"/>
-<path d="M885,165 L930,165" class="arrow"/>
-<rect x="90" y="300" width="1010" height="78" class="box red" rx="14"/>
-<text x="595" y="330" text-anchor="middle" class="label">前端、脚本或测试不能绕过工具注册、风险等级、后端审批和审计链路</text>
-<text x="595" y="356" text-anchor="middle" class="small">外部账号、浏览器、Office、shell 等能力必须保持可选边界与 fail-closed 默认值</text>
+<text x="32" y="44" text-anchor="start" class="title">扩展新工具：当前 tool_management 目录下的治理链路</text>
+<rect x="45" y="120" width="180" height="92" class="box orange" rx="14"/>
+<text x="135.0" y="148" text-anchor="middle" class="label">工具实现</text>
+<text x="135.0" y="172" text-anchor="middle" class="small">agent/tool_management</text>
+<rect x="275" y="120" width="180" height="92" class="box blue" rx="14"/>
+<text x="365.0" y="148" text-anchor="middle" class="label">ToolRegistry</text>
+<text x="365.0" y="172" text-anchor="middle" class="small">registry.py</text>
+<rect x="505" y="120" width="180" height="92" class="box red" rx="14"/>
+<text x="595.0" y="148" text-anchor="middle" class="label">Risk Policy</text>
+<text x="595.0" y="172" text-anchor="middle" class="small">风险等级与开关</text>
+<rect x="735" y="120" width="180" height="92" class="box red" rx="14"/>
+<text x="825.0" y="148" text-anchor="middle" class="label">Approval</text>
+<text x="825.0" y="172" text-anchor="middle" class="small">approval.py / 后端审批</text>
+<rect x="965" y="120" width="180" height="92" class="box red" rx="14"/>
+<text x="1055.0" y="148" text-anchor="middle" class="label">Audit / Event</text>
+<text x="1055.0" y="172" text-anchor="middle" class="small">ToolLog / TaskEvent</text>
+<path d="M225,166 L275,166" class="arrow"/>
+<path d="M455,166 L505,166" class="arrow"/>
+<path d="M685,166 L735,166" class="arrow"/>
+<path d="M915,166 L965,166" class="arrow"/>
+<rect x="75" y="302" width="1090" height="82" class="box red" rx="14"/>
+<text x="620" y="333" text-anchor="middle" class="label">搜索、workspace、memory、schedule、task、browser、shell 等工具都必须从 tool_management 注册进入治理链路</text>
+<text x="620" y="360" text-anchor="middle" class="small">前端、脚本或测试不能绕过工具注册、风险等级、后端审批和审计</text>
 </svg>

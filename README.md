@@ -2,8 +2,6 @@
 
 个人 Agent 助手系统后端与桌面控制台。项目目标不是做一个简单聊天机器人，而是构建一个**可长期演进、可控、可审计、可接入个人工具链的本机 Agent 助手系统**。
 
-> 说明：旧版长 README 已按本地资料保留为 `readme.local`，并已加入 `.gitignore`；当前 README 只保留项目运行和架构所需的核心信息。更完整的启动与配置说明见 [`docs/mvp-startup-config.md`](docs/mvp-startup-config.md)，前后端按钮到后端服务/Worker/Agent 的链路见 [`docs/frontend-backend-flow.md`](docs/frontend-backend-flow.md)。
-
 ## 项目简介
 
 系统以 FastAPI 后端为核心，统一接收 LangBot 远程入口和 Electron 本地桌面端请求，将用户需求转成可追踪的任务、会话、事件、审批和运行日志。Agent 执行层基于 LangGraph/Agent Harness，工具调用统一经过 ToolRegistry、风险等级、审批、审计和 owner-scoped 边界。

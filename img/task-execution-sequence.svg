@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="700" viewBox="0 0 1120 700" role="img">
+<svg xmlns="http://www.w3.org/2000/svg" width="1140" height="690" viewBox="0 0 1140 690" role="img">
 <style>
   .bg { fill: #f8fafc; }
   .title { font: 700 26px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #0f172a; }
@@ -22,43 +22,49 @@
   </marker>
 </defs>
 <rect width="100%" height="100%" class="bg"/>
-<text x="32" y="44" text-anchor="start" class="title">任务执行时序：任务化、可审批、可恢复</text>
-<line x1="70" y1="90" x2="70" y2="670" class="lane"/>
-<rect x="-8" y="70" width="156" height="54" class="box slate" rx="14"/>
-<text x="70.0" y="98" text-anchor="middle" class="label">用户 / LangBot / Electron</text>
-<line x1="260" y1="90" x2="260" y2="670" class="lane"/>
-<rect x="182" y="70" width="156" height="54" class="box slate" rx="14"/>
-<text x="260.0" y="98" text-anchor="middle" class="label">FastAPI</text>
-<line x1="450" y1="90" x2="450" y2="670" class="lane"/>
-<rect x="372" y="70" width="156" height="54" class="box slate" rx="14"/>
-<text x="450.0" y="98" text-anchor="middle" class="label">Task Service</text>
-<line x1="640" y1="90" x2="640" y2="670" class="lane"/>
-<rect x="562" y="70" width="156" height="54" class="box slate" rx="14"/>
-<text x="640.0" y="98" text-anchor="middle" class="label">Celery Worker</text>
-<line x1="830" y1="90" x2="830" y2="670" class="lane"/>
-<rect x="752" y="70" width="156" height="54" class="box slate" rx="14"/>
-<text x="830.0" y="98" text-anchor="middle" class="label">Agent Runtime</text>
-<line x1="1030" y1="90" x2="1030" y2="670" class="lane"/>
-<rect x="952" y="70" width="156" height="54" class="box slate" rx="14"/>
-<text x="1030.0" y="98" text-anchor="middle" class="label">Tool Governance</text>
-<path d="M150,160 L180,160" class="arrow"/>
-<text x="165.0" y="150" text-anchor="middle" class="tiny">创建任务 / 续写 / Webhook</text>
-<path d="M340,210 L370,210" class="arrow"/>
-<text x="355.0" y="200" text-anchor="middle" class="tiny">校验 user_id + 持久化 Task</text>
-<path d="M530,260 L560,260" class="arrow"/>
-<text x="545.0" y="250" text-anchor="middle" class="tiny">入队 Celery / 写 task.queued</text>
-<path d="M720,310 L750,310" class="arrow"/>
-<text x="735.0" y="300" text-anchor="middle" class="tiny">装载会话、workspace、profile</text>
-<path d="M910,360 L950,360" class="arrow"/>
-<text x="930.0" y="350" text-anchor="middle" class="tiny">请求工具：风险分级</text>
-<path d="M950,410 L910,410" class="arrow dash"/>
-<text x="930.0" y="400" text-anchor="middle" class="tiny">低风险执行或高风险等待审批</text>
-<path d="M750,505 L530,505" class="arrow"/>
-<text x="640.0" y="495" text-anchor="middle" class="tiny">写 AgentRun / TaskEvent / Result</text>
-<path d="M370,555 L340,555" class="arrow"/>
-<text x="355.0" y="545" text-anchor="middle" class="tiny">快照、日志、事件游标</text>
-<path d="M180,605 L150,605" class="arrow"/>
-<text x="165.0" y="595" text-anchor="middle" class="tiny">HTTP/WS 返回 + LangBot 回推</text>
-<rect x="330" y="432" width="740" height="46" class="box orange" rx="12"/>
-<text x="700" y="461" text-anchor="middle" class="small">审批分支：高风险工具、计划确认和人工复核会写 checkpoint，批准后由后端恢复执行</text>
+<text x="32" y="44" text-anchor="start" class="title">任务执行时序：当前模块路径下的可审批执行链路</text>
+<line x1="80" y1="88" x2="80" y2="660" class="lane"/>
+<rect x="2" y="68" width="156" height="58" class="box slate" rx="14"/>
+<text x="80.0" y="96" text-anchor="middle" class="label">入口</text>
+<text x="80.0" y="120" text-anchor="middle" class="small">channels</text>
+<line x1="270" y1="88" x2="270" y2="660" class="lane"/>
+<rect x="192" y="68" width="156" height="58" class="box slate" rx="14"/>
+<text x="270.0" y="96" text-anchor="middle" class="label">API</text>
+<text x="270.0" y="120" text-anchor="middle" class="small">app/api</text>
+<line x1="460" y1="88" x2="460" y2="660" class="lane"/>
+<rect x="382" y="68" width="156" height="58" class="box slate" rx="14"/>
+<text x="460.0" y="96" text-anchor="middle" class="label">领域服务</text>
+<text x="460.0" y="120" text-anchor="middle" class="small">domain</text>
+<line x1="650" y1="88" x2="650" y2="660" class="lane"/>
+<rect x="572" y="68" width="156" height="58" class="box slate" rx="14"/>
+<text x="650.0" y="96" text-anchor="middle" class="label">Worker</text>
+<text x="650.0" y="120" text-anchor="middle" class="small">workers</text>
+<line x1="840" y1="88" x2="840" y2="660" class="lane"/>
+<rect x="762" y="68" width="156" height="58" class="box slate" rx="14"/>
+<text x="840.0" y="96" text-anchor="middle" class="label">Agent</text>
+<text x="840.0" y="120" text-anchor="middle" class="small">agent/core</text>
+<line x1="1040" y1="88" x2="1040" y2="660" class="lane"/>
+<rect x="962" y="68" width="156" height="58" class="box slate" rx="14"/>
+<text x="1040.0" y="96" text-anchor="middle" class="label">工具治理</text>
+<text x="1040.0" y="120" text-anchor="middle" class="small">tool_management</text>
+<path d="M158,155 L192,155" class="arrow"/>
+<text x="175.0" y="145" text-anchor="middle" class="tiny">LangBot webhook 或 /local/* 请求</text>
+<path d="M348,205 L382,205" class="arrow"/>
+<text x="365.0" y="195" text-anchor="middle" class="tiny">schema/Depends 校验 + 路由分发</text>
+<path d="M538,255 L572,255" class="arrow"/>
+<text x="555.0" y="245" text-anchor="middle" class="tiny">TaskService 持久化 + 写事件</text>
+<path d="M728,305 L762,305" class="arrow"/>
+<text x="745.0" y="295" text-anchor="middle" class="tiny">workers/runtime.py 装配上下文</text>
+<path d="M918,355 L962,355" class="arrow"/>
+<text x="940.0" y="345" text-anchor="middle" class="tiny">LangGraph 决策并请求工具</text>
+<path d="M962,410 L918,410" class="arrow dash"/>
+<text x="940.0" y="400" text-anchor="middle" class="tiny">ToolRegistry 风险/审批/执行</text>
+<path d="M762,505 L538,505" class="arrow"/>
+<text x="650.0" y="495" text-anchor="middle" class="tiny">AgentRun + TaskEvent + 日志</text>
+<path d="M382,555 L348,555" class="arrow"/>
+<text x="365.0" y="545" text-anchor="middle" class="tiny">任务快照 / logs / event cursor</text>
+<path d="M192,605 L158,605" class="arrow"/>
+<text x="175.0" y="595" text-anchor="middle" class="tiny">HTTP/WS 返回或 LangBot 回推</text>
+<rect x="330" y="432" width="760" height="46" class="box orange" rx="12"/>
+<text x="710" y="461" text-anchor="middle" class="small">高风险工具、计划确认和人工复核写 checkpoint；批准后由后端恢复执行</text>
 </svg>
