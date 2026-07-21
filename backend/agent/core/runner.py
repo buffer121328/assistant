@@ -500,26 +500,30 @@ class AgentHarness:
                 or outcome.error_message
                 or "任务需要审批后才能继续。"
             )
-            requested_tools = outcome.metadata.get("requested_tools", [])
-            approval_requests = outcome.metadata.get("approval_requests", [])
+            requested_tools = [
+                tool
+                for tool in outcome.metadata.get("requested_tools", [])
+                if isinstance(tool, str)
+            ]
+            approval_requests = [
+                request
+                for request in outcome.metadata.get("approval_requests", [])
+                if isinstance(request, dict)
+            ]
             stored = await task_lifecycle.save_waiting_approval(
                 task_id,
                 message,
-                requested_tools=(
-                    tool for tool in requested_tools if isinstance(tool, str)
-                ),
-                approval_requests=(
-                    request
-                    for request in approval_requests
-                    if isinstance(request, dict)
-                ),
+                requested_tools=requested_tools,
+                approval_requests=approval_requests,
             )
             await self._publish_event(
                 "task.waiting_approval",
                 {
                     "status": TASK_STATUS_WAITING_APPROVAL,
-                    "requested_tools": [tool for tool in requested_tools if isinstance(tool, str)],
-                    "approval_request_count": len([request for request in approval_requests if isinstance(request, dict)]),
+                    "requested_tools": requested_tools,
+                    "approval_request_count": len(approval_requests),
+                    "approval_count": len(set(requested_tools)) + len(approval_requests),
+                    "summary": message,
                     "message": message,
                 },
             )
@@ -539,6 +543,13 @@ class AgentHarness:
             return stored
         result_text = outcome.result_text or "任务已完成。"
         stored = await task_lifecycle.save_success(task_id, result_text)
+        await self._publish_event(
+            "task.message.completed",
+            {
+                "text": result_text,
+                "status": TASK_STATUS_SUCCESS,
+            },
+        )
         await self._publish_event(
             "task.completed",
             {

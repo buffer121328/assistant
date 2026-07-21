@@ -68,6 +68,8 @@ export function App(): JSX.Element {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [selectedTaskId, setSelectedTaskId] = useState<string>("");
   const [eventsByTask, setEventsByTask] = useState<Record<string, LocalEvent[]>>({});
+  const [logsByTask, setLogsByTask] = useState<Record<string, LocalEvent[]>>({});
+  const [approvalsByTask, setApprovalsByTask] = useState<Record<string, Approval[]>>({});
   const [inputText, setInputText] = useState("");
   const [selectedTaskType, setSelectedTaskType] = useState<LocalTaskType>("plan");
   const [taskSearchText, setTaskSearchText] = useState("");
@@ -86,10 +88,10 @@ export function App(): JSX.Element {
   const api = useMemo(() => new LocalApiClient(settings), [settings]);
   const selectedTask = tasks.find((task) => task.task_id === selectedTaskId) || null;
   const selectedEvents = selectedTaskId ? eventsByTask[selectedTaskId] || [] : [];
-  const approvals = selectedEvents
-    .filter((event) => event.type === "task.tool.requested")
-    .map(eventToApproval)
-    .filter(Boolean) as Approval[];
+  const selectedLogs = selectedTaskId ? logsByTask[selectedTaskId] || [] : [];
+  const approvals = selectedTaskId
+    ? (approvalsByTask[selectedTaskId] || []).filter((approval) => approval.status === "pending")
+    : [];
   const derivedItems = selectedEvents.flatMap(eventToDerivedItems);
   const approvalCount = approvals.length;
   const runningCount = tasks.filter((task) => task.status === "running").length;
@@ -240,6 +242,24 @@ export function App(): JSX.Element {
 
   useEffect(() => {
     if (!selectedTaskId || !settings.userId) return;
+    let cancelled = false;
+    Promise.all([api.logs(selectedTaskId), api.approvals(selectedTaskId)])
+      .then(([logs, taskApprovals]) => {
+        if (cancelled) return;
+        setLogsByTask((current) => ({ ...current, [selectedTaskId]: logs }));
+        setApprovalsByTask((current) => ({ ...current, [selectedTaskId]: taskApprovals }));
+      })
+      .catch((reason: unknown) => {
+        if (cancelled) return;
+        setError(reason instanceof Error ? reason.message : "Unable to load task details");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [api, selectedTaskId, settings.userId]);
+
+  useEffect(() => {
+    if (!selectedTaskId || !settings.userId) return;
     let socket: WebSocket | null = null;
     let stopped = false;
     const afterEventId = selectedEvents[selectedEvents.length - 1]?.event_id;
@@ -251,6 +271,12 @@ export function App(): JSX.Element {
         socket = api.streamEvents(selectedTaskId, events.at(-1)?.event_id || afterEventId, (event) => {
           appendEvents(selectedTaskId, [event]);
           applyTaskEvent(event);
+          if (["task.tool.requested", "task.waiting_approval"].includes(event.type)) {
+            void refreshApprovals(event.task_id);
+          }
+          if (["task.action.completed", "task.action.failed", "task.completed", "task.failed"].includes(event.type)) {
+            void refreshLogs(event.task_id);
+          }
         });
         socket.addEventListener("error", () => {
           setConnectionMessage("Event stream disconnected; snapshot refresh is still available");
@@ -279,10 +305,20 @@ export function App(): JSX.Element {
   }
 
   function applyTaskEvent(event: LocalEvent): void {
-    if (!["task.failed", "task.completed"].includes(event.type)) return;
+    if (!["task.failed", "task.completed", "task.waiting_approval", "task.status.changed"].includes(event.type)) return;
     void api.task(event.task_id).then((task) => {
       setTasks((current) => current.map((item) => (item.task_id === task.task_id ? task : item)));
     });
+  }
+
+  async function refreshApprovals(taskId: string): Promise<void> {
+    const taskApprovals = await api.approvals(taskId);
+    setApprovalsByTask((current) => ({ ...current, [taskId]: taskApprovals }));
+  }
+
+  async function refreshLogs(taskId: string): Promise<void> {
+    const logs = await api.logs(taskId);
+    setLogsByTask((current) => ({ ...current, [taskId]: logs }));
   }
 
   async function createTask(): Promise<void> {
@@ -321,6 +357,7 @@ export function App(): JSX.Element {
       setTasks((current) =>
         current.map((task) => (task.task_id === result.task.task_id ? result.task : task))
       );
+      await refreshApprovals(approval.task_id);
       setApprovalReason("");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Approval failed");
@@ -572,10 +609,9 @@ export function App(): JSX.Element {
 
         {activePanel === "logs" ? (
           <section className="logs-panel">
-            {selectedEvents.filter((event) => event.type === "task.log.appended" || event.type.includes("message"))
-              .length ? (
-              selectedEvents
-                .filter((event) => event.type === "task.log.appended" || event.type.includes("message"))
+            {[...selectedLogs, ...selectedEvents.filter((event) => event.type.includes("message"))].length ? (
+              [...selectedLogs, ...selectedEvents.filter((event) => event.type.includes("message"))]
+                .sort((left, right) => left.created_at.localeCompare(right.created_at))
                 .map((event) => (
                   <article className="log-card" key={event.event_id}>
                     <span>{event.type}</span>
@@ -967,25 +1003,6 @@ function renderAssistantMessages(events: LocalEvent[], task: Task): JSX.Element[
     );
   }
   return messages;
-}
-
-function eventToApproval(event: LocalEvent): Approval | null {
-  const payload = event.payload;
-  const approvalId = String(payload.approval_id || "");
-  if (!approvalId) return null;
-  return {
-    approval_id: approvalId,
-    task_id: event.task_id,
-    tool_name: String(payload.tool_name || payload.subject || "tool"),
-    approval_type: "tool",
-    subject: String(payload.subject || payload.tool_name || "tool"),
-    request_summary: String(payload.summary || payload.request_summary || ""),
-    status: "pending",
-    decided_by_user_id: null,
-    decided_at: null,
-    created_at: event.created_at,
-    updated_at: event.created_at
-  };
 }
 
 function eventToDerivedItems(event: LocalEvent): DerivedItem[] {

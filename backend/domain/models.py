@@ -415,8 +415,9 @@ class ProcessedMessage(TimestampMixin, Base):
     __table_args__ = (
         UniqueConstraint(
             "platform",
+            "adapter",
             "message_id",
-            name="uq_processed_messages_platform_message_id",
+            name="uq_processed_messages_platform_adapter_message_id",
         ),
     )
 
@@ -746,30 +747,6 @@ class MemoryPolicy(TimestampMixin, Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
 
-class ScheduledTaskRun(Base):
-    __tablename__ = "scheduled_task_runs"
-    __table_args__ = (
-        UniqueConstraint(
-            "schedule_key",
-            "scheduled_for",
-            name="uq_scheduled_task_runs_slot",
-        ),
-    )
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    schedule_key: Mapped[str] = mapped_column(String(128), nullable=False)
-    scheduled_for: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-    )
-    task_id: Mapped[str] = mapped_column(ForeignKey("tasks.id"), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=utc_now,
-        nullable=False,
-    )
-
-
 class AgentSchedule(TimestampMixin, Base):
     __tablename__ = "agent_schedules"
     __table_args__ = (
@@ -812,9 +789,14 @@ class AgentScheduleRun(Base):
 
 class ModelLog(Base):
     __tablename__ = "model_logs"
+    __table_args__ = (Index("ix_model_logs_agent_run_id", "agent_run_id"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     task_id: Mapped[str | None] = mapped_column(ForeignKey("tasks.id"), nullable=True)
+    agent_run_id: Mapped[str | None] = mapped_column(
+        ForeignKey("agent_runs.id"),
+        nullable=True,
+    )
     model_class: Mapped[str | None] = mapped_column(String(64), nullable=True)
     request_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     response_text: Mapped[str | None] = mapped_column(Text, nullable=True)

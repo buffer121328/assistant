@@ -20,9 +20,10 @@ from domain.models import (
     Base,
     Task,
     TaskStatus,
+    ToolLog,
     User,
 )
-from domain.task_events import TaskEventRepository
+from domain.task_events import TaskEventPublisher, TaskEventRepository
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -408,6 +409,41 @@ async def test_local_api_returns_ordered_events_with_event_id_cursor(
 
 
 @pytest.mark.asyncio
+async def test_task_text_publisher_uses_desktop_message_delta_contract(
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    user_id = await create_user(db_sessionmaker)
+    async with db_sessionmaker() as session:
+        task = Task(
+            user_id=user_id,
+            platform="local",
+            task_type="plan",
+            input_text="stream this",
+            status=TaskStatus.RUNNING.value,
+        )
+        session.add(task)
+        await session.commit()
+        task_id = task.id
+
+    await TaskEventPublisher(db_sessionmaker).publish_text(
+        task_id=task_id,
+        user_id=user_id,
+        text="hello",
+    )
+
+    with create_test_client(db_sessionmaker) as client:
+        response = client.get(
+            f"/local/tasks/{task_id}/events",
+            params={"user_id": user_id},
+        )
+
+    assert response.status_code == 200
+    assert [item["type"] for item in response.json()["items"]] == [
+        "task.message.delta"
+    ]
+
+
+@pytest.mark.asyncio
 async def test_local_api_approval_decision_is_idempotent_and_reuses_backend_semantics(
     db_sessionmaker: async_sessionmaker[AsyncSession],
 ) -> None:
@@ -436,7 +472,16 @@ async def test_local_api_approval_decision_is_idempotent_and_reuses_backend_sema
         task_id = task.id
         approval_id = approval.id
 
+    other_user_id = await create_user(db_sessionmaker)
     with create_test_client(db_sessionmaker) as client:
+        listed = client.get(
+            f"/local/tasks/{task_id}/approvals",
+            params={"user_id": user_id},
+        )
+        denied = client.get(
+            f"/local/tasks/{task_id}/approvals",
+            params={"user_id": other_user_id},
+        )
         first = client.post(
             f"/local/tasks/{task_id}/approvals/{approval_id}",
             json={"user_id": user_id, "decision": "approve", "reason": "confirmed"},
@@ -446,6 +491,9 @@ async def test_local_api_approval_decision_is_idempotent_and_reuses_backend_sema
             json={"user_id": user_id, "decision": "approve", "reason": "confirmed again"},
         )
 
+    assert listed.status_code == 200
+    assert listed.json()["items"][0]["approval_id"] == approval_id
+    assert denied.status_code == 404
     assert first.status_code == 200
     assert isinstance(first.json()["queued"], bool)
     assert first.json()["task"]["status"] == "pending"
@@ -453,6 +501,47 @@ async def test_local_api_approval_decision_is_idempotent_and_reuses_backend_sema
     assert second.status_code == 200
     assert second.json()["queued"] is False
     assert second.json()["task"]["status"] == "pending"
+
+
+@pytest.mark.asyncio
+async def test_local_logs_project_sanitized_tool_audit_records(
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    user_id = await create_user(db_sessionmaker)
+    async with db_sessionmaker() as session:
+        task = Task(
+            user_id=user_id,
+            platform="local",
+            task_type="office",
+            input_text="run tool",
+            status=TaskStatus.RUNNING.value,
+        )
+        session.add(task)
+        await session.flush()
+        session.add(
+            ToolLog(
+                task_id=task.id,
+                tool_name="shell.exec",
+                status="failed",
+                input_text='{"authorization":"Bearer secret-token"}',
+                error_message="Bearer secret-token",
+            )
+        )
+        await session.commit()
+        task_id = task.id
+
+    with create_test_client(db_sessionmaker) as client:
+        response = client.get(
+            f"/local/tasks/{task_id}/logs",
+            params={"user_id": user_id},
+        )
+
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert len(items) == 1
+    assert items[0]["type"] == "task.log.appended"
+    assert items[0]["payload"]["tool_name"] == "shell.exec"
+    assert "secret-token" not in str(items[0])
 
 
 @pytest.mark.asyncio

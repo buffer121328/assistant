@@ -18,7 +18,6 @@ from domain.models import (
     ModelLog,
     PlatformAccount,
     ProcessedMessage,
-    ScheduledTaskRun,
     SkillAuditLog,
     Task,
     TaskStatus,
@@ -232,11 +231,13 @@ class MessageRepository:
         self,
         *,
         platform: str,
+        adapter: str | None,
         message_id: str,
     ) -> ProcessedMessage | None:
         return await self.session.scalar(
             select(ProcessedMessage).where(
                 ProcessedMessage.platform == platform,
+                ProcessedMessage.adapter == adapter,
                 ProcessedMessage.message_id == message_id,
             )
         )
@@ -325,6 +326,7 @@ class ModelLogCreate:
     request_text: str | None
     response_text: str | None
     error_message: str | None
+    agent_run_id: str | None = None
 
 
 class ModelLogRepository:
@@ -334,6 +336,7 @@ class ModelLogRepository:
     async def create_model_log(self, data: ModelLogCreate) -> ModelLog:
         model_log = ModelLog(
             task_id=data.task_id,
+            agent_run_id=data.agent_run_id,
             model_class=data.model_class,
             request_text=data.request_text,
             response_text=data.response_text,
@@ -594,40 +597,6 @@ def eligible_memory_conditions(now: datetime) -> tuple[ColumnElement[bool], ...]
         Memory.archived_at.is_(None),
         or_(Memory.expires_at.is_(None), Memory.expires_at > now),
     )
-
-
-class ScheduledTaskRunRepository:
-    def __init__(self, session: AsyncSession) -> None:
-        self.session = session
-
-    async def get_by_slot(
-        self,
-        *,
-        schedule_key: str,
-        scheduled_for: datetime,
-    ) -> ScheduledTaskRun | None:
-        return await self.session.scalar(
-            select(ScheduledTaskRun).where(
-                ScheduledTaskRun.schedule_key == schedule_key,
-                ScheduledTaskRun.scheduled_for == scheduled_for,
-            )
-        )
-
-    async def create(
-        self,
-        *,
-        schedule_key: str,
-        scheduled_for: datetime,
-        task_id: str,
-    ) -> ScheduledTaskRun:
-        run = ScheduledTaskRun(
-            schedule_key=schedule_key,
-            scheduled_for=scheduled_for,
-            task_id=task_id,
-        )
-        self.session.add(run)
-        await self.session.flush()
-        return run
 
 
 @dataclass(frozen=True)

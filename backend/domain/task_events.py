@@ -14,8 +14,8 @@ from domain.models import TaskEvent
 
 
 LOGGER = logging.getLogger("assistant_api")
-TASK_EVENT_STATUS = "status"
-TASK_EVENT_CONTENT_DELTA = "content_delta"
+TASK_EVENT_STATUS = "task.status.changed"
+TASK_EVENT_CONTENT_DELTA = "task.message.delta"
 TASK_EVENT_PLAN = "plan"
 TASK_EVENT_APPEND_ATTEMPTS = 3
 

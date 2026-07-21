@@ -10,12 +10,12 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from scheduler.cron import CronScheduler, ScheduledTaskDefinition
+from agent.tool_management.schedule_tools import AgentScheduleService
 from scheduler.heartbeat import run_v2_maintenance
 from infrastructure.config import Settings
 from domain.models import (
     Base,
-    ScheduledTaskRun,
+    AgentScheduleRun,
     Task,
     TaskStatus,
     ToolLog,
@@ -255,56 +255,47 @@ async def test_03_scheduler_scope_stays_state_based_without_agent_tool_execution
 
 
 @pytest.mark.asyncio
-async def test_04_cron_creates_one_pending_task_per_schedule_slot(
+async def test_04_agent_schedule_service_materializes_one_pending_task_per_slot(
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> None:
+    scheduled_for = datetime(2026, 7, 13, 0, 0, tzinfo=UTC)
     async with sessionmaker() as session:
         user = User(display_name="Scheduled User")
         session.add(user)
         await session.commit()
-
-    calls: list[str] = []
-
-    async def dispatch_task(task_id: str) -> None:
-        calls.append(task_id)
-
-    definition = ScheduledTaskDefinition(
-        schedule_key="daily-review",
-        user_id=user.id,
-        platform="scheduler",
-        task_type="daily",
-        input_text="生成今日回顾",
-    )
-    scheduled_for = datetime(2026, 7, 13, 0, 0, tzinfo=UTC)
+        user_id = user.id
 
     async with sessionmaker() as session:
-        scheduler = CronScheduler(session=session, dispatch_task=dispatch_task)
-        first = await scheduler.create_due_task(
-            definition=definition,
-            scheduled_for=scheduled_for,
+        service = AgentScheduleService(session)
+        await service.create(
+            user_id=user_id,
+            mode="at",
+            payload={"task_type": "daily", "input_text": "生成今日回顾"},
+            run_at=scheduled_for,
         )
-    async with sessionmaker() as session:
-        scheduler = CronScheduler(session=session, dispatch_task=dispatch_task)
-        second = await scheduler.create_due_task(
-            definition=definition,
-            scheduled_for=scheduled_for,
+        first_runs = await service.materialize_due(
+            now=scheduled_for + timedelta(minutes=1)
+        )
+        second_runs = await service.materialize_due(
+            now=scheduled_for + timedelta(minutes=2)
         )
 
     async with sessionmaker() as session:
         task_count = await session.scalar(select(func.count()).select_from(Task))
         run_count = await session.scalar(
-            select(func.count()).select_from(ScheduledTaskRun)
+            select(func.count()).select_from(AgentScheduleRun)
         )
-        stored = await session.get(Task, first.id)
+        stored = await session.get(Task, first_runs[0].task_id)
         logs = list(await session.scalars(select(ToolLog)))
 
-    assert second.id == first.id
+    assert len(first_runs) == 1
+    assert second_runs == []
     assert task_count == 1
     assert run_count == 1
     assert stored is not None
     assert stored.status == TaskStatus.PENDING.value
-    assert stored.platform == "scheduler"
-    assert calls == [first.id]
+    assert stored.platform == "agent_schedule"
+    assert first_runs[0].status == "materialized"
     assert not any(
         log.tool_name in {"langgraph.executor", "mcp.adapter", "shell"} for log in logs
     )
@@ -348,6 +339,8 @@ async def test_06_worker_heartbeat_composes_bounded_v2_maintenance(
         "evolution_suggestion_created": False,
         "created_notification_outbox_ids": [],
         "materialized_schedule_run_ids": [],
+        "queued_schedule_run_ids": [],
+        "failed_schedule_run_ids": [],
         "delivered_notification_outbox_ids": [],
     }
     assert [log.tool_name for log in logs] == ["memory.maintenance"]

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 import json
 from typing import Any, cast
@@ -24,6 +25,7 @@ CANCELLABLE = {TaskStatus.PENDING.value, TaskStatus.RUNNING.value, TaskStatus.WA
 @dataclass
 class AgentTaskToolService:
     session: AsyncSession
+    enqueue_task: Callable[[str], bool] | None = None
     max_events: int = 20
     max_result_chars: int = 4000
 
@@ -49,21 +51,35 @@ class AgentTaskToolService:
             conversation_id=conversation_id,
             commit=False,
         )
+        await self.session.commit()
+        await self.session.refresh(task)
+
+        queued = False
+        if self.enqueue_task is not None:
+            try:
+                queued = bool(self.enqueue_task(task.id))
+            except Exception:
+                queued = False
+
         await TaskEventRepository(self.session).append(
             task_id=task.id,
             user_id=user_id,
-            event_type="queued",
-            payload={"source": "task.start_background", "task_type": task_type},
+            event_type=("task.status.changed" if queued else "task.dispatch.failed"),
+            payload={
+                "source": "task.start_background",
+                "task_type": task_type,
+                "status": task.status,
+                "queued": queued,
+            },
         )
         await self._tool_log(
             task_id=task.id,
             name="task.start_background",
-            status="succeeded",
-            output={"task_id": task.id, "status": task.status},
+            status=("succeeded" if queued else "failed"),
+            output={"task_id": task.id, "status": task.status, "queued": queued},
         )
         await self.session.commit()
-        await self.session.refresh(task)
-        return {"task_id": task.id, "status": task.status, "queued": True}
+        return {"task_id": task.id, "status": task.status, "queued": queued}
 
     async def check_status(self, *, user_id: str, task_id: str) -> dict[str, object]:
         task = await self._owned_task(user_id=user_id, task_id=task_id)

@@ -11,8 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import NullPool
 
 from agent.tool_management.schedule_tools import AgentScheduleService
+from scheduler.heartbeat import _dispatch_materialized_schedule_runs
 from agent.tool_management.task_tools import AgentTaskToolService
 from domain.models import AgentScheduleRun, Base, Conversation, Task, TaskEvent, TaskStatus, ToolLog, User
+from infrastructure.config import Settings
 
 
 @pytest_asyncio.fixture
@@ -36,7 +38,38 @@ async def user_and_conversation(session: AsyncSession) -> tuple[User, Conversati
 
 
 @pytest.mark.asyncio
-async def test_task_start_background_returns_task_id_and_queued_event(sessionmaker) -> None:  # type: ignore[no-untyped-def]
+async def test_task_start_background_dispatches_and_reports_queue_state(sessionmaker) -> None:  # type: ignore[no-untyped-def]
+    calls: list[str] = []
+
+    def enqueue(task_id: str) -> bool:
+        calls.append(task_id)
+        return True
+
+    async with sessionmaker() as session:
+        user, conversation = await user_and_conversation(session)
+        result = await AgentTaskToolService(
+            session,
+            enqueue_task=enqueue,
+        ).start_background(
+            user_id=user.id,
+            conversation_id=conversation.id,
+            task_type="learn",
+            input_text="/learn background",
+        )
+        events = list((await session.scalars(select(TaskEvent))).all())
+        logs = list((await session.scalars(select(ToolLog))).all())
+
+    assert result["task_id"]
+    assert result["status"] == TaskStatus.PENDING.value
+    assert result["queued"] is True
+    assert calls == [result["task_id"]]
+    assert events[0].event_type == "task.status.changed"
+    assert logs[0].tool_name == "task.start_background"
+    assert logs[0].status == "succeeded"
+
+
+@pytest.mark.asyncio
+async def test_task_start_background_reports_dispatch_failure(sessionmaker) -> None:  # type: ignore[no-untyped-def]
     async with sessionmaker() as session:
         user, conversation = await user_and_conversation(session)
         result = await AgentTaskToolService(session).start_background(
@@ -48,10 +81,9 @@ async def test_task_start_background_returns_task_id_and_queued_event(sessionmak
         events = list((await session.scalars(select(TaskEvent))).all())
         logs = list((await session.scalars(select(ToolLog))).all())
 
-    assert result["task_id"]
-    assert result["status"] == TaskStatus.PENDING.value
-    assert events[0].event_type == "queued"
-    assert logs[0].tool_name == "task.start_background"
+    assert result["queued"] is False
+    assert events[0].event_type == "task.dispatch.failed"
+    assert logs[0].status == "failed"
 
 
 @pytest.mark.asyncio
@@ -164,3 +196,41 @@ async def test_schedule_owner_scope_history_toggle_run_now_delete(sessionmaker) 
     assert run["task_id"]
     assert len(history) == 1
     assert deleted["deleted"] is True
+
+
+@pytest.mark.asyncio
+async def test_materialized_schedule_run_is_dispatched_and_recorded(sessionmaker) -> None:  # type: ignore[no-untyped-def]
+    now = datetime(2026, 7, 19, 12, 0, tzinfo=UTC)
+    async with sessionmaker() as session:
+        user, conversation = await user_and_conversation(session)
+        service = AgentScheduleService(session)
+        await service.create(
+            user_id=user.id,
+            conversation_id=conversation.id,
+            mode="at",
+            payload={"task_type": "learn", "input_text": "/learn once"},
+            run_at=now,
+        )
+        runs = await service.materialize_due(now=now + timedelta(minutes=1))
+
+    calls: list[str] = []
+
+    async def dispatch(task_id: str) -> bool:
+        calls.append(task_id)
+        return True
+
+    queued, failed = await _dispatch_materialized_schedule_runs(
+        sessionmaker=sessionmaker,
+        settings=Settings(),
+        schedule_runs=runs,
+        dispatch_task=dispatch,
+    )
+
+    async with sessionmaker() as session:
+        stored = await session.get(AgentScheduleRun, runs[0].id)
+
+    assert queued == [runs[0].id]
+    assert failed == []
+    assert calls == [runs[0].task_id]
+    assert stored is not None
+    assert stored.status == "queued"

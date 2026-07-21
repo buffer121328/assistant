@@ -45,7 +45,7 @@ export type Approval = {
   approval_id: string;
   task_id: string;
   tool_name: string;
-  approval_type: "tool" | "plan" | "review";
+  approval_type: "tool" | "plan" | "review" | "change";
   subject: string;
   request_summary: string | null;
   status: string;
@@ -186,6 +186,15 @@ export class LocalApiClient {
   async logs(taskId: string): Promise<LocalEvent[]> {
     const response = await this.request<{ items: LocalEvent[] }>(
       `/local/tasks/${encodeURIComponent(taskId)}/logs?user_id=${encodeURIComponent(
+        this.settings.userId
+      )}`
+    );
+    return response.items;
+  }
+
+  async approvals(taskId: string): Promise<Approval[]> {
+    const response = await this.request<{ items: Approval[] }>(
+      `/local/tasks/${encodeURIComponent(taskId)}/approvals?user_id=${encodeURIComponent(
         this.settings.userId
       )}`
     );

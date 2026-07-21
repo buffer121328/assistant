@@ -49,11 +49,13 @@ class AgentGatewayModel:
         session: AsyncSession,
         settings: Settings,
         adapter: AgentGatewayAdapter | None = None,
+        agent_run_id: str | None = None,
         observability: Observability | None = None,
         event_sink: Callable[[str, dict[str, object]], Awaitable[None]] | None = None,
     ) -> None:
         self.session = session
         self.settings = settings
+        self.agent_run_id = agent_run_id
         if adapter is None:
             from model_gateway.pool_factory import build_pooled_model_gateway
 
@@ -173,6 +175,7 @@ class AgentGatewayModel:
             await self.repository.create_model_log(
                 ModelLogCreate(
                     task_id=request.task_id,
+                    agent_run_id=self.agent_run_id,
                     model_class=model_class,
                     request_text=request_summary,
                     response_text=build_response_summary(
@@ -208,6 +211,7 @@ class AgentGatewayModel:
         await self.repository.create_model_log(
             ModelLogCreate(
                 task_id=task_id,
+                agent_run_id=self.agent_run_id,
                 model_class=model_class,
                 request_text=request_summary,
                 response_text=None,

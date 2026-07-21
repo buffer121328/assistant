@@ -27,7 +27,18 @@ from infrastructure.checkpoints import (
     open_agent_checkpointer,
 )
 from infrastructure.config import Settings
-from domain.models import AgentRun, Approval, Base, ModelLog, Task, ToolLog, User
+from domain.models import (
+    AgentRun,
+    Approval,
+    Base,
+    Conversation,
+    ConversationMessage,
+    ModelLog,
+    Task,
+    TaskEvent,
+    ToolLog,
+    User,
+)
 from workers.runtime import execute_task_by_id
 from agent import (
     AgentDecision,
@@ -178,17 +189,30 @@ async def create_task(
     *,
     status: str = "running",
     task_type: str = "learn",
+    with_conversation: bool = False,
 ) -> Task:
     async with sessionmaker() as session:
         user = User(display_name="V3 Agent Core User")
         session.add(user)
         await session.flush()
+        conversation_id = None
+        if with_conversation:
+            conversation = Conversation(
+                user_id=user.id,
+                title="Agent runtime",
+                channel="local",
+                external_key=None,
+            )
+            session.add(conversation)
+            await session.flush()
+            conversation_id = conversation.id
         task = Task(
             user_id=user.id,
             platform="api",
             task_type=task_type,
             input_text=f"/{task_type} LangGraph checkpoint",
             status=status,
+            conversation_id=conversation_id,
         )
         session.add(task)
         await session.commit()
@@ -719,10 +743,19 @@ async def test_agent_gateway_model_uses_existing_route_and_writes_model_log(
     observability = RecordingObservability()
 
     async with sessionmaker() as session:
+        run = AgentRun(
+            task_id=task.id,
+            user_id=task.user_id,
+            attempt_no=1,
+            status="running",
+        )
+        session.add(run)
+        await session.flush()
         decision = await AgentGatewayModel(
             session=session,
             settings=Settings(),
             adapter=adapter,
+            agent_run_id=run.id,
             observability=observability,
         ).decide(request)
         await session.commit()
@@ -738,6 +771,7 @@ async def test_agent_gateway_model_uses_existing_route_and_writes_model_log(
     assert gateway_request.task_type == "learn"
     assert model_class == "standard"
     assert len(logs) == 1
+    assert logs[0].agent_run_id == run.id
     assert logs[0].error_message is None
     assert "deepseek-standard-test" in (logs[0].response_text or "")
     assert observability.events[0][0] == "agent.model.decision"
@@ -834,12 +868,54 @@ def test_checkpoint_configuration_rejects_non_postgres_without_fallback() -> Non
     with pytest.raises(AgentCheckpointConfigurationError):
         normalize_checkpoint_database_url("sqlite+aiosqlite:///local.db")
 
+@pytest.mark.asyncio
+async def test_worker_passes_current_agent_run_id_to_runtime_dependencies(
+    sessionmaker: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    task = await create_task(sessionmaker, status="pending", task_type="plan")
+    captured: list[str | None] = []
+
+    async def fake_execute_with_runtime_dependencies(**kwargs: Any) -> Task:
+        captured.append(kwargs["agent_run_id"])
+        session = kwargs["session"]
+        stored = await session.get(Task, kwargs["task_id"])
+        assert stored is not None
+        stored.status = "success"
+        stored.result_text = "captured run"
+        await session.commit()
+        return stored
+
+    monkeypatch.setattr(
+        "workers.runtime._execute_with_runtime_dependencies",
+        fake_execute_with_runtime_dependencies,
+    )
+
+    result = await execute_task_by_id(
+        task.id,
+        sessionmaker=sessionmaker,
+        settings=Settings(database_url="sqlite+aiosqlite:///unused.db"),
+        observability=RecordingObservability(),
+    )
+
+    async with sessionmaker() as session:
+        run = await session.scalar(select(AgentRun).where(AgentRun.task_id == task.id))
+
+    assert result.status == "success"
+    assert run is not None
+    assert captured == [run.id]
+
 
 @pytest.mark.asyncio
 async def test_worker_injected_executor_skips_model_and_checkpoint(
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> None:
-    task = await create_task(sessionmaker, status="pending", task_type="plan")
+    task = await create_task(
+        sessionmaker,
+        status="pending",
+        task_type="plan",
+        with_conversation=True,
+    )
 
     class RecordingExecutor:
         def __init__(self) -> None:
@@ -876,6 +952,25 @@ async def test_worker_injected_executor_skips_model_and_checkpoint(
     assert observability.events[0][0] == "agent.task"
     assert observability.flush_count == 1
     assert observability.shutdown_count == 0
+
+    async with sessionmaker() as session:
+        assistant_messages = list(
+            await session.scalars(
+                select(ConversationMessage).where(
+                    ConversationMessage.task_id == task.id,
+                    ConversationMessage.role == "assistant",
+                )
+            )
+        )
+        event_types = list(
+            await session.scalars(
+                select(TaskEvent.event_type).where(TaskEvent.task_id == task.id)
+            )
+        )
+    assert [message.content for message in assistant_messages] == ["注入执行器完成"]
+    assert "task.message.completed" in event_types
+    assert "task.completed" in event_types
+    assert "task.status.changed" in event_types
 
 
 @pytest.mark.asyncio

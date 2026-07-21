@@ -136,6 +136,7 @@ async def execute_task_by_id(
                 try:
                     task = await _execute_with_runtime_dependencies(
                         task_id=task_id,
+                        agent_run_id=agent_run.id if agent_run is not None else None,
                         session=session,
                         settings=settings,
                         sensitive_values=sensitive_values,
@@ -191,20 +192,6 @@ async def execute_task_by_id(
                     await dispatcher.dispatch_task(task.id)
                     await session.refresh(task)
 
-                if task.conversation_id is not None:
-                    from domain.conversations import ConversationService
-
-                    visible = task.result_text or task.error_message
-                    if visible:
-                        await ConversationService(session).append_message(
-                            conversation_id=task.conversation_id,
-                            user_id=task.user_id,
-                            role="assistant",
-                            content=visible,
-                            task_id=task.id,
-                        )
-                        await session.commit()
-
                 publisher = TaskEventPublisher(sessionmaker)
                 await publisher.publish(
                     task_id=task.id,
@@ -235,6 +222,7 @@ async def execute_task_by_id(
 async def _execute_with_runtime_dependencies(
     *,
     task_id: str,
+    agent_run_id: str | None,
     session: AsyncSession,
     settings: Settings,
     sensitive_values: tuple[str | None, ...],
@@ -250,6 +238,7 @@ async def _execute_with_runtime_dependencies(
     if langgraph_executor is not None:
         return await _execute_with_harness(
             task_id,
+            agent_run_id=agent_run_id,
             session=session,
             settings=settings,
             sensitive_values=sensitive_values,
@@ -265,6 +254,7 @@ async def _execute_with_runtime_dependencies(
     if checkpointer is not None:
         return await _execute_with_harness(
             task_id,
+            agent_run_id=agent_run_id,
             session=session,
             settings=settings,
             sensitive_values=sensitive_values,
@@ -280,6 +270,7 @@ async def _execute_with_runtime_dependencies(
     async with open_agent_checkpointer(settings.database_url) as runtime_checkpointer:
         return await _execute_with_harness(
             task_id,
+            agent_run_id=agent_run_id,
             session=session,
             settings=settings,
             sensitive_values=sensitive_values,
@@ -297,6 +288,7 @@ async def _execute_with_runtime_dependencies(
 async def _execute_with_harness(
     task_id: str,
     *,
+    agent_run_id: str | None,
     session: AsyncSession,
     settings: Settings,
     sensitive_values: tuple[str | None, ...],
@@ -343,6 +335,7 @@ async def _execute_with_harness(
             settings=settings,
             registry=registry,
             adapter=routing_adapter,
+            agent_run_id=agent_run_id,
         ).route_task(task)
 
     tavily_config = build_tavily_config(settings)
@@ -528,7 +521,17 @@ async def _execute_with_harness(
             )
         )
     )
-    task_specs = build_task_tool_specs(AgentTaskToolService(session))
+    def enqueue_background_task(background_task_id: str) -> bool:
+        from workers.worker import enqueue_task_execution
+
+        return enqueue_task_execution(
+            background_task_id,
+            runtime_settings=settings,
+        )
+
+    task_specs = build_task_tool_specs(
+        AgentTaskToolService(session, enqueue_task=enqueue_background_task)
+    )
     schedule_specs = build_schedule_tool_specs(AgentScheduleService(session))
     semantic_memory = Mem0MemoryAdapter(settings.mem0_config_path)
     memory_specs = build_memory_tool_specs(
@@ -581,6 +584,7 @@ async def _execute_with_harness(
             or AgentGatewayModel(
                 session=session,
                 settings=settings,
+                agent_run_id=agent_run_id,
                 observability=observability,
                 event_sink=publish_event,
             ),

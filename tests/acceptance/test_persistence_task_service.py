@@ -159,7 +159,7 @@ async def test_get_task_detail_api_returns_task_fields(
     )
 
     with create_test_client(db_sessionmaker) as client:
-        response = client.get(f"/api/tasks/{task.id}")
+        response = client.get(f"/api/tasks/{task.id}", params={"user_id": user_id})
 
     assert response.status_code == 200
     payload = response.json()
@@ -169,6 +169,11 @@ async def test_get_task_detail_api_returns_task_fields(
     assert payload["task_type"] == "plan"
     assert payload["created_at"]
     assert payload["updated_at"]
+
+    other_id = await create_user(db_sessionmaker, display_name="Other User")
+    with create_test_client(db_sessionmaker) as client:
+        denied = client.get(f"/api/tasks/{task.id}", params={"user_id": other_id})
+    assert denied.status_code == 404
 
 
 @pytest.mark.asyncio

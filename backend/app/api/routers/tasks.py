@@ -124,10 +124,14 @@ async def list_tasks(
 @router.get("/api/tasks/{task_id}", response_model=TaskResponse)
 async def get_task(
     task_id: str,
+    user_id: Annotated[str, Query(min_length=1)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> TaskResponse:
     try:
-        task = await TaskService(session).get_task(task_id)
+        task = await TaskService(session).get_task_by_user(
+            task_id=task_id,
+            user_id=user_id,
+        )
     except TaskServiceError as exc:
         raise_app_error(exc)
     return task_response(task)

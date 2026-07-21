@@ -14,9 +14,11 @@ from agent.memory.maintenance import maintain_memories
 from notifications import ReminderService, deliver_langbot_due
 from channels.langbot.service import LangBotResultClient
 from agent.tool_management.schedule_tools import AgentScheduleService
+from domain.models import AgentScheduleRun, ToolLog
+from domain.task_events import TaskEventRepository
 
 
-DispatchTask = Callable[[str], Awaitable[None]]
+DispatchTask = Callable[[str], Awaitable[bool | None]]
 
 
 async def run_v2_maintenance(
@@ -48,6 +50,15 @@ async def run_v2_maintenance(
     async with sessionmaker() as session:
         schedule_runs = await AgentScheduleService(session).materialize_due(now=now)
 
+    queued_schedule_run_ids, failed_schedule_run_ids = (
+        await _dispatch_materialized_schedule_runs(
+            sessionmaker=sessionmaker,
+            settings=settings,
+            schedule_runs=schedule_runs,
+            dispatch_task=dispatch_task,
+        )
+    )
+
     async with sessionmaker() as session:
         delivered_outbox_ids = await deliver_langbot_due(
             session=session,
@@ -60,5 +71,77 @@ async def run_v2_maintenance(
     result["evolution_suggestion_created"] = suggestion is not None
     result["created_notification_outbox_ids"] = list(created_outbox_ids)
     result["materialized_schedule_run_ids"] = [run.id for run in schedule_runs]
+    result["queued_schedule_run_ids"] = queued_schedule_run_ids
+    result["failed_schedule_run_ids"] = failed_schedule_run_ids
     result["delivered_notification_outbox_ids"] = list(delivered_outbox_ids)
     return result
+
+
+async def _dispatch_materialized_schedule_runs(
+    *,
+    sessionmaker: async_sessionmaker[AsyncSession],
+    settings: Settings,
+    schedule_runs: list[AgentScheduleRun],
+    dispatch_task: DispatchTask | None,
+) -> tuple[list[str], list[str]]:
+    queued_run_ids: list[str] = []
+    failed_run_ids: list[str] = []
+
+    for materialized in schedule_runs:
+        queued = False
+        if materialized.task_id is not None:
+            try:
+                if dispatch_task is not None:
+                    dispatch_result = await dispatch_task(materialized.task_id)
+                    queued = dispatch_result is not False
+                else:
+                    from workers.worker import enqueue_task_execution
+
+                    queued = enqueue_task_execution(
+                        materialized.task_id,
+                        runtime_settings=settings,
+                    )
+            except Exception:
+                queued = False
+
+        async with sessionmaker() as session:
+            run = await session.get(AgentScheduleRun, materialized.id)
+            if run is None:
+                continue
+            run.status = "queued" if queued else "enqueue_failed"
+            run.message = None if queued else "Task queue unavailable."
+            if run.task_id is not None:
+                await TaskEventRepository(session).append(
+                    task_id=run.task_id,
+                    user_id=run.user_id,
+                    event_type=(
+                        "task.status.changed" if queued else "task.dispatch.failed"
+                    ),
+                    payload={
+                        "source": "schedule",
+                        "schedule_run_id": run.id,
+                        "status": "pending",
+                        "queued": queued,
+                    },
+                )
+                session.add(
+                    ToolLog(
+                        task_id=run.task_id,
+                        tool_name="schedule.dispatch",
+                        status="succeeded" if queued else "failed",
+                        output_text=(
+                            '{"queued": true}'
+                            if queued
+                            else '{"queued": false}'
+                        ),
+                        error_message=None if queued else "Task queue unavailable.",
+                    )
+                )
+            await session.commit()
+
+        if queued:
+            queued_run_ids.append(materialized.id)
+        else:
+            failed_run_ids.append(materialized.id)
+
+    return queued_run_ids, failed_run_ids

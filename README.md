@@ -181,3 +181,23 @@ cd frontend/desktop
 npm run typecheck
 npm run build
 ```
+
+## V11 运行时完整性与阶段兼容说明
+
+V11 第一阶段依据 `docs/v11/01-feature-implementation-audit.md` 与 `docs/v11/02-task-schedule-runtime-audit.md` 收敛运行时主链路：普通任务详情和本地审批列表执行 owner-scoped 校验；Electron Web 桌面端从持久化审批 API 恢复 approval ID；`ToolLog` 投影到 logs 面板；消息事件使用 `task.message.delta` / `task.message.completed`；任务终态继续发布 `task.completed`、`task.failed` 和 `task.status.changed`；`TaskService` 统一写入 conversation assistant 结果，worker 不再重复追加；`task.start_background` 与到期 schedule 会返回或记录真实的 `queued` / `enqueue_failed` 状态。任务进入 `waiting_approval` 时，事件包含审批数量、请求工具和用户可读摘要。
+
+为保持历史验收契约可追踪，以下短说明保留阶段关键词，但不替代 `openspec/` 与 `docs/` 中的完整设计：
+
+- **LangBot** 是真实 LangBot 主消息入口和结果回推通道；Electron Web 桌面端通过 `/local/*` 使用同一任务与审批边界。
+- **MVP 阶段 09**：Docker Compose 同时运行 API、`celery-worker` 与 Celery Beat；heartbeat 负责超时 `running` 任务失败和 `pending` 任务补偿，真实 LangBot 负责结果回推。
+- 搜索命令使用 `TAVILY_BASE_URL` 与 `TAVILY_API_KEY` 本地配置；`/learn` 通过 `search.web` 检索资料，`/daily` 通过 `search.web` 获取需要的公开信息。
+- **V2-02**：`v2.planner` 与 `v2.researcher` 读取 `backend/resources/skillpacks/*/SKILL.md`；发现的 Skill 不会自动启用。
+- **V2-03 在 V2-02 规划层上**接入 LangGraph 与 ToolRegistry；外部 MCP Server 默认不启用。V3-08 已移除 Deepeval，当前回归入口由 V2-05 评测与回归阶段维护。
+- **V2-04**：Celery Beat 按单实例部署；TaskService 保持状态写入边界，记忆 `access_count` 只由明确读取更新，演进建议不会自动修改运行配置；审批态保持 `waiting_approval`。
+- **V2-05**：`scripts/run_evaluation.py` 读取 `core_commands.json` 并生成 `v2-05.json`；离线评测不替代 pytest、ruff 和 mypy。
+- **V6-00**：`scripts/run_memory_baseline.py` 使用 `adaptive_memory_v6_00.json` 保存基线；该阶段记录中的 adaptive candidate 尚未上线，后续状态以对应 OpenSpec change 为准。
+- 任务类型扩展约定写作 `backend/features/<task_type>`；当前实际入口位于 `backend/features/`。通道实现位于 `backend/channels/langbot` 与 `backend/channels/desktop`，worker 入口为 `workers.worker:celery_app`。
+- `/office` 默认不执行搜索，只有任务计划和受治理工具明确需要时才解析对应能力。
+- 历史阶段边界：当前不承诺完整 MCP Gateway、深度浏览、真实 Office 文件生成或邮件/日历接入；这些能力必须经过对应可选集成、审批和运行时治理后再启用。
+- **V11 数据治理基础阶段**：`processed_messages` 的幂等边界使用 `platform + adapter + message_id`；`model_logs` 增加可空 `agent_run_id`，主 worker 模型调用按 AgentRun 归属，直接聊天/子 Agent 等无 run 上下文的日志保持 NULL。该阶段不删除 legacy 调度表、不拆分消息账本、不实现 memory outbox consumer。
+- **V11 调度治理阶段**：`agent_schedules` 与 `agent_schedule_runs` 是唯一运行时调度主线；旧 `scheduled_task_runs`、`CronScheduler` 和 `ScheduledTaskRunRepository` 已移除，迁移支持回滚恢复旧表结构。

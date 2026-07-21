@@ -40,10 +40,12 @@ class CapabilityRoutingService:
         settings: Settings,
         registry: CapabilityRegistry,
         adapter: RoutingModelAdapter | None = None,
+        agent_run_id: str | None = None,
     ) -> None:
         self.session = session
         self.settings = settings
         self.registry = registry
+        self.agent_run_id = agent_run_id
         self.adapter = adapter or DeepSeekAdapter(_deepseek_config(settings))
         self.repository = ModelLogRepository(session)
         self.sensitive_values = _sensitive_values(settings)
@@ -99,6 +101,7 @@ class CapabilityRoutingService:
         await self.repository.create_model_log(
             ModelLogCreate(
                 task_id=task.id,
+                agent_run_id=self.agent_run_id,
                 model_class=model_class,
                 request_text=request_summary,
                 response_text=build_response_summary(
@@ -123,6 +126,7 @@ class CapabilityRoutingService:
         await self.repository.create_model_log(
             ModelLogCreate(
                 task_id=task.id,
+                agent_run_id=self.agent_run_id,
                 model_class=model_class,
                 request_text=request_summary,
                 response_text=None,

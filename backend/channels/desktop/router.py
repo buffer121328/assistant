@@ -17,8 +17,15 @@ from domain.conversations import ConversationError, ConversationService
 from agent.tool_management.workspace import SessionWorkspaceStore
 from infrastructure.database import get_session
 from app.support.errors import AppError
-from domain.models import ApprovalStatus, Task, TaskEvent, TaskStatus
-from app.api.schemas import ApprovalResponse, TaskListResponse, TaskResponse, approval_response, task_response
+from domain.models import ApprovalStatus, Task, TaskEvent, TaskStatus, ToolLog
+from app.api.schemas import (
+    ApprovalListResponse,
+    ApprovalResponse,
+    TaskListResponse,
+    TaskResponse,
+    approval_response,
+    task_response,
+)
 from domain.services import ApprovalService, TaskService, TaskServiceError
 from domain.task_events import TaskEventRepository
 from app.api.routers.tasks import _enqueue_task_execution, raise_app_error
@@ -330,13 +337,36 @@ async def local_list_task_logs(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> LocalEventListResponse:
     await _get_owned_task(session, task_id=task_id, user_id=user_id)
-    events = await TaskEventRepository(session).list_after(task_id=task_id, after=0)
+    logs = list(
+        await session.scalars(
+            select(ToolLog)
+            .where(ToolLog.task_id == task_id)
+            .order_by(ToolLog.created_at.asc(), ToolLog.id.asc())
+        )
+    )
     return LocalEventListResponse(
-        items=[
-            _local_event_response(event)
-            for event in events
-            if event.event_type == "task.log.appended"
-        ]
+        items=[_local_tool_log_response(log, sequence=index) for index, log in enumerate(logs, 1)]
+    )
+
+
+@router.get(
+    "/tasks/{task_id}/approvals",
+    response_model=ApprovalListResponse,
+)
+async def local_list_task_approvals(
+    task_id: str,
+    user_id: Annotated[str, Query(min_length=1)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> ApprovalListResponse:
+    try:
+        approvals = await ApprovalService(session).list_for_owner(
+            task_id=task_id,
+            user_id=user_id,
+        )
+    except TaskServiceError as exc:
+        raise_app_error(exc)
+    return ApprovalListResponse(
+        items=[approval_response(approval) for approval in approvals]
     )
 
 
@@ -414,6 +444,23 @@ def _local_event_response(event: TaskEvent) -> LocalEventResponse:
         payload=_safe_payload(event.payload_json),
     )
 
+
+
+def _local_tool_log_response(log: ToolLog, *, sequence: int) -> LocalEventResponse:
+    return LocalEventResponse(
+        event_id=f"tool-log-{log.id}",
+        task_id=log.task_id or "",
+        type="task.log.appended",
+        created_at=log.created_at.isoformat(),
+        sequence=sequence,
+        payload={
+            "tool_name": sanitize_text(log.tool_name),
+            "status": sanitize_text(log.status),
+            "input": _safe_payload_value(log.input_text),
+            "output": _safe_payload_value(log.output_text),
+            "error": _safe_payload_value(log.error_message),
+        },
+    )
 
 def _safe_payload(payload_json: str) -> dict[str, object]:
     import json

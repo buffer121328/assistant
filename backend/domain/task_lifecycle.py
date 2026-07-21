@@ -166,6 +166,12 @@ class TaskService:
             raise TaskNotFoundError(f"Task not found: {task_id}")
         return task
 
+    async def get_task_by_user(self, *, task_id: str, user_id: str) -> Task:
+        task = await self.repository.get_task_by_user(task_id=task_id, user_id=user_id)
+        if task is None:
+            raise TaskNotFoundError(f"Task not found: {task_id}")
+        return task
+
     async def list_tasks(self, user_id: str) -> list[Task]:
         if not await self.repository.user_exists(user_id):
             raise UserNotFoundError(f"User not found: {user_id}")

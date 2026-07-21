@@ -133,6 +133,7 @@ async def handle_langbot_webhook(
 
     duplicate = await repository.get_processed_message(
         platform=PLATFORM,
+        adapter=message.adapter,
         message_id=message.message_id,
     )
     if duplicate is not None:
