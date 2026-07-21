@@ -82,7 +82,8 @@ async def memory_overview(
     counts = {str(status): int(count) for status, count in rows}
     pending_index = await session.scalar(
         select(func.count(MemoryIndexOutbox.id)).where(
-            MemoryIndexOutbox.user_id == user_id, MemoryIndexOutbox.status == "pending"
+            MemoryIndexOutbox.user_id == user_id,
+            MemoryIndexOutbox.status.in_(("pending", "retry", "processing")),
         )
     )
     return {"counts": counts, "pending_index_count": int(pending_index or 0)}

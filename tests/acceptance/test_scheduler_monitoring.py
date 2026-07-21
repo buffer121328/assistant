@@ -337,6 +337,13 @@ async def test_06_worker_heartbeat_composes_bounded_v2_maintenance(
             "weekly_run_ids": (),
         },
         "evolution_suggestion_created": False,
+        "memory_index_outbox": {
+            "recovered_count": 0,
+            "processed_count": 0,
+            "succeeded_count": 0,
+            "retry_count": 0,
+            "failed_count": 0,
+        },
         "created_notification_outbox_ids": [],
         "materialized_schedule_run_ids": [],
         "queued_schedule_run_ids": [],

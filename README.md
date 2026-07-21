@@ -201,3 +201,4 @@ V11 第一阶段依据 `docs/v11/01-feature-implementation-audit.md` 与 `docs/v
 - 历史阶段边界：当前不承诺完整 MCP Gateway、深度浏览、真实 Office 文件生成或邮件/日历接入；这些能力必须经过对应可选集成、审批和运行时治理后再启用。
 - **V11 数据治理基础阶段**：`processed_messages` 的幂等边界使用 `platform + adapter + message_id`；`model_logs` 增加可空 `agent_run_id`，主 worker 模型调用按 AgentRun 归属，直接聊天/子 Agent 等无 run 上下文的日志保持 NULL。该阶段不删除 legacy 调度表、不拆分消息账本、不实现 memory outbox consumer。
 - **V11 调度治理阶段**：`agent_schedules` 与 `agent_schedule_runs` 是唯一运行时调度主线；旧 `scheduled_task_runs`、`CronScheduler` 和 `ScheduledTaskRunRepository` 已移除，迁移支持回滚恢复旧表结构。
+- **V11 记忆索引 Outbox 阶段**：maintenance heartbeat 有界消费 `memory_index_outbox`，支持 `add`、`rebuild`、`delete`，状态按 `pending/retry -> processing -> succeeded/failed` 流转；失败最多重试三次，超时 processing lease 可恢复，未配置语义索引时明确进入 failed 而不会永久占用 pending count。

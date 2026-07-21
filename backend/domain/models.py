@@ -598,6 +598,7 @@ class MemoryIndexOutbox(TimestampMixin, Base):
         UniqueConstraint(
             "memory_id", "operation", "status", name="uq_memory_index_outbox_pending"
         ),
+        Index("ix_memory_index_outbox_status_updated", "status", "updated_at"),
     )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     memory_id: Mapped[str] = mapped_column(ForeignKey("memories.id"), nullable=False)

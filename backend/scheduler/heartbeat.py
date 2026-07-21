@@ -11,6 +11,8 @@ from workers.monitoring import run_phase09_monitoring
 from agent.governance.evolution import BehaviorEvolutionService
 from agent.memory.consolidation import run_memory_consolidation_maintenance
 from agent.memory.maintenance import maintain_memories
+from agent.memory.index_outbox import MemoryIndexOutboxConsumer
+from agent.memory.semantic import Mem0MemoryAdapter
 from notifications import ReminderService, deliver_langbot_due
 from channels.langbot.service import LangBotResultClient
 from agent.tool_management.schedule_tools import AgentScheduleService
@@ -45,6 +47,12 @@ async def run_v2_maintenance(
         await session.commit()
 
     async with sessionmaker() as session:
+        index_outbox_result = await MemoryIndexOutboxConsumer(
+            session,
+            semantic_memory=Mem0MemoryAdapter(settings.mem0_config_path),
+        ).run_once(now=now)
+
+    async with sessionmaker() as session:
         created_outbox_ids = await ReminderService(session).materialize_due(now=now)
 
     async with sessionmaker() as session:
@@ -69,6 +77,13 @@ async def run_v2_maintenance(
     result["archived_memory_ids"] = list(memory_result.archived_memory_ids)
     result["memory_consolidation"] = consolidation_result
     result["evolution_suggestion_created"] = suggestion is not None
+    result["memory_index_outbox"] = {
+        "recovered_count": index_outbox_result.recovered_count,
+        "processed_count": index_outbox_result.processed_count,
+        "succeeded_count": index_outbox_result.succeeded_count,
+        "retry_count": index_outbox_result.retry_count,
+        "failed_count": index_outbox_result.failed_count,
+    }
     result["created_notification_outbox_ids"] = list(created_outbox_ids)
     result["materialized_schedule_run_ids"] = [run.id for run in schedule_runs]
     result["queued_schedule_run_ids"] = queued_schedule_run_ids
