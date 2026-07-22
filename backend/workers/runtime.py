@@ -4,8 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from langgraph.checkpoint.base import BaseCheckpointSaver
-from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from agent import (
@@ -17,7 +16,6 @@ from agent import (
     ManagedSkillStore,
     SubAgentCoordinator,
 )
-from models import sanitize_text
 from memory import Mem0MemoryAdapter
 from agent.skill_management.acquisition import SkillAcquisitionService
 from agent.skill_management.lifecycle import SkillLifecycleService
@@ -92,12 +90,19 @@ from agent.governance.capability_routing import (
     RoutingModelAdapter,
 )
 from channels.langbot.service import LangBotResultClient
-from domain.models import AgentRun, EvolutionChange, Task, TaskStatus, utc_now
+from domain.models import EvolutionChange, Task, TaskStatus
 from infrastructure.observability import build_observability
 from agent.review.gateway import GatewayJudgeModel
-from domain.services import DISPATCHABLE_TASK_STATUSES, ResultDispatcher
+from application.services import DISPATCHABLE_TASK_STATUSES, ResultDispatcher
 from runtime.subagent_gateway import GatewaySubAgentRunner
-from domain.task_events import TASK_EVENT_STATUS, TaskEventPublisher
+from application.task_events import TASK_EVENT_STATUS, TaskEventPublisher
+from workers.composition.lifecycle import (
+    finish_agent_run as _finish_agent_run,
+    record_worker_failure as _record_worker_failure,
+    sanitize_failed_task as _sanitize_failed_task,
+    sensitive_values as _sensitive_values,
+    start_agent_run as _start_agent_run,
+)
 
 BUILTIN_SKILL_ROOT = Path(__file__).resolve().parents[1] / "resources" / "skillpacks"
 
@@ -714,183 +719,3 @@ async def _execute_with_harness(
         conversation_context=SqlAlchemyConversationContextPort(session),
         user_lookup=SqlAlchemyUserLookupPort(session),
     ).execute_task(task_id)
-
-
-async def _start_agent_run(session: AsyncSession, task: Task) -> AgentRun:
-    """执行 启动 agent run 的内部辅助逻辑。
-
-    Args:
-        session: session 参数。
-        task: task 参数。
-    """
-    last_error: IntegrityError | None = None
-    for _ in range(3):
-        attempt_no = (
-            int(
-                await session.scalar(
-                    select(func.coalesce(func.max(AgentRun.attempt_no), 0)).where(
-                        AgentRun.task_id == task.id
-                    )
-                )
-                or 0
-            )
-            + 1
-        )
-        agent_run = AgentRun(
-            task_id=task.id,
-            user_id=task.user_id,
-            attempt_no=attempt_no,
-            status="running",
-            agent_profile=None,
-            graph_version="langgraph-v2",
-            checkpoint_id=None,
-            tool_snapshot_revision=None,
-            model_class=task.model_class,
-        )
-        session.add(agent_run)
-        try:
-            await session.commit()
-        except IntegrityError as exc:
-            last_error = exc
-            await session.rollback()
-            continue
-        await session.refresh(agent_run)
-        return agent_run
-    assert last_error is not None
-    raise last_error
-
-
-async def _finish_agent_run(
-    session: AsyncSession,
-    *,
-    agent_run: AgentRun,
-    task: Task,
-    sensitive_values: tuple[str | None, ...],
-) -> AgentRun:
-    """执行 处理 finish agent run 的内部辅助逻辑。
-
-    Args:
-        session: session 参数。
-        agent_run: agent_run 参数。
-        task: task 参数。
-        sensitive_values: sensitive_values 参数。
-    """
-    agent_run.status = task.status
-    agent_run.ended_at = utc_now()
-    agent_run.model_class = task.model_class
-    agent_run.error_message = (
-        _safe_worker_summary(task.error_message, sensitive_values=sensitive_values)
-        if task.error_message
-        else None
-    )
-    await session.commit()
-    await session.refresh(agent_run)
-    return agent_run
-
-
-async def _record_worker_failure(
-    session: AsyncSession,
-    *,
-    task_id: str,
-    error: Exception,
-    sensitive_values: tuple[str | None, ...],
-) -> Task:
-    """执行 记录 worker failure 的内部辅助逻辑。
-
-    Args:
-        session: session 参数。
-        task_id: task_id 参数。
-        error: error 参数。
-        sensitive_values: sensitive_values 参数。
-    """
-    await session.rollback()
-    task = await session.get(Task, task_id)
-    if task is None:
-        raise error
-
-    if task.status not in {TaskStatus.PENDING.value, TaskStatus.RUNNING.value}:
-        return task
-
-    if task.status == TaskStatus.PENDING.value:
-        task.status = TaskStatus.RUNNING.value
-        task.error_message = None
-        task.result_text = None
-        await session.flush()
-
-    task.status = TaskStatus.FAILED.value
-    task.result_text = None
-    task.error_message = _safe_worker_summary(error, sensitive_values=sensitive_values)
-    await session.commit()
-    await session.refresh(task)
-    return task
-
-
-async def _sanitize_failed_task(
-    session: AsyncSession,
-    *,
-    task: Task,
-    sensitive_values: tuple[str | None, ...],
-) -> Task:
-    """执行 处理 sanitize failed task 的内部辅助逻辑。
-
-    Args:
-        session: session 参数。
-        task: task 参数。
-        sensitive_values: sensitive_values 参数。
-    """
-    if task.status != TaskStatus.FAILED.value or task.error_message is None:
-        return task
-
-    safe_error = _safe_worker_summary(
-        task.error_message,
-        sensitive_values=sensitive_values,
-    )
-    if safe_error == task.error_message:
-        return task
-
-    task.error_message = safe_error
-    await session.commit()
-    await session.refresh(task)
-    return task
-
-
-def _safe_worker_summary(
-    value: object,
-    *,
-    sensitive_values: tuple[str | None, ...],
-    limit: int = 1000,
-) -> str:
-    """执行 处理 safe worker summary 的内部辅助逻辑。
-
-    Args:
-        value: value 参数。
-        sensitive_values: sensitive_values 参数。
-        limit: limit 参数。
-    """
-    text = sanitize_text(value, extra_sensitive_values=sensitive_values).strip()
-    if "traceback" in text.lower():
-        text = "内部错误已脱敏"
-    if len(text) <= limit:
-        return text
-    return f"{text[:limit]}..."
-
-
-def _sensitive_values(settings: Settings) -> tuple[str | None, ...]:
-    """执行 处理 sensitive values 的内部辅助逻辑。
-
-    Args:
-        settings: settings 参数。
-    """
-    return (
-        settings.langbot_webhook_secret,
-        settings.langbot_api_base_url,
-        settings.langbot_api_key,
-        settings.tavily_base_url,
-        settings.tavily_api_key,
-        settings.brave_search_api_key,
-        settings.brave_search_base_url,
-        settings.duckduckgo_search_base_url,
-        settings.deepseek_api_key,
-        settings.credential_master_key.get_secret_value(),
-        settings.local_api_token.get_secret_value(),
-    )

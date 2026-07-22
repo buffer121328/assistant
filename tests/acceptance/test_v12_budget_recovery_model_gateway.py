@@ -14,7 +14,7 @@ from sqlalchemy.pool import NullPool
 from runtime.budget import BudgetExceededError, RunBudget
 from runtime.loop import ControlledLoop, LoopStepLimitError
 from tools import ToolInvocation, ToolRegistry, ToolSpec
-from tools.registry import ToolHandler
+from tools.core.registry import ToolHandler
 from domain.models import (
     Approval,
     ApprovalStatus,

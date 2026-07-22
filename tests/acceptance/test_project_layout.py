@@ -43,11 +43,30 @@ def test_project_has_clear_frontend_backend_legacy_layout() -> None:
         "skill_management",
     ):
         assert (ROOT / "backend" / "agent" / layer / "__init__.py").is_file()
-    for package in ("runtime", "tools", "memory"):
+    for package in ("application", "common", "runtime", "tools", "memory"):
         assert (ROOT / "backend" / package / "__init__.py").is_file()
     assert (ROOT / "backend" / "channels" / "langbot" / "router.py").is_file()
     assert (ROOT / "backend" / "channels" / "desktop" / "router.py").is_file()
     assert (ROOT / "backend" / "domain").is_dir()
+    assert sorted(path.name for path in (ROOT / "backend" / "domain").glob("*.py")) == [
+        "__init__.py",
+        "models.py",
+    ]
+    for module in (
+        "account_connections",
+        "conversation_memory",
+        "conversations",
+        "dispatch",
+        "memory_candidates",
+        "memory_release",
+        "memory_service",
+        "services",
+        "status_service",
+        "task_commands",
+        "task_events",
+        "task_lifecycle",
+    ):
+        assert (ROOT / "backend" / "application" / f"{module}.py").is_file()
     assert (ROOT / "backend" / "infrastructure").is_dir()
     assert (ROOT / "backend" / "integrations").is_dir()
     assert (ROOT / "backend" / "knowledge").is_dir()
@@ -124,7 +143,7 @@ def test_first_party_runtime_imports_rag_not_legacy_knowledge_package() -> None:
     first_party_paths = [
         ROOT / "backend" / "workers" / "runtime.py",
         ROOT / "backend" / "app" / "api" / "routers" / "knowledge.py",
-        ROOT / "backend" / "tools" / "knowledge.py",
+        ROOT / "backend" / "tools" / "builtin" / "knowledge.py",
         ROOT / "backend" / "evaluation" / "rag_retrieval.py",
     ]
 
@@ -178,7 +197,9 @@ def test_runtime_metadata_uses_new_layout_paths() -> None:
 
     assert pyproject["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"] == [
         "backend/app",
+        "backend/application",
         "backend/channels",
+        "backend/common",
         "backend/domain",
         "backend/agent",
         "backend/runtime",

@@ -9,7 +9,7 @@ from sqlalchemy.pool import NullPool
 from infrastructure.config import Settings
 from app.main import create_app
 from domain.models import Base, User
-from domain.services import MemoryService
+from application.services import MemoryService
 
 
 @pytest_asyncio.fixture
@@ -362,7 +362,7 @@ async def test_complete_memory_actions_create_policy_retrieval_and_digest_are_ow
 async def test_langbot_aliases_why_policy_and_sensitive_list_are_safe(
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> None:
-    from domain.memory_candidates import MemoryPolicyService
+    from application.memory_candidates import MemoryPolicyService
     from domain.models import MemoryRetrievalTrace, Task, TaskStatus
 
     owner, other = await users(sessionmaker)

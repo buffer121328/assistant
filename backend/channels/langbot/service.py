@@ -10,12 +10,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.support.commands import parse_task_type
 from infrastructure.config import Settings
-from domain.conversations import ConversationService
+from application.conversations import ConversationService
 from app.support.errors import AppError
 from domain.models import Task
 from infrastructure.repositories import MessageRepository, ProcessedMessageCreate
 from app.api.schemas import LangBotWebhookRequest
-from domain.services import TaskService, TaskServiceError
+from application.services import TaskService, TaskServiceError
 
 from channels.langbot.intent import (
     ALL_COMMAND_TASK_TYPES,

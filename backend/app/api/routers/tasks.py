@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from domain.conversations import ConversationError
+from application.conversations import ConversationError
 from infrastructure.database import get_session
 from app.support.errors import AppError
 from domain.models import (
@@ -23,7 +23,7 @@ from domain.models import (
     TaskStatus,
     ToolLog,
 )
-from models import sanitize_text
+from common.redaction import sanitize_text
 from app.api.schemas import (
     ApprovalDecisionRequest,
     ApprovalDecisionResponse,
@@ -35,8 +35,8 @@ from app.api.schemas import (
     approval_response,
     task_response,
 )
-from domain.services import ApprovalService, TaskService, TaskServiceError
-from domain.task_events import TaskEventRepository, event_record
+from application.services import ApprovalService, TaskService, TaskServiceError
+from application.task_events import TaskEventRepository, event_record
 from workers.worker import enqueue_task_execution as _default_enqueue_task_execution
 
 router = APIRouter()

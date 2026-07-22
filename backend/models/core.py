@@ -3,8 +3,9 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 import json
-import re
 from typing import Any
+
+from common.redaction import sanitize_text
 
 MODEL_CLASS_LIGHT = "light"
 MODEL_CLASS_STANDARD = "standard"
@@ -37,14 +38,6 @@ UNSUPPORTED_MODEL_CLASSES = frozenset({"complex"})
 SUPPORTED_MODEL_CLASSES = frozenset({MODEL_CLASS_LIGHT, MODEL_CLASS_STANDARD})
 
 _MAX_LOG_TEXT_LENGTH = 1000
-_SENSITIVE_PATTERNS = (
-    re.compile(r"Bearer\s+(?:\[REDACTED\]|[A-Za-z0-9._~+/=-]+)", re.IGNORECASE),
-    re.compile(r"(?i)\"?(authorization|cookie)\"?\s*[:=]\s*\"?[^,}\"']+"),
-    re.compile(r"(?i)\"?(api[_-]?key|token|secret)\"?\s*[:=]\s*\"?[^,\s}\"']+"),
-    re.compile(r"https?://private\.[^\s}\"')]+", re.IGNORECASE),
-)
-
-
 @dataclass(frozen=True)
 class GatewayMessage:
     """表示 处理 gateway message 的后端数据结构或服务对象。"""
@@ -150,26 +143,6 @@ def route_model(task_type: str, model_class: str | None) -> str:
         message="Unknown task type",
         status_code=400,
     )
-
-
-def sanitize_text(
-    value: Any,
-    *,
-    extra_sensitive_values: Iterable[str | None] = (),
-) -> str:
-    """处理 sanitize text。
-
-    Args:
-        value: value 参数。
-        extra_sensitive_values: extra_sensitive_values 参数。
-    """
-    text = str(value)
-    for sensitive_value in extra_sensitive_values:
-        if sensitive_value:
-            text = text.replace(sensitive_value, "[REDACTED]")
-    for pattern in _SENSITIVE_PATTERNS:
-        text = pattern.sub("[REDACTED]", text)
-    return text
 
 
 def build_request_summary(

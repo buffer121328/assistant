@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from common.redaction import sanitize_text
 from dataclasses import dataclass
 from time import perf_counter
 from typing import Any
@@ -16,7 +17,6 @@ from .core import (
     GatewayResult,
     GatewayUsage,
     ModelGatewayError,
-    sanitize_text,
 )
 
 

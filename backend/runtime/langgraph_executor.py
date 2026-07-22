@@ -13,16 +13,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from runtime.budget import RunBudget
 from domain.models import Approval, ApprovalStatus, Task
-from tools.approval import (
+from tools.core.approval import (
     EXACT_APPROVAL_TOOLS,
     external_approval_binding,
     external_audit_arguments,
 )
-from models import sanitize_text
+from common.redaction import sanitize_text
 from observability import NoopObservability, Observability
-from tools.catalog import ToolCatalogSnapshot, build_planned_tool_schemas
-from tools.registry import ToolInvocation, ToolRegistry, ToolSnapshotStaleError
-from tools.search import SearchWebResult
+from tools.core.catalog import ToolCatalogSnapshot, build_planned_tool_schemas
+from tools.core.registry import ToolInvocation, ToolRegistry, ToolSnapshotStaleError
+from tools.builtin.search import SearchWebResult
 
 from agent.modeling.agent_model import (
     AgentDecision,

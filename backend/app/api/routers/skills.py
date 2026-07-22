@@ -27,7 +27,7 @@ from app.api.schemas import (
     SkillResponse,
     skill_response,
 )
-from domain.services import TaskServiceError
+from application.services import TaskServiceError
 from agent.skill_management.lifecycle import SkillLifecycleError, SkillLifecycleService
 
 router = APIRouter()

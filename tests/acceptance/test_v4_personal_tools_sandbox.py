@@ -16,10 +16,10 @@ Document = docx_module.Document
 load_workbook = openpyxl_module.load_workbook
 Presentation = pptx_module.Presentation
 
-from tools.artifacts import ArtifactPathError, ArtifactStore, ProductivityTools
-from tools.browser import BrowserDestinationError, PublicUrlPolicy
+from tools.builtin.artifacts import ArtifactPathError, ArtifactStore, ProductivityTools
+from tools.builtin.browser import BrowserDestinationError, PublicUrlPolicy
 from tools.sandbox import DockerSandboxConfig, DockerSandboxRunner
-from tools.personal import build_personal_tool_descriptors
+from tools.builtin.personal import build_personal_tool_descriptors
 
 
 def test_personal_productivity_tools_generate_real_task_scoped_files(

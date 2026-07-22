@@ -17,8 +17,8 @@ from agent.ports import (
 )
 
 from domain.models import Task, TaskStatus, ToolLog, User
-from domain.services import MemoryService, StatusService
-from domain.task_lifecycle import (
+from application.services import MemoryService, StatusService
+from application.task_lifecycle import (
     InvalidTaskStatusTransitionError,
     TaskNotFoundError,
     TaskService,
@@ -27,7 +27,7 @@ from domain.task_lifecycle import (
 
 if TYPE_CHECKING:
     from memory.working_set import ConversationCompactionPolicy
-    from domain.conversation_memory import ConversationSummarizer
+    from application.conversation_memory import ConversationSummarizer
 
 
 class SqlAlchemyUserLookupPort(UserLookupPort[User]):
@@ -274,8 +274,8 @@ class SqlAlchemyConversationContextPort(ConversationContextPort):
             build_context_pack,
         )
 
-        from domain.conversation_memory import ConversationMemoryService
-        from domain.conversations import ConversationService
+        from application.conversation_memory import ConversationMemoryService
+        from application.conversations import ConversationService
 
         messages = await ConversationService(self.session).list_messages(
             conversation_id=conversation_id,

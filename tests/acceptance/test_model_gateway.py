@@ -491,7 +491,7 @@ async def test_task_event_stream_is_owner_scoped_and_resumable(
     client: TestClient,
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> None:
-    from domain.task_events import TaskEventPublisher
+    from application.task_events import TaskEventPublisher
 
     user, task = await create_task(sessionmaker, task_type="plan")
     async with sessionmaker() as session:

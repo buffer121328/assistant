@@ -38,7 +38,7 @@ from tools import (
     ToolSpec,
     external_approval_binding,
 )
-from tools.personal import build_personal_tool_descriptors
+from tools.builtin.personal import build_personal_tool_descriptors
 
 MASTER_KEY = "test-account-master-key-with-more-than-32-chars"
 

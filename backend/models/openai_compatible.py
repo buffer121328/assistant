@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from common.redaction import sanitize_text
 from collections.abc import AsyncIterator
 from time import perf_counter
 from typing import Any
@@ -13,7 +14,6 @@ from .core import (
     MODEL_GATEWAY_PROVIDER_ERROR,
     MODEL_GATEWAY_TIMEOUT,
     ModelGatewayError,
-    sanitize_text,
 )
 from .pools import ModelNode
 

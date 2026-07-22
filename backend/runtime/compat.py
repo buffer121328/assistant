@@ -59,7 +59,7 @@ async def execute_memory_task(
         task_id: task_id 参数。
         semantic_memory: semantic_memory 参数。
     """
-    from domain.services import MemoryService
+    from application.services import MemoryService
 
     return await MemoryService(
         session,
@@ -74,7 +74,7 @@ async def execute_status_task(session: AsyncSession, *, task_id: str) -> Any:
         session: session 参数。
         task_id: task_id 参数。
     """
-    from domain.services import StatusService
+    from application.services import StatusService
 
     return await StatusService(session).execute_task(task_id)
 
@@ -90,7 +90,7 @@ def task_lifecycle(
         session: session 参数。
         success_hook: success_hook 参数。
     """
-    from domain.services import TaskService
+    from application.services import TaskService
 
     return TaskService(session, success_hook=success_hook)
 
@@ -162,8 +162,8 @@ async def load_conversation_context(
         current_input: current_input 参数。
         long_term_memory: long_term_memory 参数。
     """
-    from domain.conversation_memory import ConversationMemoryService
-    from domain.conversations import ConversationService
+    from application.conversation_memory import ConversationMemoryService
+    from application.conversations import ConversationService
     from memory.working_set import ConversationMessageRef, build_context_pack
 
     messages = await ConversationService(session).list_messages(

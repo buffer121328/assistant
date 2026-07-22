@@ -27,10 +27,10 @@ from models import (
 )
 from observability import NoopObservability, Observability
 
-from app.support.answer_stream import FinalAnswerDeltaDecoder
+from models.streaming import FinalAnswerDeltaDecoder
 from infrastructure.config import Settings
 from infrastructure.repositories import ModelLogCreate, ModelLogRepository
-from domain.task_events import TASK_EVENT_CONTENT_DELTA
+from application.task_events import TASK_EVENT_CONTENT_DELTA
 
 
 class AgentGatewayAdapter(Protocol):

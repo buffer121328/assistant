@@ -27,8 +27,8 @@ from integrations import (
     ProviderError,
 )
 from tools import ToolInvocation, ToolRegistry, external_approval_binding
-from tools.browser import BrowserDestinationError, PublicUrlPolicy
-from tools.browser_interact import (
+from tools.builtin.browser import BrowserDestinationError, PublicUrlPolicy
+from tools.builtin.browser_interact import (
     BrowserInteractionResult,
     BrowserInteractor,
     build_browser_tool_descriptors,

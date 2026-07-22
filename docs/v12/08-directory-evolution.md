@@ -2,37 +2,49 @@
 
 ## 阶段目标
 
-让项目目录贴近生产级 Agent 平台边界，减少 `backend/agent` 对 runtime、tools、memory、models 等实现包的直接承载。
+让项目目录贴近生产级 Agent 平台边界，减少 `backend/agent` 与 `backend/domain` 对 runtime、tools、memory、models、应用编排服务等实现职责的直接承载。
 
-## 本批范围（2026-07-21）
+## 已完成范围
 
-当前已完成两步迁移：先把 RAG 从 facade 演进为物理实现包，再整体提升 runtime/tools/memory/models 为顶层实现包：
+已完成三步迁移：
+
+1. RAG 从 facade 演进为物理主实现包。
+2. runtime/tools/memory/models 提升为 `backend/` 顶层实现包。
+3. 应用编排服务迁入 `backend/application/`，`backend/domain/` 收敛为实体、状态与领域规则边界。
 
 ```text
-backend/rag/__init__.py     # 对外稳定 RAG contract
-backend/rag/service.py      # KnowledgeService、ingest/search/delete 主实现
-backend/rag/extractors.py   # 文档解析实现与 parser 常量
-backend/rag/citations.py    # citation token/context/validator
-backend/knowledge/          # legacy 兼容 shim，仅 re-export rag
-backend/runtime/            # Agent runner、LangGraph executor、预算、loop、子 Agent
-backend/tools/              # ToolRegistry、工具治理、内置工具、sandbox provider
-backend/memory/             # 短期/长期记忆、检索、候选、合并、索引 outbox
-backend/models/             # 模型网关、provider、模型池、fallback、脱敏
+backend/rag/__init__.py       # 对外稳定 RAG contract
+backend/rag/service.py        # KnowledgeService、ingest/search/delete 主实现
+backend/rag/extractors.py     # 文档解析实现与 parser 常量
+backend/rag/citations.py      # citation token/context/validator
+backend/knowledge/            # legacy 兼容 shim，仅 re-export rag
+backend/runtime/              # Agent runner、LangGraph executor、预算、loop、子 Agent
+backend/tools/core/           # approval/catalog/registry
+backend/tools/builtin/        # search/knowledge/memory/task/workspace 等内置工具
+backend/tools/providers/      # 外部工具 provider 适配
+backend/memory/               # 短期/长期记忆、检索、候选、合并、索引 outbox
+backend/models/               # 模型网关、provider、模型池、fallback、streaming helpers
+backend/application/          # 任务生命周期、TaskEvent、会话、账号连接、记忆、状态、回推
+backend/common/               # 跨包通用能力，如脱敏
+backend/domain/               # SQLAlchemy 实体、状态枚举和纯领域规则边界
 ```
 
-知识 API、`knowledge.search` tool、worker runtime 和评测器已改为从 `rag` 导入；旧 `knowledge` 包保持兼容。旧 `backend/agent/core`、`backend/agent/tool_management`、`backend/agent/memory`、`backend/model_gateway` 已删除，first-party import 改为 `runtime`、`tools`、`memory`、`models`。
+知识 API、`knowledge.search` tool、worker runtime 和评测器已改为从 `rag` 导入；旧 `knowledge` 包保持兼容。旧 `backend/agent/core`、`backend/agent/tool_management`、`backend/agent/memory`、`backend/model_gateway` 已删除，first-party import 改为 `runtime`、`tools`、`memory`、`models`。应用编排导入改为 `application.*`，旧 `domain.services`、`domain.task_lifecycle`、`domain.task_events`、`domain.conversations` 等物理模块已删除。
 
 ## 当前真实目录
 
 ```text
 backend/
+├── app/                    # FastAPI 入口、API schemas、routers、dependencies
+├── application/            # use-case 编排：task lifecycle/events、memory、conversation、dispatch
+├── channels/               # desktop/langbot channel adapters
+├── common/                 # 跨包通用工具，无业务编排
+├── domain/                 # ORM entities、状态枚举、领域边界
 ├── agent/                  # planning/modeling/review/governance/skill/prompt
 ├── runtime/                # runner/langgraph/loop/budget/subagents
-├── tools/                  # registry/approval/catalog/builtin tools/sandbox
+├── tools/                  # core/builtin/providers/sandbox
 ├── memory/                 # working set/retrieval/semantic/consolidation/outbox
-├── models/                 # model gateway/providers/pools/fallback/redaction
-├── app/                    # FastAPI 入口与 API
-├── domain/                 # 持久化领域模型与服务
+├── models/                 # model gateway/providers/pools/fallback/streaming
 ├── evaluation/             # 离线评测器
 ├── rag/                    # RAG/knowledge 主实现包
 ├── knowledge/              # legacy 兼容导出 shim
@@ -43,12 +55,11 @@ backend/
 
 ## 分步迁移原则
 
-1. 先加 facade，再按边界物理迁移实现。
-2. 每次只迁移一个边界。
-3. 保持旧 import 兼容一个阶段。
-4. 迁移前写 acceptance test。
+1. 先加 facade 或聚合导出，再按边界物理迁移实现。
+2. 每次迁移都要有可回归的布局/行为测试。
+3. 新路径必须承载唯一实现；旧路径最多短期做薄兼容 shim。
+4. 如果用户明确要求整体大迁移并删除旧包，则迁移后必须全仓检查旧 import 无遗漏，再删除旧物理模块。
 5. README 只记录真实已完成的新路径。
-6. 物理移动时必须避免长期重复职责；旧路径只做薄兼容 shim。
 
 ## 中期方向（未实现）
 
@@ -56,7 +67,7 @@ backend/
 backend/policies/     # auth、tool_access、approvals、risk、budget（未迁移）
 backend/rag/          # ingestion、chunking、retrieval、reranking、citations
 backend/runtime/      # graph、checkpoint、interrupt、budget、recovery
-backend/tools/        # registry、validators、permissions、mcp、builtin
+backend/tools/        # core、builtin、providers、sandbox、validators
 backend/models/       # gateway、providers、routing、fallback、cost
 backend/memory/       # short_term、long_term、policies、cleanup
 ```
@@ -70,6 +81,8 @@ backend/memory/       # short_term、long_term、policies、cleanup
 - [x] README 与本文档记录真实 `backend/rag` 主实现包和 `backend/knowledge` 兼容边界。
 - [x] RAG 实现职责只保留在 `backend/rag`；`backend/knowledge` 仅 re-export 兼容导入。
 - [x] runtime/tools/memory/models 已提升到 `backend/` 顶层，旧实现包已删除，first-party import 无旧路径遗漏。
+- [x] `backend/application/` 承载任务生命周期、事件、会话、记忆、账号连接、状态与回推等应用编排职责。
+- [x] `backend/domain/` 仅保留 `models.py` 与包声明，不再承载依赖仓储/session 的编排服务。
 
 ## 下一步建议
 

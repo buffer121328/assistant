@@ -13,11 +13,11 @@ from sqlalchemy.pool import NullPool
 from memory.agentic import classify_memory_query_type, weighted_rrf
 from memory.semantic import SemanticMemoryResult
 from agent.prompting import PromptBuilder, PromptStore, PromptValidationError
-from tools.memory_tools import AgentMemoryToolService, build_memory_tool_descriptors
-from tools.prompt_tools import PromptToolService, build_prompt_tool_descriptors
-from tools.registry import ToolInvocation
+from tools.builtin.memory_tools import AgentMemoryToolService, build_memory_tool_descriptors
+from tools.builtin.prompt_tools import PromptToolService, build_prompt_tool_descriptors
+from tools.core.registry import ToolInvocation
 from domain.models import Approval, ApprovalStatus, Base, EvolutionVersion, Memory, Task, ToolLog, User
-from domain.services import MemoryService, MemoryNotFoundError, ForbiddenMemoryContentError
+from application.services import MemoryService, MemoryNotFoundError, ForbiddenMemoryContentError
 
 
 @pytest_asyncio.fixture

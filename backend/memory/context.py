@@ -35,7 +35,7 @@ async def load_memory_context(
         scope_kind: scope_kind 参数。
         scope_id: scope_id 参数。
     """
-    from domain.memory_release import load_active_retrieval_weights
+    from application.memory_release import load_active_retrieval_weights
 
     weights = await load_active_retrieval_weights(
         session=session,

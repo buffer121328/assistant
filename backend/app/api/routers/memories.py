@@ -22,7 +22,7 @@ from domain.models import (
     Task,
     User,
 )
-from domain.services import MemoryService, TaskServiceError
+from application.services import MemoryService, TaskServiceError
 
 router = APIRouter()
 
@@ -433,7 +433,7 @@ async def update_memory_policy_api(
         "reflection",
     }:
         raise AppError("memory_policy_invalid", "Memory policy is invalid.", 400)
-    from domain.memory_candidates import MemoryPolicyService
+    from application.memory_candidates import MemoryPolicyService
 
     item = await MemoryPolicyService(session).set_never_remember(
         user_id=user_id,

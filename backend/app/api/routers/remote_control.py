@@ -13,7 +13,7 @@ from app.api.schemas import (
     remote_control_bridge_response,
 )
 from domain.models import ProcessedMessage, Task
-from domain.services import ResultDispatcher
+from application.services import ResultDispatcher
 from channels.langbot.service import LangBotResultClient
 from infrastructure.database import get_session
 from app.support.errors import AppError

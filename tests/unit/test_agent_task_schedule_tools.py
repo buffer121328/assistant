@@ -10,9 +10,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from tools.schedule_tools import AgentScheduleService
+from tools.builtin.schedule_tools import AgentScheduleService
 from scheduler.heartbeat import _dispatch_materialized_schedule_runs
-from tools.task_tools import AgentTaskToolService
+from tools.builtin.task_tools import AgentTaskToolService
 from domain.models import AgentScheduleRun, Base, Conversation, Task, TaskEvent, TaskStatus, ToolLog, User
 from infrastructure.config import Settings
 

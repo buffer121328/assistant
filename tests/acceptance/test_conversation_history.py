@@ -12,7 +12,7 @@ from sqlalchemy.pool import NullPool
 from infrastructure.config import Settings
 from app.main import create_app
 from domain.models import Base, TaskStatus, User
-from domain.services import TaskService
+from application.services import TaskService
 
 
 @pytest_asyncio.fixture
@@ -302,7 +302,7 @@ def test_agent_model_request_uses_prebudgeted_conversation_history_without_secon
 async def test_conversation_message_api_reports_active_compaction_metadata(
     client: TestClient, sessionmaker: async_sessionmaker[AsyncSession]
 ) -> None:
-    from domain.conversations import ConversationService
+    from application.conversations import ConversationService
     from domain.models import ConversationSummary
 
     owner = await create_user(sessionmaker, "Compacted Owner")

@@ -15,7 +15,7 @@ from sqlalchemy.pool import NullPool
 
 from app.main import create_app
 from domain.models import Approval, Base, Task, TaskStatus, ToolLog, User
-from domain.services import TaskService
+from application.services import TaskService
 from agent import HumanApprovalRequest
 from tools import (
     ToolApprovalRequiredError,

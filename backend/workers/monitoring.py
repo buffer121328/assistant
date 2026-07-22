@@ -7,12 +7,12 @@ import json
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from models import sanitize_text
+from common.redaction import sanitize_text
 
 from infrastructure.config import Settings
 from domain.models import Approval, ApprovalStatus, Task, TaskEvent, TaskStatus, ToolLog
 from infrastructure.repositories import ToolLogRepository
-from domain.task_events import TaskEventRepository
+from application.task_events import TaskEventRepository
 from workers.worker import enqueue_task_execution
 
 

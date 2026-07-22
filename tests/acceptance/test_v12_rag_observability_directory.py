@@ -164,7 +164,7 @@ async def test_v12_06_knowledge_injection_does_not_expand_tool_authority(
         async def handler(_invocation: ToolInvocation) -> dict[str, bool]:
             return {"executed": True}
 
-        from tools.registry import ToolHandler, ToolSpec
+        from tools.core.registry import ToolHandler, ToolSpec
 
         registry.register(
             ToolSpec(

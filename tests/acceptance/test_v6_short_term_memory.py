@@ -9,11 +9,11 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from domain.conversation_memory import (
+from application.conversation_memory import (
     ConversationMemoryService,
     SummaryDraft,
 )
-from domain.conversations import ConversationError, ConversationService
+from application.conversations import ConversationError, ConversationService
 from domain.models import Base, ConversationMessage, ConversationSummary, User
 
 

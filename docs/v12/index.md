@@ -22,7 +22,7 @@
 | V12-05 | `05-model-gateway-hardening.md` | 增强模型网关：健康检查、冷却、熔断、fallback、限流、成本统计 | P1 | 是 |
 | V12-06 | `06-rag-memory-governance.md` | 已完成轻量切片：source/citation、no-answer、删除、untrusted 边界与治理 fixture；向量/rerank 待后续 | P1 | 是 |
 | V12-07 | `07-observability-and-evaluation-gates.md` | 已完成轻量切片：task trace、diagnostics 聚合、治理数据集与本地 JSON 报告 | P1 | 是 |
-| V12-08 | `08-directory-evolution.md` | 已完成首个 facade：`backend/rag`；其余目录仅保留中期方向 | P2 | 中 |
+| V12-08 | `08-directory-evolution.md` | 已完成 RAG 主实现包、runtime/tools/memory/models 顶层迁移，以及 `application`/`domain` 边界收敛 | P2 | 中 |
 
 ## 推荐推进顺序
 
@@ -48,7 +48,7 @@ V12-08 目录渐进演进
 
 ## 第三批进展（V12-06/07/08）
 
-2026-07-21 已完成一个轻量、无新运行依赖的切片：知识检索增加 source id、citation、no-answer 和 untrusted 标记；owner 可删除文档并立即清理 chunk；TaskResponse 使用 task id 作为 trace id，diagnostics 聚合 event/model/tool/approval/retrieval/error；新增可保存 JSON 报告的 V12 治理门禁；目录演进只引入 `backend/rag` facade，没有大规模搬迁。pgvector、rerank、query rewrite、完整答案验证、分布式 trace 和其他目录物理迁移仍未实现。
+2026-07-21 至 2026-07-22 已完成轻量、无新运行依赖的切片：知识检索增加 source id、citation、no-answer 和 untrusted 标记；owner 可删除文档并立即清理 chunk；TaskResponse 使用 task id 作为 trace id，diagnostics 聚合 event/model/tool/approval/retrieval/error；新增可保存 JSON 报告的 V12 治理门禁；目录演进已从 `backend/rag` facade 继续推进到 RAG 主实现包、runtime/tools/memory/models 顶层包，以及 `backend/application` 应用编排层；`backend/domain` 只保留实体、状态与领域边界。pgvector、rerank、query rewrite、完整答案验证、分布式 trace 和 policies 物理迁移仍未实现。
 
 ## V12 不做事项
 

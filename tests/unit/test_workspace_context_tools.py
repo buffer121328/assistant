@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from tools import ToolInvocation, ToolRegistry
-from tools.workspace_context import (
+from tools.builtin.workspace_context import (
     ReadonlyShellRunner,
     WorkspaceContextError,
     WorkspaceContextStore,

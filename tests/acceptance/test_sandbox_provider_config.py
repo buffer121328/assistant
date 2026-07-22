@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tools.artifacts import ArtifactStore, ProductivityTools
-from tools.personal import build_personal_tool_descriptors, build_personal_tool_specs
+from tools.builtin.artifacts import ArtifactStore, ProductivityTools
+from tools.builtin.personal import build_personal_tool_descriptors, build_personal_tool_specs
 from tools.sandbox import DockerSandboxConfig, build_sandbox_runner
 from infrastructure.config import Settings
 

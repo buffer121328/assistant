@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from tools.catalog import ToolCatalogSnapshot, ToolSelectionResult
+from tools.core.catalog import ToolCatalogSnapshot, ToolSelectionResult
 
 
 @dataclass(frozen=True)

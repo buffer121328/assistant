@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.main import create_app
 from domain.models import Base, Task, TaskStatus, User
-from domain.services import TaskService
+from application.services import TaskService
 
 
 @pytest_asyncio.fixture

@@ -23,7 +23,7 @@ from domain.models import (
     ToolLog,
     User,
 )
-from domain.task_events import TaskEventPublisher, TaskEventRepository
+from application.task_events import TaskEventPublisher, TaskEventRepository
 
 
 ROOT = Path(__file__).resolve().parents[2]

@@ -62,14 +62,16 @@
 .
 ├── backend/
 │   ├── app/                         # FastAPI 应用壳、路由、schema、依赖和支持模块
+│   ├── application/                 # 应用编排服务：任务生命周期、事件、记忆、会话、回推
 │   ├── channels/
 │   │   ├── desktop/                 # `/local/*` API、WebSocket 事件流、审批桥接
 │   │   └── langbot/                 # LangBot webhook、intent 路由、结果回推
-│   ├── domain/                      # SQLAlchemy model、服务层、任务生命周期
+│   ├── common/                      # 跨包通用能力：脱敏等无业务编排工具
+│   ├── domain/                      # SQLAlchemy 实体、状态枚举和纯领域规则边界
 │   ├── infrastructure/              # 配置、数据库、认证、日志、观测基础设施
 │   ├── agent/                       # Agent 规划、治理、建模、评审、Skill 和 Prompt 管理
 │   ├── runtime/                     # Agent runner、LangGraph executor、预算、loop、子 Agent
-│   ├── tools/                       # ToolRegistry、工具治理、内置工具、sandbox provider
+│   ├── tools/                       # core registry/catalog/approval、builtin tools、providers、sandbox
 │   ├── memory/                      # 短期/长期记忆、检索、候选、合并、索引 outbox
 │   ├── capabilities/                # 能力注册与发现
 │   ├── evaluation/                  # 离线评测与发布门禁
@@ -77,7 +79,7 @@
 │   ├── integrations/                # 账号、凭据和外部 provider 适配
 │   ├── rag/                         # RAG/knowledge 导入、解析、检索、citation 主实现
 │   ├── knowledge/                   # legacy 兼容导出 shim，旧 import 仍可用
-│   ├── models/                      # 模型网关、provider、模型池、fallback、脱敏
+│   ├── models/                      # 模型网关、provider、模型池、fallback 和 streaming helpers
 │   ├── notifications/               # 通知 outbox 和投递租约
 │   ├── resources/                   # prompt 模板和内置 skillpacks
 │   ├── scheduler/                   # 定时维护、监控和心跳入口
@@ -219,7 +221,7 @@ V11 第一阶段依据 `docs/v11/01-feature-implementation-audit.md` 与 `docs/v
 
 V12 文档入口见 `docs/v12/index.md`，自查摘要见 `docs/v12/01-production-agent-system-self-audit.md`。V12 不推进 CI/CD，重点按阶段补强本地单用户生产化能力：本地质量与配置隔离、Tool Schema 强校验、Agent 预算守卫、持久任务恢复、模型网关可靠性、RAG/记忆治理、本地可观测与评测门禁、目录渐进演进。
 
-首批 V12-00/01/02 已完成：范围基线固定为本地单用户生产化；默认配置验收使用显式测试 Settings 隔离个人 `.env`；ToolRegistry 在 handler 前强制校验 JSON Schema、allowlist、source、snapshot/version 和高风险审批，batch 会在调度任一 handler 前完成全量预检，Registry ToolLog 对输入、输出和错误统一脱敏并限制长度。timeout、retry、idempotency、dry-run、compensation 和 required permissions 当前仅作为 ToolSpec 治理元数据，尚未实现完整执行语义。第二批 V12-03/04/05 已完成轻量本地实现：Agent 运行预算提供 step/tool/token/deadline stop reason 与安全摘要；heartbeat 基于现有 TaskEvent/ToolLog 写入 stale running dead-letter 和 waiting approval recovery 诊断；ToolRegistry 拒绝缺少 idempotency key 的高风险非幂等重复执行；模型池支持节点 cooldown、同池 fallback、本地 RPM/TPM 跳过和估算成本诊断；桌面事件可展示预算和恢复状态。后续阶段仍需深化完整 workflow step attempt 表、跨进程持久熔断历史、完整 RAG、可观测性和 Agent 评测体系。 第三批 V12-06/07/08 已完成轻量切片：知识结果返回 source id、citation、no-answer 与 `untrusted_document` 标记，owner 删除文档后 chunk 立即不可检索；任务以 task id 作为本地 trace id，并提供聚合 event/model/tool/approval/retrieval/error 的 diagnostics API；新增 V12 治理 fixture 与 `scripts/run_v12_governance_gate.py` 本地 JSON 报告；RAG 目录已从 facade 进阶为主实现包，`KnowledgeService`、extractors 与 citation helpers 位于 `backend/rag`，旧 `backend/knowledge` 仅保留兼容 re-export。目录大迁移已进一步把 runtime、tools、memory、models 提升为 `backend/` 顶层实现包，并删除旧 `backend/agent/core`、`backend/agent/tool_management`、`backend/agent/memory`、`backend/model_gateway` 包。pgvector、rerank/query rewrite、完整答案验证、分布式 trace 和 policies 的物理迁移仍未实现。 后续 grounding 切片增加了机器可校验 `citation_token`、untrusted retrieval context formatter 和 citation reference validator；治理门禁现在会在临时 SQLite/knowledge root 中真实执行 KnowledgeService 导入、分块与检索，并输出 recall@k、abstention 和 instruction-risk 指标。当前 validator 只验证引用是否来自本次检索，不声称完成语义蕴含或事实正确性判断。
+首批 V12-00/01/02 已完成：范围基线固定为本地单用户生产化；默认配置验收使用显式测试 Settings 隔离个人 `.env`；ToolRegistry 在 handler 前强制校验 JSON Schema、allowlist、source、snapshot/version 和高风险审批，batch 会在调度任一 handler 前完成全量预检，Registry ToolLog 对输入、输出和错误统一脱敏并限制长度。timeout、retry、idempotency、dry-run、compensation 和 required permissions 当前仅作为 ToolSpec 治理元数据，尚未实现完整执行语义。第二批 V12-03/04/05 已完成轻量本地实现：Agent 运行预算提供 step/tool/token/deadline stop reason 与安全摘要；heartbeat 基于现有 TaskEvent/ToolLog 写入 stale running dead-letter 和 waiting approval recovery 诊断；ToolRegistry 拒绝缺少 idempotency key 的高风险非幂等重复执行；模型池支持节点 cooldown、同池 fallback、本地 RPM/TPM 跳过和估算成本诊断；桌面事件可展示预算和恢复状态。后续阶段仍需深化完整 workflow step attempt 表、跨进程持久熔断历史、完整 RAG、可观测性和 Agent 评测体系。 第三批 V12-06/07/08 已完成轻量切片：知识结果返回 source id、citation、no-answer 与 `untrusted_document` 标记，owner 删除文档后 chunk 立即不可检索；任务以 task id 作为本地 trace id，并提供聚合 event/model/tool/approval/retrieval/error 的 diagnostics API；新增 V12 治理 fixture 与 `scripts/run_v12_governance_gate.py` 本地 JSON 报告；RAG 目录已从 facade 进阶为主实现包，`KnowledgeService`、extractors 与 citation helpers 位于 `backend/rag`，旧 `backend/knowledge` 仅保留兼容 re-export。目录大迁移已进一步把 runtime、tools、memory、models 提升为 `backend/` 顶层实现包，并删除旧 `backend/agent/core`、`backend/agent/tool_management`、`backend/agent/memory`、`backend/model_gateway` 包；本批又把任务生命周期、TaskEvent、会话、账号连接、记忆候选/发布、状态和结果回推等应用编排服务迁入 `backend/application`，`backend/domain` 只保留 SQLAlchemy 实体、状态枚举和领域规则边界，通用脱敏沉入 `backend/common`。pgvector、rerank/query rewrite、完整答案验证、分布式 trace 和 policies 的物理迁移仍未实现。 后续 grounding 切片增加了机器可校验 `citation_token`、untrusted retrieval context formatter 和 citation reference validator；治理门禁现在会在临时 SQLite/knowledge root 中真实执行 KnowledgeService 导入、分块与检索，并输出 recall@k、abstention 和 instruction-risk 指标。当前 validator 只验证引用是否来自本次检索，不声称完成语义蕴含或事实正确性判断。
 
 ## 后端源码注释覆盖
 

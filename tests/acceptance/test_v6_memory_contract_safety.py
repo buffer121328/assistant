@@ -18,7 +18,7 @@ from domain.models import (
     MemoryLink,
     User,
 )
-from domain.services import ForbiddenMemoryContentError, MemoryService
+from application.services import ForbiddenMemoryContentError, MemoryService
 from memory.semantic import SemanticMemoryResult
 
 

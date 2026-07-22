@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from domain.memory_release import (
+from application.memory_release import (
     MemoryReleaseError,
     MemoryReleaseService,
     default_policy_config,
@@ -23,7 +23,7 @@ from domain.models import (
     MemoryRetrievalPolicyVersion,
     User,
 )
-from domain.services import MemoryService, TaskServiceError
+from application.services import MemoryService, TaskServiceError
 from evaluation.memory_release import evaluate_memory_release_fixture
 from memory.context import load_memory_context
 

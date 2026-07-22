@@ -5,8 +5,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from domain.conversation_memory import ConversationMemoryService
-from domain.conversations import ConversationError, ConversationService
+from application.conversation_memory import ConversationMemoryService
+from application.conversations import ConversationError, ConversationService
 from infrastructure.database import get_session
 from app.support.errors import AppError
 from app.api.schemas import (

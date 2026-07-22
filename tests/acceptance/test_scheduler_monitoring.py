@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from tools.schedule_tools import AgentScheduleService
+from tools.builtin.schedule_tools import AgentScheduleService
 from scheduler.heartbeat import run_v2_maintenance
 from infrastructure.config import Settings
 from domain.models import (

@@ -14,7 +14,7 @@ from agent.skill_management.store import (
 from capabilities import discover_skill_metadata
 
 from infrastructure.repositories import SkillAuditRepository
-from domain.services import UserNotFoundError
+from application.services import UserNotFoundError
 
 
 SkillSource = Literal["builtin", "managed"]

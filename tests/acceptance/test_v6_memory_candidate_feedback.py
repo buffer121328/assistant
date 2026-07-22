@@ -9,9 +9,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from domain.memory_candidates import MemoryCandidatePipeline, MemoryPolicyService
+from application.memory_candidates import MemoryCandidatePipeline, MemoryPolicyService
 from domain.models import Base, Memory, MemoryPolicy, User
-from domain.services import MemoryService
+from application.services import MemoryService
 from memory.candidates import CandidateDraft, SourceEvent
 
 
@@ -257,7 +257,7 @@ async def test_fast_pool_adapter_is_strict_and_success_hook_failure_cannot_flip_
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> None:
     from domain.models import Task, TaskStatus
-    from domain.services import TaskService
+    from application.services import TaskService
     from memory.candidates import FastPoolMemoryCandidateExtractor
 
     class Client:

@@ -18,7 +18,7 @@ from tools import (
     ToolSnapshotStaleError,
     ToolSpec,
 )
-from tools.registry import ToolHandler
+from tools.core.registry import ToolHandler
 from domain.models import Base, Task, TaskStatus, ToolLog, User
 
 

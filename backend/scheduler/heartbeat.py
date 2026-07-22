@@ -15,9 +15,9 @@ from memory.index_outbox import MemoryIndexOutboxConsumer
 from memory.semantic import Mem0MemoryAdapter
 from notifications import ReminderService, deliver_langbot_due
 from channels.langbot.service import LangBotResultClient
-from tools.schedule_tools import AgentScheduleService
+from tools.builtin.schedule_tools import AgentScheduleService
 from domain.models import AgentScheduleRun, ToolLog
-from domain.task_events import TaskEventRepository
+from application.task_events import TaskEventRepository
 
 
 DispatchTask = Callable[[str], Awaitable[bool | None]]

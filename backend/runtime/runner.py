@@ -9,8 +9,8 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from memory import SemanticMemory, load_memory_context
-from models import sanitize_text
-from tools.catalog import ToolCandidateSelector, ToolCatalogSnapshot
+from common.redaction import sanitize_text
+from tools.core.catalog import ToolCandidateSelector, ToolCatalogSnapshot
 
 from agent.planning.capabilities import (
     CapabilitiesBuilder,

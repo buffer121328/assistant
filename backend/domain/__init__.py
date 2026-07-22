@@ -1,1 +1,1 @@
-"""Application domain services, models, repositories contracts, and task state."""
+"""Domain entities, states, and pure domain rules."""
