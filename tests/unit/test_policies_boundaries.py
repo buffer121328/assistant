@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from domain.models import ApprovalType, TaskStatus
-from policies.approval_requests import normalize_approval_requests
-from policies.task_status import DISPATCHABLE_TASK_STATUSES, VALID_TRANSITIONS
-from policies.tool_approval import external_approval_binding, external_audit_arguments
+from domain.policies.approval_requests import normalize_approval_requests
+from domain.policies.task_status import DISPATCHABLE_TASK_STATUSES, VALID_TRANSITIONS
+from domain.policies.tool_approval import (
+    external_approval_binding,
+    external_audit_arguments,
+)
 
 
 def test_task_status_policy_keeps_transition_rules_outside_application() -> None:
@@ -43,7 +46,8 @@ def test_external_tool_approval_binding_uses_fingerprint_not_raw_arguments() -> 
 
     assert binding.subject.startswith("email.send:")
     assert len(binding.fingerprint) == 64
-    assert audit["argument_fingerprint"] == external_approval_binding(
-        "email.send", {"body": "raw body"}
-    ).fingerprint
+    assert (
+        audit["argument_fingerprint"]
+        == external_approval_binding("email.send", {"body": "raw body"}).fingerprint
+    )
     assert "raw body" not in str(audit)

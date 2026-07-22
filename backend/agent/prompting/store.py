@@ -9,7 +9,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from common.redaction import sanitize_text
+from domain.policies.redaction import sanitize_text
 from domain.models import (
     Approval,
     ApprovalStatus,
@@ -21,7 +21,13 @@ from domain.models import (
     utc_now,
 )
 
-from .types import FILE_TO_MODULE, MODULE_FILES, PromptBuildResult, PromptModule, PromptModuleName
+from .types import (
+    FILE_TO_MODULE,
+    MODULE_FILES,
+    PromptBuildResult,
+    PromptModule,
+    PromptModuleName,
+)
 
 _POLICY_DOWNGRADE = re.compile(
     r"(?i)(disable|关闭|绕过|bypass).{0,30}(approval|审批|toolregistry|tool registry|risk|风险|permission|权限)"

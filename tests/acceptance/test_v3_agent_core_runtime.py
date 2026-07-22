@@ -19,14 +19,14 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.pool import NullPool
 
-from models.agent_model import AgentGatewayModel
-from infrastructure.checkpoints import (
+from model_gateway.agent_model import AgentGatewayModel
+from infrastructure.persistence.checkpoints import (
     AgentCheckpointConfigurationError,
     build_checkpoint_serializer,
     normalize_checkpoint_database_url,
     open_agent_checkpointer,
 )
-from infrastructure.config import Settings
+from infrastructure.settings.config import Settings
 from domain.models import (
     AgentRun,
     Approval,
@@ -56,8 +56,8 @@ from agent.modeling.agent_model import (
     build_agent_model_request,
     parse_agent_decision,
 )
-from models import GatewayResult, GatewayUsage
-from observability import NoopObservation
+from model_gateway import GatewayResult, GatewayUsage
+from infrastructure.telemetry.observability import NoopObservation
 from tools import (
     ToolCatalog,
     ToolDescriptor,
@@ -563,14 +563,10 @@ async def test_agent_loop_rejects_unplanned_tool_before_handler(
             await executor.execute(run_input=task_run_input(task))
         await session.commit()
         logs = list(
-            await session.scalars(
-                select(ToolLog).where(ToolLog.task_id == task.id)
-            )
+            await session.scalars(select(ToolLog).where(ToolLog.task_id == task.id))
         )
 
-    assert any(
-        log.tool_name == "shell.exec" and log.status == "failed" for log in logs
-    )
+    assert any(log.tool_name == "shell.exec" and log.status == "failed" for log in logs)
 
 
 @pytest.mark.asyncio
@@ -625,9 +621,7 @@ async def test_agent_loop_enforces_step_and_timeout_limits(
             tool_snapshot=tool_snapshot(),
         )
         with pytest.raises(TimeoutError):
-            await slow.execute(
-                run_input=task_run_input(task, timeout_seconds=0.01)
-            )
+            await slow.execute(run_input=task_run_input(task, timeout_seconds=0.01))
 
 
 @pytest.mark.asyncio
@@ -682,11 +676,11 @@ async def test_approval_interrupt_resumes_same_task_and_revalidates_registry(
         assert calls == []
 
         session.add(
-                Approval(
-                    task_id=task.id,
-                    tool_name="email.send",
-                    subject=waiting.approval_requests[0].subject,
-                    status="approved",
+            Approval(
+                task_id=task.id,
+                tool_name="email.send",
+                subject=waiting.approval_requests[0].subject,
+                status="approved",
                 decided_by_user_id=task.user_id,
             )
         )
@@ -760,9 +754,7 @@ async def test_agent_gateway_model_uses_existing_route_and_writes_model_log(
         ).decide(request)
         await session.commit()
         logs = list(
-            await session.scalars(
-                select(ModelLog).where(ModelLog.task_id == task.id)
-            )
+            await session.scalars(select(ModelLog).where(ModelLog.task_id == task.id))
         )
 
     assert decision.answer == "网关生成的回答"
@@ -802,13 +794,9 @@ async def test_agent_gateway_model_maps_office_route_and_audits_invalid_decision
             adapter=adapter,
         )
         with pytest.raises(AgentDecisionError):
-            await model.decide(
-                build_agent_model_request(office_input, tool_schemas=())
-            )
+            await model.decide(build_agent_model_request(office_input, tool_schemas=()))
         await session.commit()
-        log = await session.scalar(
-            select(ModelLog).where(ModelLog.task_id == task.id)
-        )
+        log = await session.scalar(select(ModelLog).where(ModelLog.task_id == task.id))
 
     assert adapter.calls[0][0].task_type == "office_text"
     assert adapter.calls[0][1] == "standard"
@@ -840,9 +828,7 @@ async def test_postgres_checkpointer_lifecycle_is_strict_and_injectable() -> Non
         finally:
             calls["closed"] = True
 
-    database_url = (
-        "postgresql+asyncpg://assistant:placeholder@postgres:5432/assistant"
-    )
+    database_url = "postgresql+asyncpg://assistant:placeholder@postgres:5432/assistant"
     async with open_agent_checkpointer(
         database_url,
         saver_factory=saver_factory,
@@ -861,12 +847,14 @@ async def test_postgres_checkpointer_lifecycle_is_strict_and_injectable() -> Non
 def test_checkpoint_configuration_rejects_non_postgres_without_fallback() -> None:
     serializer = build_checkpoint_serializer()
     assert serializer._allowed_msgpack_modules is None
-    assert normalize_checkpoint_database_url(
-        "postgresql://user:placeholder@db:5432/app"
-    ) == "postgresql://user:placeholder@db:5432/app"
+    assert (
+        normalize_checkpoint_database_url("postgresql://user:placeholder@db:5432/app")
+        == "postgresql://user:placeholder@db:5432/app"
+    )
 
     with pytest.raises(AgentCheckpointConfigurationError):
         normalize_checkpoint_database_url("sqlite+aiosqlite:///local.db")
+
 
 @pytest.mark.asyncio
 async def test_worker_passes_current_agent_run_id_to_runtime_dependencies(

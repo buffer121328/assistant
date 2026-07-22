@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from domain.models import Task, ToolLog
-from observability import Observability
+from infrastructure.telemetry.observability import Observability
 
 
 logger = logging.getLogger(__name__)

@@ -6,15 +6,15 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from infrastructure.config import Settings
+from infrastructure.settings.config import Settings
 from app.main import create_app
-from infrastructure.observability import (
+from infrastructure.telemetry.observability import (
     LangfuseObservability,
     build_observability,
 )
 from evaluation import run_langfuse_experiment
 from evaluation.loader import DatasetSecurityError
-from observability import NoopObservability, sanitize_telemetry_value
+from infrastructure.telemetry.observability import NoopObservability, sanitize_telemetry_value
 
 
 class FakeSdkObservation:
@@ -42,9 +42,7 @@ class FakeLangfuseClient:
         self.flush_count = 0
         self.shutdown_count = 0
 
-    def start_as_current_observation(
-        self, **kwargs: Any
-    ) -> FakeObservationManager:
+    def start_as_current_observation(self, **kwargs: Any) -> FakeObservationManager:
         self.events.append(("start", kwargs))
         return FakeObservationManager(self)
 
@@ -81,7 +79,9 @@ def test_01_missing_or_partial_credentials_use_noop_without_building_client() ->
         calls.append(kwargs)
         return FakeLangfuseClient()
 
-    assert isinstance(build_observability(Settings(), client_factory=factory), NoopObservability)
+    assert isinstance(
+        build_observability(Settings(), client_factory=factory), NoopObservability
+    )
     assert isinstance(
         build_observability(
             Settings(langfuse_public_key="public-only"),

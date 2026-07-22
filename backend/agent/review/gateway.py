@@ -5,7 +5,7 @@ from typing import Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models import (
+from model_gateway import (
     DeepSeekAdapter,
     DeepSeekConfig,
     GatewayMessage,
@@ -17,7 +17,7 @@ from models import (
 )
 from agent.review.core import JudgeDecision, JudgeRequest
 
-from infrastructure.config import Settings
+from infrastructure.settings.config import Settings
 from infrastructure.repositories import ModelLogCreate, ModelLogRepository
 
 

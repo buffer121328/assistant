@@ -6,8 +6,8 @@ import math
 from types import MappingProxyType
 from typing import Mapping
 
-from capabilities import CapabilityKind, CapabilityRegistry
-from models import GatewayMessage
+from agent.capabilities import CapabilityKind, CapabilityRegistry
+from model_gateway import GatewayMessage
 
 
 AGENT_PROFILE_TASK_TYPES: Mapping[str, str] = MappingProxyType(

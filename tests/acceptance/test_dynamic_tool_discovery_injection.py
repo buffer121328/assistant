@@ -12,7 +12,7 @@ from agent import (
     DefaultProfileSelector,
     TaskContext,
 )
-from capabilities import CapabilityKind, build_default_registry
+from agent.capabilities import CapabilityKind, build_default_registry
 from tools import (
     MCPToolDescription,
     MCPToolSource,
@@ -138,7 +138,9 @@ async def test_refresh_does_not_scan_or_import_arbitrary_python(tmp_path: Path) 
         encoding="utf-8",
     )
 
-    await ToolCatalog((StaticToolSource("builtin", (descriptor("demo.safe"),)),)).refresh()
+    await ToolCatalog(
+        (StaticToolSource("builtin", (descriptor("demo.safe"),)),)
+    ).refresh()
 
     assert not sentinel.exists()
 
@@ -166,7 +168,9 @@ class FakeMCPDiscoveryClient:
 
 
 @pytest.mark.asyncio
-async def test_mcp_discovery_requires_explicit_client_and_is_disabled_by_default() -> None:
+async def test_mcp_discovery_requires_explicit_client_and_is_disabled_by_default() -> (
+    None
+):
     absent = MCPToolSource(source_id="notes", client=None)
     absent_snapshot = await ToolCatalog((absent,)).refresh()
 

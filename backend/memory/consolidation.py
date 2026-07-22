@@ -18,7 +18,7 @@ from domain.models import (
     MemoryLink,
     new_id,
 )
-from memory.candidates import obvious_preference_conflict
+from memory.candidate_extraction import obvious_preference_conflict
 from memory.safety import memory_content_hash, normalize_memory_content
 
 

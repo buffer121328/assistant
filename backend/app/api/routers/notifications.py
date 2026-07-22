@@ -6,9 +6,9 @@ from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from notifications import NotificationError, ReminderService
+from integrations.notifications import NotificationError, ReminderService
 
-from infrastructure.database import get_session
+from infrastructure.persistence.database import get_session
 from app.support.errors import AppError
 from domain.models import NotificationOutbox
 from app.api.schemas import (

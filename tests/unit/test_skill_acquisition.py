@@ -27,12 +27,16 @@ class FakeMarketplaceProvider:
     name = "curated"
     trust_level = "curated"
 
-    def __init__(self, candidates: Sequence[SkillCandidate] = (), package: bytes = b"") -> None:
+    def __init__(
+        self, candidates: Sequence[SkillCandidate] = (), package: bytes = b""
+    ) -> None:
         self.candidates = tuple(candidates)
         self.package = package
         self.search_calls: list[str] = []
 
-    async def search(self, *, query: str, tags: Sequence[str] = (), capability_gap: str = "") -> Sequence[SkillCandidate]:
+    async def search(
+        self, *, query: str, tags: Sequence[str] = (), capability_gap: str = ""
+    ) -> Sequence[SkillCandidate]:
         self.search_calls.append(query)
         return self.candidates
 
@@ -50,7 +54,15 @@ def package_bytes(name: str = "market-skill") -> bytes:
     with zipfile.ZipFile(buffer, "w") as archive:
         archive.writestr(
             "manifest.json",
-            json.dumps({"schema_version": 1, "name": name, "display_name": "Market Skill", "summary": "Market search helper", "version": "1.0.0"}),
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "name": name,
+                    "display_name": "Market Skill",
+                    "summary": "Market search helper",
+                    "version": "1.0.0",
+                }
+            ),
         )
         archive.writestr("SKILL.md", "# Market Skill\n\nUse marketplace data safely.\n")
     return buffer.getvalue()
@@ -65,8 +77,12 @@ def store(tmp_path: Path) -> ManagedSkillStore:
 
 
 @pytest_asyncio.fixture
-async def sessionmaker(tmp_path: Path) -> AsyncIterator[async_sessionmaker[AsyncSession]]:
-    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path}/skills.db", poolclass=NullPool)
+async def sessionmaker(
+    tmp_path: Path,
+) -> AsyncIterator[async_sessionmaker[AsyncSession]]:
+    engine = create_async_engine(
+        f"sqlite+aiosqlite:///{tmp_path}/skills.db", poolclass=NullPool
+    )
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     maker = async_sessionmaker(engine, expire_on_commit=False)
@@ -83,20 +99,47 @@ async def create_user(sessionmaker: async_sessionmaker[AsyncSession]) -> User:
         return user
 
 
-def lifecycle(session: AsyncSession, store: ManagedSkillStore, refreshes: list[str]) -> SkillLifecycleService:
-    return SkillLifecycleService(session, store=store, refresh_registry=lambda: refreshes.append("refresh"))
+def lifecycle(
+    session: AsyncSession, store: ManagedSkillStore, refreshes: list[str]
+) -> SkillLifecycleService:
+    return SkillLifecycleService(
+        session, store=store, refresh_registry=lambda: refreshes.append("refresh")
+    )
 
 
 @pytest.mark.asyncio
-async def test_skill_acquisition_reuses_enabled_local_before_marketplace(sessionmaker, store: ManagedSkillStore) -> None:  # type: ignore[no-untyped-def]
+async def test_skill_acquisition_reuses_enabled_local_before_marketplace(
+    sessionmaker, store: ManagedSkillStore
+) -> None:  # type: ignore[no-untyped-def]
     user = await create_user(sessionmaker)
-    provider = FakeMarketplaceProvider([SkillCandidate("remote", "remote", "Remote", "Remote", "1.0.0", "curated", "curated", 1.0)])
+    provider = FakeMarketplaceProvider(
+        [
+            SkillCandidate(
+                "remote",
+                "remote",
+                "Remote",
+                "Remote",
+                "1.0.0",
+                "curated",
+                "curated",
+                1.0,
+            )
+        ]
+    )
     async with sessionmaker() as session:
         refreshes: list[str] = []
         life = lifecycle(session, store, refreshes)
-        await life.create(user_id=user.id, name="local-search", display_name="Local Search", summary="python search helper", instructions="Search docs")
+        await life.create(
+            user_id=user.id,
+            name="local-search",
+            display_name="Local Search",
+            summary="python search helper",
+            instructions="Search docs",
+        )
         await life.set_enabled(user_id=user.id, name="local-search", enabled=True)
-        service = SkillAcquisitionService(lifecycle=life, marketplace_providers=[provider])
+        service = SkillAcquisitionService(
+            lifecycle=life, marketplace_providers=[provider]
+        )
 
         decision = await service.recommend(capability_gap="python search")
 
@@ -107,14 +150,37 @@ async def test_skill_acquisition_reuses_enabled_local_before_marketplace(session
 
 
 @pytest.mark.asyncio
-async def test_skill_acquisition_prefers_disabled_local_before_marketplace(sessionmaker, store: ManagedSkillStore) -> None:  # type: ignore[no-untyped-def]
+async def test_skill_acquisition_prefers_disabled_local_before_marketplace(
+    sessionmaker, store: ManagedSkillStore
+) -> None:  # type: ignore[no-untyped-def]
     user = await create_user(sessionmaker)
-    provider = FakeMarketplaceProvider([SkillCandidate("remote", "remote", "Remote", "Remote", "1.0.0", "curated", "curated", 1.0)])
+    provider = FakeMarketplaceProvider(
+        [
+            SkillCandidate(
+                "remote",
+                "remote",
+                "Remote",
+                "Remote",
+                "1.0.0",
+                "curated",
+                "curated",
+                1.0,
+            )
+        ]
+    )
     async with sessionmaker() as session:
         refreshes: list[str] = []
         life = lifecycle(session, store, refreshes)
-        await life.create(user_id=user.id, name="disabled-search", display_name="Disabled Search", summary="python search helper", instructions="Search docs")
-        service = SkillAcquisitionService(lifecycle=life, marketplace_providers=[provider])
+        await life.create(
+            user_id=user.id,
+            name="disabled-search",
+            display_name="Disabled Search",
+            summary="python search helper",
+            instructions="Search docs",
+        )
+        service = SkillAcquisitionService(
+            lifecycle=life, marketplace_providers=[provider]
+        )
 
         decision = await service.recommend(capability_gap="python search")
 
@@ -126,11 +192,24 @@ async def test_skill_acquisition_prefers_disabled_local_before_marketplace(sessi
 
 
 @pytest.mark.asyncio
-async def test_skill_acquisition_recommends_high_score_marketplace_before_create(sessionmaker, store: ManagedSkillStore) -> None:  # type: ignore[no-untyped-def]
-    candidate = SkillCandidate("market", "market", "Market", "browser automation", "1.0.0", "curated", "curated", 0.95)
+async def test_skill_acquisition_recommends_high_score_marketplace_before_create(
+    sessionmaker, store: ManagedSkillStore
+) -> None:  # type: ignore[no-untyped-def]
+    candidate = SkillCandidate(
+        "market",
+        "market",
+        "Market",
+        "browser automation",
+        "1.0.0",
+        "curated",
+        "curated",
+        0.95,
+    )
     provider = FakeMarketplaceProvider([candidate])
     async with sessionmaker() as session:
-        service = SkillAcquisitionService(lifecycle=lifecycle(session, store, []), marketplace_providers=[provider])
+        service = SkillAcquisitionService(
+            lifecycle=lifecycle(session, store, []), marketplace_providers=[provider]
+        )
         decision = await service.recommend(capability_gap="browser automation")
 
     assert decision.decision is SkillAcquisitionDecisionType.INSTALL_MARKETPLACE
@@ -139,13 +218,23 @@ async def test_skill_acquisition_recommends_high_score_marketplace_before_create
 
 
 @pytest.mark.asyncio
-async def test_skill_acquisition_low_score_untrusted_moves_to_create_or_compose(sessionmaker, store: ManagedSkillStore) -> None:  # type: ignore[no-untyped-def]
-    candidate = SkillCandidate("bad", "bad", "Bad", "unknown", "1.0.0", "untrusted", "untrusted", 0.2).scored()
+async def test_skill_acquisition_low_score_untrusted_moves_to_create_or_compose(
+    sessionmaker, store: ManagedSkillStore
+) -> None:  # type: ignore[no-untyped-def]
+    candidate = SkillCandidate(
+        "bad", "bad", "Bad", "unknown", "1.0.0", "untrusted", "untrusted", 0.2
+    ).scored()
     provider = FakeMarketplaceProvider([candidate])
     async with sessionmaker() as session:
-        service = SkillAcquisitionService(lifecycle=lifecycle(session, store, []), marketplace_providers=[provider])
-        composed = await service.recommend(capability_gap="rare thing", composable_tools=["workspace.search_text"])
-        created = await service.recommend(capability_gap="rare thing", allow_create=True)
+        service = SkillAcquisitionService(
+            lifecycle=lifecycle(session, store, []), marketplace_providers=[provider]
+        )
+        composed = await service.recommend(
+            capability_gap="rare thing", composable_tools=["workspace.search_text"]
+        )
+        created = await service.recommend(
+            capability_gap="rare thing", allow_create=True
+        )
         none = await service.recommend(capability_gap="rare thing", allow_create=False)
 
     assert composed.decision is SkillAcquisitionDecisionType.COMPOSE_EXISTING
@@ -154,14 +243,27 @@ async def test_skill_acquisition_low_score_untrusted_moves_to_create_or_compose(
 
 
 @pytest.mark.asyncio
-async def test_marketplace_install_is_disabled_and_audited(sessionmaker, store: ManagedSkillStore) -> None:  # type: ignore[no-untyped-def]
+async def test_marketplace_install_is_disabled_and_audited(
+    sessionmaker, store: ManagedSkillStore
+) -> None:  # type: ignore[no-untyped-def]
     user = await create_user(sessionmaker)
     async with sessionmaker() as session:
         refreshes: list[str] = []
-        service = SkillAcquisitionService(lifecycle=lifecycle(session, store, refreshes))
+        service = SkillAcquisitionService(
+            lifecycle=lifecycle(session, store, refreshes)
+        )
         item = await service.install_candidate(
             user_id=user.id,
-            candidate=SkillCandidate("market", "market-skill", "Market", "summary", "1.0.0", "curated", "curated", 1.0),
+            candidate=SkillCandidate(
+                "market",
+                "market-skill",
+                "Market",
+                "summary",
+                "1.0.0",
+                "curated",
+                "curated",
+                1.0,
+            ),
             package=package_bytes(),
         )
         audits = list((await session.scalars(select(SkillAuditLog))).all())
@@ -174,14 +276,25 @@ async def test_marketplace_install_is_disabled_and_audited(sessionmaker, store: 
 
 
 @pytest.mark.asyncio
-async def test_propose_create_creates_evolution_change_and_approval_not_managed_root(sessionmaker, store: ManagedSkillStore) -> None:  # type: ignore[no-untyped-def]
+async def test_propose_create_creates_evolution_change_and_approval_not_managed_root(
+    sessionmaker, store: ManagedSkillStore
+) -> None:  # type: ignore[no-untyped-def]
     user = await create_user(sessionmaker)
     async with sessionmaker() as session:
-        task = __import__("domain.models", fromlist=["Task"]).Task(user_id=user.id, platform="api", task_type="agent", input_text="need skill")
+        task = __import__("domain.models", fromlist=["Task"]).Task(
+            user_id=user.id, platform="api", task_type="agent", input_text="need skill"
+        )
         session.add(task)
         await session.flush()
         service = SkillAcquisitionService(lifecycle=lifecycle(session, store, []))
-        change = await service.propose_create(session=session, task_id=task.id, user_id=user.id, name="new-skill", instructions="Do things", evidence="No safe option")
+        change = await service.propose_create(
+            session=session,
+            task_id=task.id,
+            user_id=user.id,
+            name="new-skill",
+            instructions="Do things",
+            evidence="No safe option",
+        )
         approvals = list((await session.scalars(select(Approval))).all())
         changes = list((await session.scalars(select(EvolutionChange))).all())
 

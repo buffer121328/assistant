@@ -9,11 +9,11 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from application.conversation_memory import (
+from session import (
     ConversationMemoryService,
     SummaryDraft,
 )
-from application.conversations import ConversationError, ConversationService
+from session.conversations import ConversationError, ConversationService
 from domain.models import Base, ConversationMessage, ConversationSummary, User
 
 
@@ -225,7 +225,7 @@ async def test_context_loading_automatically_creates_summary_before_pack(
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> None:
     from memory.working_set import ConversationCompactionPolicy
-    from infrastructure.agent_ports import SqlAlchemyConversationContextPort
+    from infrastructure.adapters.agent_runtime import SqlAlchemyConversationContextPort
 
     user, conversation_id = await create_conversation(sessionmaker)
     async with sessionmaker() as session:
@@ -276,7 +276,7 @@ async def test_automatic_compaction_reuses_fresh_summary_without_rewrite(
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> None:
     from memory.working_set import ConversationCompactionPolicy
-    from infrastructure.agent_ports import SqlAlchemyConversationContextPort
+    from infrastructure.adapters.agent_runtime import SqlAlchemyConversationContextPort
 
     user, conversation_id = await create_conversation(sessionmaker)
     async with sessionmaker() as session:

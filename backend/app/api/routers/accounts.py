@@ -7,8 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from integrations import CredentialCipher, CredentialError
 
-from application.account_connections import AccountConnectionError, AccountConnectionService
-from infrastructure.database import get_session
+from integrations.accounts import (
+    AccountConnectionError,
+    AccountConnectionService,
+)
+from infrastructure.persistence.database import get_session
 from app.support.errors import AppError
 from app.api.schemas import (
     AccountConnectionActorRequest,

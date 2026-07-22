@@ -5,7 +5,7 @@ from pathlib import Path
 from tools.builtin.artifacts import ArtifactStore, ProductivityTools
 from tools.builtin.personal import build_personal_tool_descriptors, build_personal_tool_specs
 from tools.sandbox import DockerSandboxConfig, build_sandbox_runner
-from infrastructure.config import Settings
+from infrastructure.settings.config import Settings
 
 
 def test_default_local_config_uses_no_sandbox_provider_and_no_shell_exec(

@@ -23,14 +23,20 @@ from domain.models import (
     Task,
     User,
 )
-from infrastructure.config import Settings
+from infrastructure.settings.config import Settings
 from channels.langbot.service import LangBotResultClient
 from app.main import create_app
-from notifications import NotificationError, ReminderService, deliver_langbot_due
+from integrations.notifications import (
+    NotificationError,
+    ReminderService,
+    deliver_langbot_due,
+)
 
 
 @pytest_asyncio.fixture
-async def sessionmaker(tmp_path: Path) -> AsyncIterator[async_sessionmaker[AsyncSession]]:
+async def sessionmaker(
+    tmp_path: Path,
+) -> AsyncIterator[async_sessionmaker[AsyncSession]]:
     engine = create_async_engine(
         f"sqlite+aiosqlite:///{tmp_path}/notifications.db", poolclass=NullPool
     )
@@ -385,9 +391,7 @@ async def test_reminder_and_desktop_notification_api_enforce_ownership(
         await ReminderService(session).materialize_due(now=now)
 
     with TestClient(app) as client:
-        polled = client.get(
-            "/api/notifications/poll", params={"user_id": owner_id}
-        )
+        polled = client.get("/api/notifications/poll", params={"user_id": owner_id})
         outbox_id = polled.json()["items"][0]["outbox_id"]
         denied = client.post(
             f"/api/notifications/{outbox_id}/ack", json={"user_id": other_id}
@@ -395,9 +399,7 @@ async def test_reminder_and_desktop_notification_api_enforce_ownership(
         acknowledged = client.post(
             f"/api/notifications/{outbox_id}/ack", json={"user_id": owner_id}
         )
-        empty = client.get(
-            "/api/notifications/poll", params={"user_id": owner_id}
-        )
+        empty = client.get("/api/notifications/poll", params={"user_id": owner_id})
         completed = client.get("/api/reminders", params={"user_id": owner_id})
     assert denied.status_code == 404
     assert acknowledged.status_code == 204
@@ -467,9 +469,7 @@ def test_desktop_reminder_client_dialog_and_notification_ack_contract(
     ]
 
     application = QApplication.instance() or QApplication([])
-    dialog = ReminderManagerDialog(
-        base_url="http://127.0.0.1:8000", user_id="user-1"
-    )
+    dialog = ReminderManagerDialog(base_url="http://127.0.0.1:8000", user_id="user-1")
     dialog._reminders_refreshed(  # noqa: SLF001 - verify visible reminder state
         [
             {

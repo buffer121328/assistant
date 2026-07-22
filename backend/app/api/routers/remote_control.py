@@ -13,9 +13,9 @@ from app.api.schemas import (
     remote_control_bridge_response,
 )
 from domain.models import ProcessedMessage, Task
-from application.dispatch import ResultDispatcher
+from tasks.dispatch import ResultDispatcher
 from channels.langbot.service import LangBotResultClient
-from infrastructure.database import get_session
+from infrastructure.persistence.database import get_session
 from app.support.errors import AppError
 
 router = APIRouter()

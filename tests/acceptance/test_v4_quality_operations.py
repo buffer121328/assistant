@@ -14,7 +14,7 @@ from sqlalchemy import select
 
 from domain.models import Base, Task, User
 from domain.models import ToolLog
-from observability import NoopObservation
+from infrastructure.telemetry.observability import NoopObservation
 from agent.review import (
     JudgeDecision,
     JudgeRequest,
@@ -48,7 +48,9 @@ class Judge:
         self.requests.append(request)
         if self.fail:
             raise RuntimeError("judge unavailable")
-        return JudgeDecision(relevance=0.9, completeness=0.4, faithfulness=0.8, rationale="bounded")
+        return JudgeDecision(
+            relevance=0.9, completeness=0.4, faithfulness=0.8, rationale="bounded"
+        )
 
 
 class Observability:
@@ -227,7 +229,14 @@ async def test_quality_evaluation_is_idempotent_scores_and_keeps_task_success(
         user = User(display_name="quality")
         session.add(user)
         await session.flush()
-        task = Task(user_id=user.id, platform="api", task_type="agent", input_text="问题", status="success", result_text="答案")
+        task = Task(
+            user_id=user.id,
+            platform="api",
+            task_type="agent",
+            input_text="问题",
+            status="success",
+            result_text="答案",
+        )
         session.add(task)
         await session.commit()
         evaluator = QualityEvaluator(
@@ -259,7 +268,14 @@ async def test_judge_failure_is_best_effort(
         user = User(display_name="quality")
         session.add(user)
         await session.flush()
-        task = Task(user_id=user.id, platform="api", task_type="agent", input_text="问题", status="success", result_text="答案")
+        task = Task(
+            user_id=user.id,
+            platform="api",
+            task_type="agent",
+            input_text="问题",
+            status="success",
+            result_text="答案",
+        )
         session.add(task)
         await session.commit()
         result = await QualityEvaluator(

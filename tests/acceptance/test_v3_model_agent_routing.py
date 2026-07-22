@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from infrastructure.config import Settings
+from infrastructure.settings.config import Settings
 from domain.models import Base, ModelLog, Task, TaskStatus, User
 from workers.runtime import execute_task_by_id
 from agent import AgentRunInput, AgentRunResult
@@ -19,12 +19,12 @@ from agent.governance.routing import (
     build_agent_route_candidates,
     parse_agent_route_decision,
 )
-from capabilities import (
+from agent.capabilities import (
     CapabilityKind,
     CapabilityMetadata,
     CapabilityRegistry,
 )
-from models import GatewayResult, GatewayUsage
+from model_gateway import GatewayResult, GatewayUsage
 
 
 @pytest_asyncio.fixture
@@ -86,7 +86,9 @@ async def fetch_model_logs(
 
 
 class FakeRoutingAdapter:
-    def __init__(self, content: str | None = None, error: Exception | None = None) -> None:
+    def __init__(
+        self, content: str | None = None, error: Exception | None = None
+    ) -> None:
         self.content = content
         self.error = error
         self.calls: list[tuple[Any, str]] = []

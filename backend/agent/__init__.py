@@ -1,3 +1,5 @@
+from typing import TYPE_CHECKING
+
 from agent.modeling.agent_model import (
     AgentDecision,
     AgentDecisionError,
@@ -41,15 +43,6 @@ from agent.governance.governed_evolution import (
     GovernedEvolutionService,
 )
 from runtime.loop import ControlledLoop, LoopStepLimitError
-from runtime.runner import (
-    AgentHarness,
-    AgentHarnessError,
-    ExecutionBoundary,
-    ExecutionOutcome,
-    LangGraphExecutionResult,
-    MinimalLangGraphExecutor,
-    NonPendingTaskExecutionError,
-)
 from agent.planning.planner import DefaultPlanningLayer, ExecutionPlan
 from agent.ports import (
     ConversationContextPack,
@@ -102,6 +95,38 @@ from runtime.subagents import (
     SubAgentResult,
     SubAgentRunner,
 )
+
+if TYPE_CHECKING:
+    from runtime.runner import (
+        AgentHarness,
+        AgentHarnessError,
+        ExecutionBoundary,
+        ExecutionOutcome,
+        LangGraphExecutionResult,
+        MinimalLangGraphExecutor,
+        NonPendingTaskExecutionError,
+    )
+
+
+_RUNTIME_RUNNER_EXPORTS = {
+    "AgentHarness",
+    "AgentHarnessError",
+    "ExecutionBoundary",
+    "ExecutionOutcome",
+    "LangGraphExecutionResult",
+    "MinimalLangGraphExecutor",
+    "NonPendingTaskExecutionError",
+}
+
+
+def __getattr__(name: str) -> object:
+    if name in _RUNTIME_RUNNER_EXPORTS:
+        from runtime import runner
+
+        value = getattr(runner, name)
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 __all__ = [
     "AgentDecision",

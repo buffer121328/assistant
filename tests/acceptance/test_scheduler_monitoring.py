@@ -10,9 +10,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from tools.builtin.schedule_tools import AgentScheduleService
-from scheduler.heartbeat import run_v2_maintenance
-from infrastructure.config import Settings
+from tools.builtin.schedule import AgentScheduleService
+from workers.heartbeat import run_v2_maintenance
+from infrastructure.settings.config import Settings
 from domain.models import (
     Base,
     AgentScheduleRun,

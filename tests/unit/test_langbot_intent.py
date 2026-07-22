@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from infrastructure.config import Settings
+from infrastructure.settings.config import Settings
 from channels.langbot.intent import classify_langbot_intent
 
 

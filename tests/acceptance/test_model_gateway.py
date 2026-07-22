@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from infrastructure.config import Settings
+from infrastructure.settings.config import Settings
 from app.main import create_app
 from domain.models import Base, ModelLog, Task, TaskStatus, ToolLog, User
 
@@ -491,7 +491,7 @@ async def test_task_event_stream_is_owner_scoped_and_resumable(
     client: TestClient,
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> None:
-    from application.task_events import TaskEventPublisher
+    from tasks.events import TaskEventPublisher
 
     user, task = await create_task(sessionmaker, task_type="plan")
     async with sessionmaker() as session:

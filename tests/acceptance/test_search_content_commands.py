@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from infrastructure.config import Settings
+from infrastructure.settings.config import Settings
 from app.main import create_app
 from domain.models import Base, Memory, Task, TaskStatus, ToolLog, User
 from workers.runtime import execute_task_by_id
@@ -24,7 +24,7 @@ from agent import (
     WorkPlan,
     WorkPlanStep,
 )
-from models.deepseek import DeepSeekAdapter
+from model_gateway.deepseek import DeepSeekAdapter
 from tools import (
     NormalizedSearchSource,
     SearchWebTool,

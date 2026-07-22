@@ -1,6 +1,6 @@
 """Core tool governance contracts, registry, catalog, and approvals."""
 
-from policies.tool_approval import (
+from domain.policies.tool_approval import (
     EXACT_APPROVAL_TOOLS,
     ExternalApprovalBinding,
     external_approval_binding,

@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from runtime.budget import BudgetExceededError, RunBudget
 from domain.models import ToolLog
-from common.redaction import sanitize_text
+from domain.policies.redaction import sanitize_text
 
 
 T = TypeVar("T")

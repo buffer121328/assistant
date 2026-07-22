@@ -1,0 +1,326 @@
+from __future__ import annotations
+
+
+from dataclasses import dataclass
+
+from sqlalchemy import or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from memory.working_set import estimate_tokens
+from domain.policies.redaction import sanitize_text
+
+from domain.models import Conversation, ConversationMessage, User, utc_now
+
+
+@dataclass(frozen=True)
+class ConversationTokenStats:
+    """表示 处理 conversation token stats 的后端数据结构或服务对象。"""
+
+    conversation_id: str
+    message_count: int
+    user_message_count: int
+    assistant_message_count: int
+    total_estimated_tokens: int
+    user_estimated_tokens: int
+    assistant_estimated_tokens: int
+    token_limit: int
+
+    @property
+    def usage_ratio(self) -> float:
+        """处理 usage ratio。"""
+        if self.token_limit <= 0:
+            return 0.0
+        return min(1.0, self.total_estimated_tokens / self.token_limit)
+
+    @property
+    def status(self) -> str:
+        """处理 status。"""
+        if self.usage_ratio >= 0.9:
+            return "full"
+        if self.usage_ratio >= 0.7:
+            return "warning"
+        return "ok"
+
+
+class ConversationError(RuntimeError):
+    """表示 处理 conversation error 的后端数据结构或服务对象。"""
+
+    def __init__(self, code: str, status_code: int = 400) -> None:
+        """初始化对象实例。
+
+        Args:
+            code: code 参数。
+            status_code: status_code 参数。
+        """
+        super().__init__(code)
+        self.code = code
+        self.status_code = status_code
+
+
+class ConversationService:
+    """表示 处理 conversation service 的后端数据结构或服务对象。"""
+
+    def __init__(self, session: AsyncSession) -> None:
+        """初始化对象实例。
+
+        Args:
+            session: session 参数。
+        """
+        self.session = session
+
+    async def create(
+        self,
+        *,
+        user_id: str,
+        title: str | None = None,
+        channel: str = "desktop",
+        external_key: str | None = None,
+        commit: bool = True,
+    ) -> Conversation:
+        """创建。
+
+        Args:
+            user_id: user_id 参数。
+            title: title 参数。
+            channel: channel 参数。
+            external_key: external_key 参数。
+            commit: commit 参数。
+        """
+        if await self.session.get(User, user_id) is None:
+            raise ConversationError("conversation_user_not_found", 404)
+        safe_title = _title(title or "新会话")
+        conversation = Conversation(
+            user_id=user_id,
+            title=safe_title,
+            channel=channel.strip()[:32] or "desktop",
+            external_key=(external_key.strip()[:512] if external_key else None),
+        )
+        self.session.add(conversation)
+        await self.session.flush()
+        if commit:
+            await self.session.commit()
+            await self.session.refresh(conversation)
+        return conversation
+
+    async def resolve_external(
+        self, *, user_id: str, channel: str, external_key: str, title: str
+    ) -> Conversation:
+        """解析 external。
+
+        Args:
+            user_id: user_id 参数。
+            channel: channel 参数。
+            external_key: external_key 参数。
+            title: title 参数。
+        """
+        existing = await self.session.scalar(
+            select(Conversation).where(
+                Conversation.user_id == user_id,
+                Conversation.channel == channel,
+                Conversation.external_key == external_key,
+            )
+        )
+        if existing is not None:
+            if existing.archived_at is not None:
+                existing.archived_at = None
+            return existing
+        return await self.create(
+            user_id=user_id,
+            title=title,
+            channel=channel,
+            external_key=external_key,
+            commit=False,
+        )
+
+    async def list_active(self, user_id: str, *, limit: int = 50) -> list[Conversation]:
+        """列出 active。
+
+        Args:
+            user_id: user_id 参数。
+            limit: limit 参数。
+        """
+        if await self.session.get(User, user_id) is None:
+            raise ConversationError("conversation_user_not_found", 404)
+        items = await self.session.scalars(
+            select(Conversation)
+            .where(
+                Conversation.user_id == user_id,
+                Conversation.archived_at.is_(None),
+            )
+            .order_by(Conversation.updated_at.desc(), Conversation.id.desc())
+            .limit(max(1, min(limit, 100)))
+        )
+        return list(items)
+
+    async def get_owned(
+        self, *, conversation_id: str, user_id: str, active_only: bool = False
+    ) -> Conversation:
+        """获取 owned。
+
+        Args:
+            conversation_id: conversation_id 参数。
+            user_id: user_id 参数。
+            active_only: active_only 参数。
+        """
+        conditions = [
+            Conversation.id == conversation_id,
+            Conversation.user_id == user_id,
+        ]
+        if active_only:
+            conditions.append(Conversation.archived_at.is_(None))
+        item = await self.session.scalar(select(Conversation).where(*conditions))
+        if item is None:
+            raise ConversationError("conversation_not_found", 404)
+        return item
+
+    async def archive(self, *, conversation_id: str, user_id: str) -> Conversation:
+        """归档。
+
+        Args:
+            conversation_id: conversation_id 参数。
+            user_id: user_id 参数。
+        """
+        item = await self.get_owned(conversation_id=conversation_id, user_id=user_id)
+        item.archived_at = item.archived_at or utc_now()
+        await self.session.commit()
+        await self.session.refresh(item)
+        return item
+
+    async def append_message(
+        self,
+        *,
+        conversation_id: str,
+        user_id: str,
+        role: str,
+        content: str,
+        task_id: str | None = None,
+    ) -> ConversationMessage:
+        """处理 append message。
+
+        Args:
+            conversation_id: conversation_id 参数。
+            user_id: user_id 参数。
+            role: role 参数。
+            content: content 参数。
+            task_id: task_id 参数。
+        """
+        if role not in {"user", "assistant"}:
+            raise ConversationError("conversation_role_invalid")
+        conversation = await self.get_owned(
+            conversation_id=conversation_id, user_id=user_id
+        )
+        safe_content = sanitize_text(content).strip()[:20_000]
+        if not safe_content:
+            raise ConversationError("conversation_message_empty")
+        if task_id is not None:
+            existing = await self.session.scalar(
+                select(ConversationMessage).where(
+                    ConversationMessage.conversation_id == conversation_id,
+                    ConversationMessage.task_id == task_id,
+                    ConversationMessage.role == role,
+                    ConversationMessage.content == safe_content,
+                )
+            )
+            if existing is not None:
+                return existing
+        item = ConversationMessage(
+            conversation_id=conversation_id,
+            task_id=task_id,
+            role=role,
+            content=safe_content,
+        )
+        self.session.add(item)
+        conversation.updated_at = utc_now()
+        if conversation.title == "新会话" and role == "user":
+            conversation.title = _title(safe_content)
+        await self.session.flush()
+        return item
+
+    async def list_messages(
+        self,
+        *,
+        conversation_id: str,
+        user_id: str,
+        limit: int = 100,
+        exclude_task_id: str | None = None,
+    ) -> list[ConversationMessage]:
+        """列出 messages。
+
+        Args:
+            conversation_id: conversation_id 参数。
+            user_id: user_id 参数。
+            limit: limit 参数。
+            exclude_task_id: exclude_task_id 参数。
+        """
+        await self.get_owned(conversation_id=conversation_id, user_id=user_id)
+        conditions = [ConversationMessage.conversation_id == conversation_id]
+        if exclude_task_id:
+            conditions.append(
+                or_(
+                    ConversationMessage.task_id.is_(None),
+                    ConversationMessage.task_id != exclude_task_id,
+                )
+            )
+        newest = list(
+            await self.session.scalars(
+                select(ConversationMessage)
+                .where(*conditions)
+                .order_by(
+                    ConversationMessage.created_at.desc(),
+                    ConversationMessage.id.desc(),
+                )
+                .limit(max(1, min(limit, 200)))
+            )
+        )
+        newest.reverse()
+        return newest
+
+    async def token_stats(
+        self,
+        *,
+        conversation_id: str,
+        user_id: str,
+        token_limit: int = 4_000,
+    ) -> ConversationTokenStats:
+        """处理 token stats。
+
+        Args:
+            conversation_id: conversation_id 参数。
+            user_id: user_id 参数。
+            token_limit: token_limit 参数。
+        """
+        messages = await self.list_messages(
+            conversation_id=conversation_id, user_id=user_id, limit=200
+        )
+        user_tokens = sum(
+            estimate_tokens(message.content)
+            for message in messages
+            if message.role == "user"
+        )
+        assistant_tokens = sum(
+            estimate_tokens(message.content)
+            for message in messages
+            if message.role == "assistant"
+        )
+        return ConversationTokenStats(
+            conversation_id=conversation_id,
+            message_count=len(messages),
+            user_message_count=sum(1 for message in messages if message.role == "user"),
+            assistant_message_count=sum(
+                1 for message in messages if message.role == "assistant"
+            ),
+            total_estimated_tokens=user_tokens + assistant_tokens,
+            user_estimated_tokens=user_tokens,
+            assistant_estimated_tokens=assistant_tokens,
+            token_limit=max(1, token_limit),
+        )
+
+
+def _title(value: str) -> str:
+    """执行 处理 title 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+    """
+    safe = " ".join(sanitize_text(value).strip().split())[:80]
+    return safe or "新会话"

@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import create_app
-from capabilities import (
+from agent.capabilities import (
     CapabilityDisabledError,
     CapabilityKind,
     CapabilityLoaderMissingError,

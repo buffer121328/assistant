@@ -4,7 +4,7 @@ from collections.abc import AsyncIterator
 
 import pytest
 
-from models import (
+from model_gateway import (
     GatewayMessage,
     GatewayRequest,
     GatewayResult,
@@ -140,7 +140,7 @@ def test_desktop_event_renderer_shows_plan_and_appends_content(tmp_path) -> None
 
 
 def test_final_answer_decoder_emits_only_answer_text() -> None:
-    from models.streaming import FinalAnswerDeltaDecoder
+    from model_gateway.streaming import FinalAnswerDeltaDecoder
 
     decoder = FinalAnswerDeltaDecoder()
     assert decoder.feed('{"action":"tool_call","tool_name":"search.web"}') == ""

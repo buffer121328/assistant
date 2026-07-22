@@ -31,7 +31,7 @@ from domain.models import (
     User,
     Task,
 )
-from infrastructure.config import Settings
+from infrastructure.settings.config import Settings
 from app.main import create_app
 from rag import KnowledgeError, KnowledgeService, SUPPORTED_MEDIA_TYPES
 from rag.extractors import PARSER_VERSION

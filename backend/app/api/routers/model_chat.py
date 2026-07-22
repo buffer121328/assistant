@@ -11,11 +11,11 @@ from app.api.schemas import (
     ModelGatewayUsage,
 )
 from app.support.errors import AppError
-from common.redaction import sanitize_text
-from infrastructure.database import get_session
-from infrastructure.config import Settings
-from models import GatewayMessage, GatewayRequest, GatewayResult, ModelGatewayError
-from models.chat_service import handle_model_chat
+from domain.policies.redaction import sanitize_text
+from infrastructure.persistence.database import get_session
+from infrastructure.settings.config import Settings
+from model_gateway import GatewayMessage, GatewayRequest, GatewayResult, ModelGatewayError
+from model_gateway.chat_service import handle_model_chat
 
 router = APIRouter()
 

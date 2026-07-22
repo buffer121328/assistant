@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas import LangBotWebhookRequest
 from channels.langbot.service import handle_langbot_webhook
-from infrastructure.database import get_session
+from infrastructure.persistence.database import get_session
 
 router = APIRouter()
 

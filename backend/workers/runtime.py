@@ -20,7 +20,7 @@ from memory import Mem0MemoryAdapter
 from agent.skill_management.acquisition import SkillAcquisitionService
 from agent.skill_management.lifecycle import SkillLifecycleService
 from agent.prompting import PromptBuilder, PromptStore
-from observability import Observability
+from infrastructure.telemetry.observability import Observability
 from rag import KnowledgeService
 from integrations import (
     AccountBackedProviders,
@@ -30,7 +30,7 @@ from integrations import (
     active_connection_providers,
 )
 from agent.review import JudgeModel, QualityEvaluator, SamplingPolicy
-from capabilities import CapabilityRegistry, build_default_registry
+from agent.capabilities import CapabilityRegistry, build_default_registry
 from tools import (
     AgentScheduleService,
     AgentTaskToolService,
@@ -75,28 +75,28 @@ from tools import (
     build_tavily_config,
 )
 
-from infrastructure.config import Settings
-from models.agent_model import AgentGatewayModel
-from infrastructure.agent_ports import (
+from infrastructure.settings.config import Settings
+from model_gateway.agent_model import AgentGatewayModel
+from infrastructure.adapters.agent_runtime import (
     SqlAlchemyConversationContextPort,
     SqlAlchemyExecutionTracePort,
     SqlAlchemyLocalTaskServicePort,
     SqlAlchemyTaskLifecyclePort,
     SqlAlchemyUserLookupPort,
 )
-from infrastructure.checkpoints import open_agent_checkpointer
+from infrastructure.persistence.checkpoints import open_agent_checkpointer
 from agent.governance.capability_routing import (
     CapabilityRoutingService,
     RoutingModelAdapter,
 )
 from channels.langbot.service import LangBotResultClient
 from domain.models import EvolutionChange, Task, TaskStatus
-from infrastructure.observability import build_observability
+from infrastructure.telemetry.observability import build_observability
 from agent.review.gateway import GatewayJudgeModel
-from application.dispatch import ResultDispatcher
-from policies.task_status import DISPATCHABLE_TASK_STATUSES
+from tasks.dispatch import ResultDispatcher
+from domain.policies.task_status import DISPATCHABLE_TASK_STATUSES
 from runtime.subagent_gateway import GatewaySubAgentRunner
-from application.task_events import TASK_EVENT_STATUS, TaskEventPublisher
+from tasks.events import TASK_EVENT_STATUS, TaskEventPublisher
 from workers.composition.lifecycle import (
     finish_agent_run as _finish_agent_run,
     record_worker_failure as _record_worker_failure,

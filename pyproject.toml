@@ -51,24 +51,19 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = [
     "backend/app",
-    "backend/application",
+    "backend/session",
+    "backend/tasks",
     "backend/channels",
-    "backend/common",
     "backend/domain",
     "backend/agent",
     "backend/runtime",
     "backend/tools",
     "backend/memory",
-    "backend/capabilities",
     "backend/evaluation",
     "backend/infrastructure",
     "backend/integrations",
     "backend/rag",
-    "backend/models",
-    "backend/notifications",
-    "backend/observability",
-    "backend/policies",
-    "backend/scheduler",
+    "backend/model_gateway",
     "backend/workers",
 ]
 dev-mode-dirs = ["backend"]
@@ -93,23 +88,19 @@ pythonpath = ["backend", "legacy/desktop-qt", "."]
 [tool.coverage.run]
 source = [
     "backend/app",
-    "backend/application",
+    "backend/session",
+    "backend/tasks",
     "backend/channels",
-    "backend/common",
     "backend/domain",
     "backend/agent",
     "backend/runtime",
     "backend/tools",
     "backend/memory",
-    "backend/capabilities",
     "backend/evaluation",
     "backend/infrastructure",
     "backend/integrations",
     "backend/rag",
-    "backend/models",
-    "backend/notifications",
-    "backend/observability",
-    "backend/policies",
+    "backend/model_gateway",
     "backend/workers",
 ]
 
@@ -118,8 +109,8 @@ fail_under = 80
 show_missing = true
 
 [tool.mypy]
-files = ["backend/app", "backend/application", "backend/channels", "backend/common", "backend/domain", "backend/agent", "backend/runtime", "backend/tools", "backend/memory", "backend/capabilities", "backend/evaluation", "backend/infrastructure", "backend/integrations", "backend/rag", "backend/models", "backend/notifications", "backend/observability", "backend/policies", "backend/workers", "scripts", "tests"]
+files = ["backend/app", "backend/session", "backend/tasks", "backend/channels", "backend/domain", "backend/agent", "backend/runtime", "backend/tools", "backend/memory", "backend/evaluation", "backend/infrastructure", "backend/integrations", "backend/rag", "backend/model_gateway", "backend/workers", "scripts", "tests"]
 mypy_path = "backend"
 explicit_package_bases = true
 ignore_missing_imports = true
-exclude = ["legacy/", "backend/scheduler/"]
+exclude = ["legacy/"]

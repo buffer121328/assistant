@@ -6,22 +6,22 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from capabilities import build_default_registry
+from agent.capabilities import build_default_registry
 from agent import ManagedSkillStore
-from observability import Observability
+from infrastructure.telemetry.observability import Observability
 from integrations import DefaultConnectionTester
 
-from infrastructure.config import Settings, load_settings
-from infrastructure.auth import LocalApiAuthMiddleware
-from infrastructure.database import create_database_sessionmaker
+from infrastructure.settings.config import Settings, load_settings
+from infrastructure.security.auth import LocalApiAuthMiddleware
+from infrastructure.persistence.database import create_database_sessionmaker
 from app.support.errors import (
     AppError,
     app_error_handler,
     http_error_handler,
     request_validation_error_handler,
 )
-from infrastructure.logging import configure_logging
-from infrastructure.observability import build_observability
+from infrastructure.telemetry.logging import configure_logging
+from infrastructure.telemetry.observability import build_observability
 from app.api.router import router
 
 

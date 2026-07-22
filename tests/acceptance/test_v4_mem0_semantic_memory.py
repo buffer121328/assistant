@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import NullPool
 
 from domain.models import Base, Memory, Task, User
-from application.memory_service import MemoryService
+from memory.user_memory import MemoryService
 from memory import SemanticMemoryResult, load_memory_summary
 
 

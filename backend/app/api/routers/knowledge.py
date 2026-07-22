@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from rag import KnowledgeError, KnowledgeService, MAX_IMPORT_BYTES
 
-from infrastructure.database import get_session
+from infrastructure.persistence.database import get_session
 from app.support.errors import AppError
 from app.api.schemas import (
     KnowledgeDeleteResponse,

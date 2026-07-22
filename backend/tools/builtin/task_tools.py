@@ -9,9 +9,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from domain.models import Task, TaskEvent, TaskStatus, ToolLog
-from application.task_lifecycle import TaskNotFoundError, TaskService
-from application.task_events import TaskEventRepository, event_record
-from common.redaction import sanitize_text
+from tasks.lifecycle import TaskNotFoundError, TaskService
+from tasks.events import TaskEventRepository, event_record
+from domain.policies.redaction import sanitize_text
 
 from tools.core.catalog import ToolDescriptor
 from tools.core.registry import ToolInvocation, ToolRiskLevel, ToolSpec

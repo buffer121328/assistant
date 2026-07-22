@@ -12,7 +12,7 @@ import pytest_asyncio
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from infrastructure.config import Settings
+from infrastructure.settings.config import Settings
 from app.main import create_app
 from domain.models import (
     Approval,
@@ -23,7 +23,7 @@ from domain.models import (
     ToolLog,
     User,
 )
-from application.task_events import TaskEventPublisher, TaskEventRepository
+from tasks.events import TaskEventPublisher, TaskEventRepository
 
 
 ROOT = Path(__file__).resolve().parents[2]

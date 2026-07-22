@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from infrastructure.config import Settings
+from infrastructure.settings.config import Settings
 from domain.models import Base, Task, TaskStatus, ToolLog, User
 from workers.runtime import execute_task_by_id
 from agent import (

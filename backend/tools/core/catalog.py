@@ -7,7 +7,7 @@ import re
 from types import MappingProxyType
 from typing import Any, Literal, Protocol, cast
 
-from common.redaction import sanitize_text
+from domain.policies.redaction import sanitize_text
 
 from tools.core.registry import ToolRiskLevel
 

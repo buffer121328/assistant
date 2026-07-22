@@ -20,14 +20,22 @@ from domain.models import Base, Task, ToolLog, User
 
 
 def make_store(tmp_path: Path, **kwargs: Any) -> WorkspaceContextStore:
-    return WorkspaceContextStore(root=tmp_path, sensitive_values=("secret-token",), **kwargs)
+    return WorkspaceContextStore(
+        root=tmp_path, sensitive_values=("secret-token",), **kwargs
+    )
 
 
-def test_workspace_list_read_search_and_find_are_bounded_readonly(tmp_path: Path) -> None:
-    (tmp_path / "README.md").write_text("# Demo\nToolRegistry context\n", encoding="utf-8")
+def test_workspace_list_read_search_and_find_are_bounded_readonly(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "README.md").write_text(
+        "# Demo\nToolRegistry context\n", encoding="utf-8"
+    )
     docs = tmp_path / "docs"
     docs.mkdir()
-    (docs / "guide.txt").write_text("Use workspace.search_text for context\n", encoding="utf-8")
+    (docs / "guide.txt").write_text(
+        "Use workspace.search_text for context\n", encoding="utf-8"
+    )
     (docs / "image.png").write_bytes(b"\x89PNG\x00binary")
 
     store = make_store(tmp_path, max_results=10)
@@ -51,7 +59,9 @@ def test_workspace_list_read_search_and_find_are_bounded_readonly(tmp_path: Path
 
 
 @pytest.mark.parametrize("path", ["../secret.txt", "/tmp/secret.txt", ".env"])
-def test_workspace_tools_reject_escape_and_denied_paths(tmp_path: Path, path: str) -> None:
+def test_workspace_tools_reject_escape_and_denied_paths(
+    tmp_path: Path, path: str
+) -> None:
     (tmp_path / ".env").write_text("API_KEY=secret-token", encoding="utf-8")
     store = make_store(tmp_path)
 
@@ -59,7 +69,9 @@ def test_workspace_tools_reject_escape_and_denied_paths(tmp_path: Path, path: st
         store.read_file(path=path)
 
 
-@pytest.mark.skipif(not hasattr(Path, "symlink_to"), reason="symlink support unavailable")
+@pytest.mark.skipif(
+    not hasattr(Path, "symlink_to"), reason="symlink support unavailable"
+)
 def test_workspace_tools_reject_symlink_escape(tmp_path: Path) -> None:
     outside = tmp_path.parent / "outside-workspace-secret.txt"
     outside.write_text("secret-token", encoding="utf-8")
@@ -71,7 +83,9 @@ def test_workspace_tools_reject_symlink_escape(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("content", [b"abc\x00def", "x" * 2001])
-def test_workspace_read_rejects_binary_or_oversized_files(tmp_path: Path, content: bytes | str) -> None:
+def test_workspace_read_rejects_binary_or_oversized_files(
+    tmp_path: Path, content: bytes | str
+) -> None:
     if isinstance(content, str):
         (tmp_path / "large.txt").write_text(content, encoding="utf-8")
         filename = "large.txt"
@@ -84,10 +98,11 @@ def test_workspace_read_rejects_binary_or_oversized_files(tmp_path: Path, conten
         store.read_file(path=filename)
 
 
-
 @pytest.mark.asyncio
 async def test_workspace_tool_execution_records_safe_tool_log(tmp_path: Path) -> None:
-    (tmp_path / "README.md").write_text("hello secret-token context\n", encoding="utf-8")
+    (tmp_path / "README.md").write_text(
+        "hello secret-token context\n", encoding="utf-8"
+    )
     engine = create_async_engine(
         f"sqlite+aiosqlite:///{tmp_path}/workspace-tools.db",
         poolclass=NullPool,
@@ -135,7 +150,10 @@ async def test_workspace_tool_execution_records_safe_tool_log(tmp_path: Path) ->
     finally:
         await engine.dispose()
 
-def test_workspace_descriptors_are_l1_and_readonly_shell_is_disabled_by_default() -> None:
+
+def test_workspace_descriptors_are_l1_and_readonly_shell_is_disabled_by_default() -> (
+    None
+):
     descriptors = build_workspace_tool_descriptors(enabled=True)
     by_name = {item.name: item for item in descriptors}
 
@@ -147,7 +165,9 @@ def test_workspace_descriptors_are_l1_and_readonly_shell_is_disabled_by_default(
 
 
 @pytest.mark.asyncio
-async def test_readonly_shell_executes_allowed_argv_when_enabled(tmp_path: Path) -> None:
+async def test_readonly_shell_executes_allowed_argv_when_enabled(
+    tmp_path: Path,
+) -> None:
     (tmp_path / "README.md").write_text("workspace context\n", encoding="utf-8")
     store = make_store(tmp_path)
     runner = ReadonlyShellRunner(store=store, enabled=True)
@@ -171,7 +191,9 @@ async def test_readonly_shell_executes_allowed_argv_when_enabled(tmp_path: Path)
         ("cat", ".env"),
     ],
 )
-def test_readonly_shell_rejects_unsafe_argv(tmp_path: Path, command: tuple[str, ...]) -> None:
+def test_readonly_shell_rejects_unsafe_argv(
+    tmp_path: Path, command: tuple[str, ...]
+) -> None:
     (tmp_path / "README.md").write_text("workspace context\n", encoding="utf-8")
     (tmp_path / ".env").write_text("API_KEY=secret-token\n", encoding="utf-8")
     store = make_store(tmp_path)

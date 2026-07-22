@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent.prompting import PromptStore
 from domain.models import ToolLog
-from common.redaction import sanitize_text
+from domain.policies.redaction import sanitize_text
 
 from tools.core.catalog import ToolDescriptor
 from tools.core.registry import ToolInvocation, ToolRiskLevel, ToolSpec

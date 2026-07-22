@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from infrastructure.config import Settings
+from infrastructure.settings.config import Settings
 from app.main import create_app
 from domain.models import Base, SkillAuditLog, User
 from agent import (
@@ -25,7 +25,7 @@ from agent import (
     SkillDefinition,
     SkillResourceError,
 )
-from capabilities import CapabilityDisabledError, build_default_registry
+from agent.capabilities import CapabilityDisabledError, build_default_registry
 
 
 ROOT = Path(__file__).parents[2]
@@ -56,8 +56,9 @@ def skill_package(
     return buffer.getvalue()
 
 
-
-def test_skill_loader_strips_frontmatter_from_builtin_instructions(tmp_path: Path) -> None:
+def test_skill_loader_strips_frontmatter_from_builtin_instructions(
+    tmp_path: Path,
+) -> None:
     skills_root = tmp_path / "skills"
     skill_dir = skills_root / "portable-skill"
     skill_dir.mkdir(parents=True)
@@ -201,6 +202,7 @@ def test_managed_store_rejects_unsafe_resource_packages_atomically(
         with pytest.raises(InvalidSkillPackageError):
             store.install(skill_package(name=name, extra_entries=entries))
         assert not (tmp_path / "managed" / name).exists()
+
 
 def test_managed_store_creates_disabled_skill_and_controls_lifecycle(
     tmp_path: Path,
@@ -373,9 +375,7 @@ async def test_skill_api_audits_mutations_and_refreshes_catalog(
     assert enabled.status_code == 200
     assert enabled.json()["enabled"] is True
     assert conflict.status_code == 409
-    assert "skill.meeting-notes" in {
-        item["id"] for item in catalog.json()["items"]
-    }
+    assert "skill.meeting-notes" in {item["id"] for item in catalog.json()["items"]}
     meeting_notes = next(
         item for item in listed.json()["items"] if item["name"] == "meeting-notes"
     )
@@ -431,7 +431,9 @@ async def test_skill_api_installs_and_rejects_unknown_actor_without_mutation(
         installed = client.post(
             "/api/skills/install",
             data={"user_id": user_id},
-            files={"package": ("meeting-notes.zip", skill_package(), "application/zip")},
+            files={
+                "package": ("meeting-notes.zip", skill_package(), "application/zip")
+            },
         )
         unknown = client.post(
             "/api/skills/private-skill/enable",

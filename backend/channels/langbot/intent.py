@@ -5,10 +5,10 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from models import GatewayMessage, GatewayRequest, ModelGatewayError, route_model
-from models.pool_factory import build_pooled_models
+from model_gateway import GatewayMessage, GatewayRequest, ModelGatewayError, route_model
+from model_gateway.pool_factory import build_pooled_models
 
-from infrastructure.config import Settings
+from infrastructure.settings.config import Settings
 
 CORE_INTENT_TASK_TYPES = frozenset({"plan", "learn", "daily", "office"})
 UTILITY_COMMAND_TASK_TYPES = frozenset({"memory", "status"})

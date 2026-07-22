@@ -16,9 +16,9 @@ from fastapi import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent.skill_management.store import MAX_ARCHIVE_BYTES
-from capabilities import build_default_registry
+from agent.capabilities import build_default_registry
 
-from infrastructure.database import get_session
+from infrastructure.persistence.database import get_session
 from app.support.errors import AppError
 from app.api.schemas import (
     SkillActorRequest,
@@ -27,7 +27,7 @@ from app.api.schemas import (
     SkillResponse,
     skill_response,
 )
-from application.task_lifecycle import TaskServiceError
+from tasks.lifecycle import TaskServiceError
 from agent.skill_management.lifecycle import SkillLifecycleError, SkillLifecycleService
 
 router = APIRouter()

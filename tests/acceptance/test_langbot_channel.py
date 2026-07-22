@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from infrastructure.config import Settings
+from infrastructure.settings.config import Settings
 from app.main import create_app
 from domain.models import (
     Base,
@@ -23,7 +23,7 @@ from domain.models import (
     ToolLog,
     User,
 )
-from application.dispatch import ResultDispatcher
+from tasks.dispatch import ResultDispatcher
 from channels.langbot.intent import LANGBOT_INTENT_OUTCOMES, LangBotIntentDecision
 
 

@@ -31,7 +31,7 @@ from domain.models import (
     ToolLog,
     User,
 )
-from infrastructure.config import Settings
+from infrastructure.settings.config import Settings
 from rag import (
     KnowledgeService,
     format_retrieval_context,

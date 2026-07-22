@@ -6,10 +6,10 @@ import pytest_asyncio
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
-from infrastructure.config import Settings
+from infrastructure.settings.config import Settings
 from app.main import create_app
 from domain.models import Base, User
-from application.memory_service import MemoryService
+from memory.user_memory import MemoryService
 
 
 @pytest_asyncio.fixture
@@ -362,7 +362,7 @@ async def test_complete_memory_actions_create_policy_retrieval_and_digest_are_ow
 async def test_langbot_aliases_why_policy_and_sensitive_list_are_safe(
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> None:
-    from application.memory_candidates import MemoryPolicyService
+    from memory.candidate_pipeline import MemoryPolicyService
     from domain.models import MemoryRetrievalTrace, Task, TaskStatus
 
     owner, other = await users(sessionmaker)

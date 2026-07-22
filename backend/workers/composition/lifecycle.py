@@ -4,9 +4,9 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from common.redaction import sanitize_text
+from domain.policies.redaction import sanitize_text
 from domain.models import AgentRun, Task, TaskStatus, utc_now
-from infrastructure.config import Settings
+from infrastructure.settings.config import Settings
 
 
 async def start_agent_run(session: AsyncSession, task: Task) -> AgentRun:

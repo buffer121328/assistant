@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from infrastructure.config import Settings
+from infrastructure.settings.config import Settings
 from domain.models import (
     Base,
     ProcessedMessage,
@@ -25,7 +25,7 @@ from agent import (
     AgentRunInput,
     LangGraphExecutionResult,
 )
-from models.deepseek import DeepSeekAdapter
+from model_gateway.deepseek import DeepSeekAdapter
 from tools import TavilySearchRequest
 
 

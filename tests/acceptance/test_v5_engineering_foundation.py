@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 import httpx
 from pydantic import SecretStr
 
-from infrastructure.config import Settings
+from infrastructure.settings.config import Settings
 from app.main import create_app
 from assistant_desktop.client import DesktopApiClient
 from integrations import CredentialCipher, CredentialError
@@ -67,8 +67,10 @@ def test_compose_and_ci_define_engineering_boundaries() -> None:
 
 
 def test_agent_engineering_packages_have_explicit_owners() -> None:
-    for package in ("integrations", "rag", "notifications"):
+    for package in ("integrations", "rag"):
         assert (ROOT / "backend" / package / "__init__.py").is_file()
+    assert (ROOT / "backend/integrations/notifications.py").is_file()
+    assert not (ROOT / "backend/notifications").exists()
     assert (ROOT / "tests/integration/README.md").is_file()
 
 

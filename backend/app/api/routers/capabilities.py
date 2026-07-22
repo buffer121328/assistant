@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query, Request
 
-from capabilities import CapabilityKind, CapabilityRegistry
+from agent.capabilities import CapabilityKind, CapabilityRegistry
 
 from app.api.schemas import CapabilityCatalogResponse, capability_response
 

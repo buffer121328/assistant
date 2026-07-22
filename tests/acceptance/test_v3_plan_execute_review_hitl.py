@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.pool import NullPool
 
 from domain.models import Approval, ApprovalType, Base, Task, User
-from application.task_lifecycle import TaskService
+from tasks.lifecycle import TaskService
 from agent import (
     AgentDecision,
     AgentModelRequest,

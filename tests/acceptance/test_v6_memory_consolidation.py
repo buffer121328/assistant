@@ -16,7 +16,7 @@ from domain.models import (
     MemoryLink,
     User,
 )
-from application.memory_service import MemoryService
+from memory.user_memory import MemoryService
 from memory.consolidation import (
     MemoryConsolidationService,
     ReconciliationReport,
@@ -192,7 +192,7 @@ async def test_digest_api_does_not_cross_user_boundary(
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> None:
     from fastapi.testclient import TestClient
-    from infrastructure.config import Settings
+    from infrastructure.settings.config import Settings
     from app.main import create_app
 
     first = await owner(sessionmaker)

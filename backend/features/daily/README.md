@@ -11,7 +11,7 @@ Current shared implementation points:
 - Notification and reminder APIs: `backend/app/api/routers/notifications.py`
 - Runtime execution: `backend/workers/runtime.py`
 - Agent profile adapter: `backend/agent/planning/profiles.py`
-- Notification services: `backend/notifications`
+- Notification services: `backend/application/notifications.py`
 - Memory services: `backend/memory`
 - Prompt templates: `backend/resources/prompts`
 - Skill packages: `backend/resources/skillpacks`

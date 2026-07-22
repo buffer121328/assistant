@@ -9,10 +9,10 @@ from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from infrastructure.config import Settings
+from infrastructure.settings.config import Settings
 from app.main import create_app
 from domain.models import Base, TaskStatus, User
-from application.task_lifecycle import TaskService
+from tasks.lifecycle import TaskService
 
 
 @pytest_asyncio.fixture
@@ -302,7 +302,7 @@ def test_agent_model_request_uses_prebudgeted_conversation_history_without_secon
 async def test_conversation_message_api_reports_active_compaction_metadata(
     client: TestClient, sessionmaker: async_sessionmaker[AsyncSession]
 ) -> None:
-    from application.conversations import ConversationService
+    from session.conversations import ConversationService
     from domain.models import ConversationSummary
 
     owner = await create_user(sessionmaker, "Compacted Owner")

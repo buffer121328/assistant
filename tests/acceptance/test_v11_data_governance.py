@@ -12,7 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import NullPool
 
 from domain.models import AgentRun, Base, ModelLog, ProcessedMessage, Task, User
-from infrastructure.repositories import MessageRepository, ModelLogCreate, ModelLogRepository
+from infrastructure.repositories import (
+    MessageRepository,
+    ModelLogCreate,
+    ModelLogRepository,
+)
 
 
 @pytest_asyncio.fixture
@@ -129,7 +133,9 @@ async def test_model_log_agent_run_association_is_optional(
     assert associated.agent_run_id == run.id
     assert unassociated.agent_run_id is None
     async with sessionmaker() as session:
-        stored = list(await session.scalars(select(ModelLog).order_by(ModelLog.created_at)))
+        stored = list(
+            await session.scalars(select(ModelLog).order_by(ModelLog.created_at))
+        )
     assert [item.agent_run_id for item in stored] == [run.id, None]
 
 

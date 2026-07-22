@@ -9,13 +9,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.support.commands import parse_task_type
-from infrastructure.config import Settings
-from application.conversations import ConversationService
+from infrastructure.settings.config import Settings
+from session.conversations import ConversationService
 from app.support.errors import AppError
 from domain.models import Task
 from infrastructure.repositories import MessageRepository, ProcessedMessageCreate
 from app.api.schemas import LangBotWebhookRequest
-from application.task_lifecycle import TaskService, TaskServiceError
+from tasks.lifecycle import TaskService, TaskServiceError
 
 from channels.langbot.intent import (
     ALL_COMMAND_TASK_TYPES,

@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from capabilities import CapabilityKind, CapabilityMetadata
+from agent.capabilities import CapabilityKind, CapabilityMetadata
 
 
 class CapabilityResponse(BaseModel):

@@ -5,8 +5,8 @@ import json
 import re
 from typing import Any, Literal, Protocol
 
-from common.redaction import sanitize_text
-from models import GatewayMessage
+from domain.policies.redaction import sanitize_text
+from model_gateway import GatewayMessage
 
 from agent.modeling.executors import AgentRunInput
 

@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from infrastructure.config import Settings, load_settings
+from infrastructure.settings.config import Settings, load_settings
 from app.support.errors import AppError
-from infrastructure.logging import configure_logging
+from infrastructure.telemetry.logging import configure_logging
 from app.main import create_app
 
 

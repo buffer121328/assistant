@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from infrastructure.database import get_session
+from infrastructure.persistence.database import get_session
 from app.support.errors import AppError
 from domain.models import (
     Memory,
@@ -22,8 +22,8 @@ from domain.models import (
     Task,
     User,
 )
-from application.memory_service import MemoryService
-from application.task_lifecycle import TaskServiceError
+from memory.user_memory import MemoryService
+from tasks.lifecycle import TaskServiceError
 
 router = APIRouter()
 
@@ -434,7 +434,7 @@ async def update_memory_policy_api(
         "reflection",
     }:
         raise AppError("memory_policy_invalid", "Memory policy is invalid.", 400)
-    from application.memory_candidates import MemoryPolicyService
+    from memory.candidate_pipeline import MemoryPolicyService
 
     item = await MemoryPolicyService(session).set_never_remember(
         user_id=user_id,

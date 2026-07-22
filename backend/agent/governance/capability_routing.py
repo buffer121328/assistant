@@ -11,8 +11,8 @@ from agent.governance.routing import (
     build_agent_route_messages,
     parse_agent_route_decision,
 )
-from capabilities import CapabilityRegistry
-from models import (
+from agent.capabilities import CapabilityRegistry
+from model_gateway import (
     DeepSeekAdapter,
     DeepSeekConfig,
     GatewayRequest,
@@ -23,7 +23,7 @@ from models import (
     route_model,
 )
 
-from infrastructure.config import Settings
+from infrastructure.settings.config import Settings
 from domain.models import Task
 from infrastructure.repositories import ModelLogCreate, ModelLogRepository
 

@@ -4,8 +4,8 @@ import asyncio
 
 from celery import Celery  # type: ignore[import-untyped]
 
-from infrastructure.config import Settings, load_settings
-from infrastructure.database import create_database_sessionmaker
+from infrastructure.settings.config import Settings, load_settings
+from infrastructure.persistence.database import create_database_sessionmaker
 from workers.runtime import execute_task_by_id
 
 
@@ -53,7 +53,7 @@ def execute_task(task_id: str) -> str:
 @celery_app.task(name="workers.run_v2_maintenance")
 def run_v2_maintenance_task() -> dict[str, object]:
     """运行 v2 maintenance task。"""
-    from scheduler.heartbeat import run_v2_maintenance
+    from workers.heartbeat import run_v2_maintenance
 
     runtime_settings = load_settings()
     sessionmaker = create_database_sessionmaker(runtime_settings.database_url)

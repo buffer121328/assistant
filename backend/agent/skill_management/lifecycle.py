@@ -11,10 +11,10 @@ from agent.skill_management.store import (
     ManagedSkillStore,
     ManagedSkillStoreError,
 )
-from capabilities import discover_skill_metadata
+from agent.capabilities import discover_skill_metadata
 
 from infrastructure.repositories import SkillAuditRepository
-from application.task_lifecycle import UserNotFoundError
+from tasks.lifecycle import UserNotFoundError
 
 
 SkillSource = Literal["builtin", "managed"]

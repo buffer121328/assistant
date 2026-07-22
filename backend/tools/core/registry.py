@@ -19,9 +19,9 @@ from domain.models import (
     Task,
     ToolLog,
 )
-from common.redaction import sanitize_text
+from domain.policies.redaction import sanitize_text
 
-from policies.tool_approval import (
+from domain.policies.tool_approval import (
     EXACT_APPROVAL_TOOLS,
     external_approval_binding,
     external_audit_arguments,

@@ -26,7 +26,7 @@ from domain.models import (
     ToolLog,
     User,
 )
-from models import (
+from model_gateway import (
     GatewayMessage,
     GatewayRequest,
     GatewayResult,
@@ -389,7 +389,7 @@ async def test_models_cooldown_fallback_rate_limit_and_cost_diagnostics() -> Non
     assert adapters["fast-a"].calls == 1
     assert adapters["fast-b"].calls == 2
     assert gateway.balancer.metrics("fast-a").health_status == "cooldown"
-    assert events[0]["event_type"] == "models.fallback"
+    assert events[0]["event_type"] == "model_gateway.fallback"
     assert events[0]["from_node"] == "fast-a"
     assert events[0]["to_node"] == "fast-b"
     assert first.estimated_cost == pytest.approx(0.07)
