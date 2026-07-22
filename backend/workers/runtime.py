@@ -23,7 +23,7 @@ from agent.skill_management.acquisition import SkillAcquisitionService
 from agent.skill_management.lifecycle import SkillLifecycleService
 from agent.prompting import PromptBuilder, PromptStore
 from observability import Observability
-from knowledge import KnowledgeService
+from rag import KnowledgeService
 from integrations import (
     AccountBackedProviders,
     AccountBackedBrowserSessions,

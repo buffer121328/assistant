@@ -280,7 +280,12 @@ async def test_v12_07_task_diagnostics_correlate_logs_approvals_and_retrieval(
 
 def test_v12_08_rag_facade_and_docs_describe_incremental_boundary() -> None:
     from knowledge import KnowledgeService as LegacyKnowledgeService
+    from knowledge.extractors import PARSER_VERSION as LegacyParserVersion
+    from knowledge.service import KnowledgeService as LegacyModuleKnowledgeService
     from rag import KnowledgeService as FacadeKnowledgeService
+    from rag.extractors import PARSER_VERSION as RagParserVersion
 
     assert FacadeKnowledgeService is LegacyKnowledgeService
+    assert FacadeKnowledgeService is LegacyModuleKnowledgeService
+    assert RagParserVersion == LegacyParserVersion
     assert (Path(__file__).parents[2] / "backend/rag/__init__.py").exists()

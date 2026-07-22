@@ -90,6 +90,49 @@ def test_backend_directory_basenames_are_unique() -> None:
     assert duplicates == {}
 
 
+def test_rag_is_primary_implementation_and_knowledge_is_compatibility_shim() -> None:
+    rag_service = (ROOT / "backend" / "rag" / "service.py").read_text(
+        encoding="utf-8"
+    )
+    rag_extractors = (ROOT / "backend" / "rag" / "extractors.py").read_text(
+        encoding="utf-8"
+    )
+    knowledge_init = (ROOT / "backend" / "knowledge" / "__init__.py").read_text(
+        encoding="utf-8"
+    )
+    knowledge_service = (ROOT / "backend" / "knowledge" / "service.py").read_text(
+        encoding="utf-8"
+    )
+    knowledge_extractors = (
+        ROOT / "backend" / "knowledge" / "extractors.py"
+    ).read_text(encoding="utf-8")
+
+    assert "class KnowledgeService:" in rag_service
+    assert "def extract_text(" in rag_extractors
+    assert "from .extractors import" in rag_service
+    assert "from knowledge" not in rag_service
+    assert "from rag import" in knowledge_init
+    assert "from rag.service import" in knowledge_service
+    assert "from rag.extractors import" in knowledge_extractors
+    assert "class KnowledgeService:" not in knowledge_init
+    assert "class KnowledgeService:" not in knowledge_service
+    assert "def extract_text(" not in knowledge_extractors
+
+
+def test_first_party_runtime_imports_rag_not_legacy_knowledge_package() -> None:
+    first_party_paths = [
+        ROOT / "backend" / "workers" / "runtime.py",
+        ROOT / "backend" / "app" / "api" / "routers" / "knowledge.py",
+        ROOT / "backend" / "agent" / "tool_management" / "knowledge.py",
+        ROOT / "backend" / "evaluation" / "rag_retrieval.py",
+    ]
+
+    for path in first_party_paths:
+        text = path.read_text(encoding="utf-8")
+        assert "from rag import" in text, path
+        assert "from knowledge import" not in text, path
+
+
 def test_backend_features_make_core_agent_scenarios_visible() -> None:
     features_root = ROOT / "backend" / "features"
     for task_type in ("plan", "learn", "daily", "office"):

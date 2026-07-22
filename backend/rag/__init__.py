@@ -11,17 +11,15 @@ from .citations import (
     format_retrieval_context,
     validate_citation_references,
 )
-from knowledge import (
+from .extractors import PARSER_VERSION, SUPPORTED_MEDIA_TYPES, extract_text
+from .service import (
     MAX_IMPORT_BYTES,
-    PARSER_VERSION,
-    SUPPORTED_MEDIA_TYPES,
     IngestionResult,
     KnowledgeDeleteResult,
     KnowledgeDocumentStatus,
     KnowledgeError,
     KnowledgeSearchResult,
     KnowledgeService,
-    extract_text,
 )
 
 __all__ = [
