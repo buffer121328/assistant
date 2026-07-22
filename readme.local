@@ -1,0 +1,155 @@
+# assistant：本地运行与维护说明
+
+本文件面向在本机启动、调试和维护当前仓库的开发者；它不替代仓库根 `README.md` 的项目概览，也不记录已废弃目录或历史阶段实现。
+
+## 文档导航
+
+| 需要解决的问题 | 阅读位置 |
+|---|---|
+| 项目是什么、最简启动和质量命令 | [`README.md`](README.md) |
+| `.env`、Compose、Electron、LangBot 与外部能力配置 | [`docs/mvp-startup-config.md`](docs/mvp-startup-config.md) |
+| 每个 HTTP / WebSocket 接口、请求响应、服务/Worker/Runtime 调用链 | [`docs/运行与API全量上手指南.md`](docs/运行与API全量上手指南.md) |
+| 从 Electron 按钮追踪 IPC、HTTP、WebSocket 到后端 | [`docs/frontend-backend-flow.md`](docs/frontend-backend-flow.md) |
+| 阶段范围、验收与设计记录 | `docs/v*/`、`openspec/` |
+
+## 当前运行形态
+
+```text
+Electron Desktop（宿主机，可选）
+        │ /local/*、/api/remote-control/*
+        ▼
+FastAPI（assistant-api） ── PostgreSQL
+        │                         ▲
+        ▼                         │
+Redis ── Celery Worker ── Agent Runtime / ToolRegistry / Model Gateway
+        ▲
+Celery Beat（单实例，维护与调度）
+
+LangBot ── POST /api/webhooks/langbot ──► 同一任务系统
+```
+
+- 推荐用 Docker Compose 启动 PostgreSQL、Redis、迁移、API、Worker 和单实例 Beat；
+- Electron 是宿主机上的独立桌面壳，不内置 Python、数据库、Redis 或模型运行时；
+- 任务是中心实体：创建后通常进入 `pending`，Worker 执行后变为 `success`、`failed` 或 `waiting_approval`；
+- 高风险工具不会由前端设置直接放行，仍由后端 ToolRegistry、风险等级与 ApprovalService 决定；
+- `user_id` 是本机 owner-scoped 数据边界。Electron 必须在 Settings 中填写一个已存在的 `users.id` 才会加载或创建本地任务。
+
+## 首次本机启动
+
+### 1. 准备依赖和本地配置
+
+```bash
+cp .env.example .env
+uv sync
+```
+
+仅在需要对应能力时安装额外依赖：
+
+```bash
+uv sync --extra browser-automation
+uv sync --extra office
+uv sync --extra observability
+```
+
+`.env` 只能保留在本机，禁止提交真实 Token、Cookie、API Key、私有 URL 或认证头。模板占位值只足以让基础服务启动，无法完成真实模型、LangBot、搜索或外部账号调用。
+
+### 2. 启动完整后端
+
+```bash
+docker compose up --build assistant-api celery-worker celery-beat postgres redis
+```
+
+Compose 会先完成数据库迁移和运行时 volume 初始化。检查：
+
+```bash
+curl http://127.0.0.1:8000/health
+docker compose ps -a
+```
+
+如果 `LOCAL_API_AUTH_REQUIRED=true`，`/api/*`、`/internal/*` 和除 `/local/health` 以外的 `/local/*` 需要：
+
+```http
+Authorization: Bearer <LOCAL_API_TOKEN>
+```
+
+`/health`、`/local/health` 和 LangBot webhook 不使用这个 Bearer token；LangBot webhook 改为校验 `X-LangBot-Secret`。
+
+### 3. 初始化本地用户
+
+系统没有公开的用户创建 API。开发环境可通过 Compose PostgreSQL 创建测试 owner：
+
+```bash
+docker compose exec postgres psql -U assistant -d assistant
+```
+
+```sql
+insert into users (id, display_name, created_at, updated_at)
+values ('00000000-0000-0000-0000-000000000001', 'Local User', now(), now())
+on conflict (id) do nothing;
+```
+
+该 UUID 仅用于隔离的本机开发环境。
+
+### 4. 启动 Electron（可选）
+
+```bash
+cd frontend/desktop
+npm ci
+npm run dev
+```
+
+在 Settings 中填写：
+
+- Local API URL：`http://127.0.0.1:8000`；
+- User ID：上一步已有的 `users.id`；
+- Default workdir：可选，但必须存在且是目录；
+- Model：`light` 或 `standard`；
+- Approval policy：仅前端偏好，不能绕过后端治理。
+
+当前 Electron 设置只保存 API URL、User ID、工作目录、模型档位和审批偏好，**不会保存或注入本机 API Bearer token**。因此开发 Electron 时，要么在隔离的本机环境中关闭 `LOCAL_API_AUTH_REQUIRED`，要么先补充受控的 token 存储与请求头注入实现；不要把 token 暴露给 renderer。
+
+## 本地调试命令
+
+如不使用 Compose，可在已具备 PostgreSQL/Redis 的前提下分别运行：
+
+```bash
+uv run alembic upgrade head
+uv run uvicorn app.main:create_app --factory --reload --app-dir backend
+uv run celery -A workers.worker:celery_app worker --loglevel=info
+uv run celery -A workers.worker:celery_app beat --loglevel=info
+```
+
+常用质量检查：
+
+```bash
+uv run pytest
+uv run pytest --cov
+uv run ruff check .
+uv run mypy .
+uv lock --check
+
+cd frontend/desktop
+npm run typecheck
+npm run build
+```
+
+## 当前目录边界
+
+| 目录 | 责任 |
+|---|---|
+| `backend/app/` | FastAPI 应用装配、路由、schema、异常响应。 |
+| `backend/channels/` | LangBot webhook 与 Electron `/local/*` 通道适配。 |
+| `backend/tasks/` | 任务生命周期、审批、事件、结果回推。 |
+| `backend/session/` | Conversation、会话摘要和上下文。 |
+| `backend/domain/` | SQLAlchemy 实体、枚举和纯领域策略。 |
+| `backend/infrastructure/` | 配置、鉴权、持久化、仓储、telemetry 与 runtime adapters。 |
+| `backend/runtime/` | Agent Harness、LangGraph 执行、预算、执行边界。 |
+| `backend/tools/` | ToolRegistry、内置工具、provider、sandbox。 |
+| `backend/memory/` | 用户记忆、候选提取、检索、索引和发布。 |
+| `backend/rag/` | 知识导入、解析、检索和 citation 的唯一实现。 |
+| `backend/model_gateway/` | 模型 provider、模型池、fallback 与 streaming。 |
+| `backend/integrations/` | 账号连接、凭据、提醒和外部 provider。 |
+| `backend/workers/` | Celery app、任务运行时和 heartbeat 维护。 |
+| `frontend/desktop/` | Electron + Vite + React 桌面端。 |
+
+新增能力时，先写可追踪的验收标准和自动化测试，再沿对应领域边界扩展；不要让前端、脚本或新工具绕过后端的审批、权限与审计策略。

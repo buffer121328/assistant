@@ -21,7 +21,7 @@
 | 受控工具调用 | 工具由 ToolRegistry 注册，按风险等级执行；高风险动作需要审批，工具调用和结果写入审计事件。 |
 | 桌面任务控制台 | Electron + React 展示任务列表、详情、timeline、logs、approvals、changes、settings 和 remote bridge。 |
 | 远程桥接账本 | `/api/remote-control/bridge/sessions` 记录 LangBot 入站消息、任务绑定、回推状态和重放信息。 |
-| Owner-scoped 本地 API | `/local/*` 请求显式携带 `user_id`，用于任务、会话、审批、记忆和账号连接的 owner 校验。 |
+| Owner-scoped 本地 API | `/local/*` 请求显式携带 `user_id`，用于任务、会话、审批、记忆和账号连接的 owner 校验；Electron 在 User ID 未配置时只做健康/配置检查，不请求任务列表。 |
 | 记忆与上下文 | 支持 conversation、knowledge、agentic memory、session workspace 和只读 workspace context 工具。 |
 | 可演进能力边界 | Skill acquisition、schedule、prompt bootstrap、search provider chain 等能力保持受治理、可测试、可回滚。 |
 
@@ -97,7 +97,7 @@
 │   └── desktop/                     # Electron + Vite + React 桌面端源码
 ├── legacy/
 │   └── desktop-qt/                  # 历史 Qt 桌面端源码，仅保留参考和旧测试
-├── docs/                            # 启动配置、阶段文档、前后端链路和设计说明
+├── docs/                            # 启动配置、阶段文档、前后端链路、API 手册和设计说明
 ├── img/                             # README 架构图 SVG
 ├── openspec/                        # OpenSpec 变更与规范资料
 ├── scripts/                         # 运维、评测、smoke 脚本

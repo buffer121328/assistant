@@ -186,8 +186,12 @@ def test_desktop_web_renderer_covers_task_console_and_developer_workflow() -> No
     assert "No timeline events yet" in app_source
     assert "Token usage" in app_source
     assert "api.createTask(inputText.trim(), selectedTaskType)" in app_source
+    assert "api.hasUserId ? api.listTasks() : Promise.resolve([])" in app_source
+    assert "Connected; set User ID in Settings to load local tasks" in app_source
     assert "LocalTaskType" in api_source
     assert 'taskType: LocalTaskType = "plan"' in api_source
+    assert "features: Record<string, boolean | string>" in api_source
+    assert "readErrorMessage" in api_source
     assert "dangerouslySetInnerHTML" not in app_source
 
 

@@ -64,7 +64,7 @@ export type LocalConfig = {
   service_name: string;
   app_env: string;
   local_api_auth_required: boolean;
-  features: Record<string, boolean>;
+  features: Record<string, boolean | string>;
 };
 
 
@@ -123,6 +123,14 @@ type RequestOptions = {
 export class LocalApiClient {
   constructor(private readonly settings: DesktopSettings) {}
 
+  get hasUserId(): boolean {
+    return this.userId.length > 0;
+  }
+
+  private get userId(): string {
+    return this.settings.userId.trim();
+  }
+
   async health(): Promise<Health> {
     return this.request("/local/health");
   }
@@ -133,7 +141,7 @@ export class LocalApiClient {
 
   async listTasks(): Promise<Task[]> {
     const response = await this.request<{ items: Task[] }>(
-      `/local/tasks?user_id=${encodeURIComponent(this.settings.userId)}`
+      `/local/tasks?user_id=${encodeURIComponent(this.userId)}`
     );
     return response.items;
   }
@@ -142,7 +150,7 @@ export class LocalApiClient {
     const response = await this.request<{ task: Task; queued: boolean }>("/local/tasks", {
       method: "POST",
       body: {
-        user_id: this.settings.userId,
+        user_id: this.userId,
         task_type: taskType,
         input_text: inputText,
         model_class: this.settings.defaultModelClass
@@ -157,7 +165,7 @@ export class LocalApiClient {
       {
         method: "POST",
         body: {
-          user_id: this.settings.userId,
+          user_id: this.userId,
           content
         }
       }
@@ -168,7 +176,7 @@ export class LocalApiClient {
   async task(taskId: string): Promise<Task> {
     return this.request(
       `/local/tasks/${encodeURIComponent(taskId)}?user_id=${encodeURIComponent(
-        this.settings.userId
+        this.userId
       )}`
     );
   }
@@ -177,7 +185,7 @@ export class LocalApiClient {
     const cursor = afterEventId ? `&after_event_id=${encodeURIComponent(afterEventId)}` : "";
     const response = await this.request<{ items: LocalEvent[] }>(
       `/local/tasks/${encodeURIComponent(taskId)}/events?user_id=${encodeURIComponent(
-        this.settings.userId
+        this.userId
       )}${cursor}`
     );
     return response.items;
@@ -186,7 +194,7 @@ export class LocalApiClient {
   async logs(taskId: string): Promise<LocalEvent[]> {
     const response = await this.request<{ items: LocalEvent[] }>(
       `/local/tasks/${encodeURIComponent(taskId)}/logs?user_id=${encodeURIComponent(
-        this.settings.userId
+        this.userId
       )}`
     );
     return response.items;
@@ -195,7 +203,7 @@ export class LocalApiClient {
   async approvals(taskId: string): Promise<Approval[]> {
     const response = await this.request<{ items: Approval[] }>(
       `/local/tasks/${encodeURIComponent(taskId)}/approvals?user_id=${encodeURIComponent(
-        this.settings.userId
+        this.userId
       )}`
     );
     return response.items;
@@ -210,7 +218,7 @@ export class LocalApiClient {
     return this.request(`/local/tasks/${encodeURIComponent(taskId)}/approvals/${approvalId}`, {
       method: "POST",
       body: {
-        user_id: this.settings.userId,
+        user_id: this.userId,
         decision,
         reason
       }
@@ -221,7 +229,7 @@ export class LocalApiClient {
   async conversationTokenStats(conversationId: string): Promise<ConversationTokenStats> {
     return this.request(
       `/local/conversations/${encodeURIComponent(conversationId)}/token-stats?user_id=${encodeURIComponent(
-        this.settings.userId
+        this.userId
       )}`
     );
   }
@@ -272,7 +280,7 @@ export class LocalApiClient {
       `/local/tasks/${encodeURIComponent(taskId)}/events/stream`,
       this.settings.apiBaseUrl.replace(/^http/, "ws")
     );
-    url.searchParams.set("user_id", this.settings.userId);
+    url.searchParams.set("user_id", this.userId);
     if (afterEventId) {
       url.searchParams.set("after_event_id", afterEventId);
     }
@@ -293,8 +301,28 @@ export class LocalApiClient {
     });
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: { message: response.statusText } }));
-      throw new Error(error.error?.message || "Local API request failed");
+      throw new Error(readErrorMessage(error) || response.statusText || "Local API request failed");
     }
     return response.json() as Promise<T>;
   }
+}
+
+
+function readErrorMessage(error: unknown): string | null {
+  if (!error || typeof error !== "object") return null;
+  const payload = error as { error?: { message?: unknown }; detail?: unknown };
+  if (typeof payload.error?.message === "string" && payload.error.message) {
+    return payload.error.message;
+  }
+  if (typeof payload.detail === "string" && payload.detail) {
+    return payload.detail;
+  }
+  if (Array.isArray(payload.detail) && payload.detail.length) {
+    const first = payload.detail[0] as { msg?: unknown; loc?: unknown } | undefined;
+    if (first && typeof first.msg === "string") {
+      const loc = Array.isArray(first.loc) ? first.loc.join(".") : "request";
+      return `${loc}: ${first.msg}`;
+    }
+  }
+  return null;
 }

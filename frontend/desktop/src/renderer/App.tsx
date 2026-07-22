@@ -86,6 +86,7 @@ export function App(): JSX.Element {
   const [error, setError] = useState<string>("");
 
   const api = useMemo(() => new LocalApiClient(settings), [settings]);
+  const hasConfiguredUser = settings.userId.trim().length > 0;
   const selectedTask = tasks.find((task) => task.task_id === selectedTaskId) || null;
   const selectedEvents = selectedTaskId ? eventsByTask[selectedTaskId] || [] : [];
   const selectedLogs = selectedTaskId ? logsByTask[selectedTaskId] || [] : [];
@@ -157,13 +158,19 @@ export function App(): JSX.Element {
     api
       .health()
       .then(() => api.config())
-      .then(() => api.listTasks())
+      .then(() => (api.hasUserId ? api.listTasks() : Promise.resolve([])))
       .then((items) => {
         if (cancelled) return;
         setConnection("connected");
-        setConnectionMessage("Connected to local agent server");
+        setConnectionMessage(
+          api.hasUserId
+            ? "Connected to local agent server"
+            : "Connected; set User ID in Settings to load local tasks"
+        );
         setTasks(items);
-        if (!selectedTaskId && items[0]) {
+        if (!api.hasUserId) {
+          setSelectedTaskId("");
+        } else if (!selectedTaskId && items[0]) {
           setSelectedTaskId(items[0].task_id);
         }
       })
@@ -220,7 +227,7 @@ export function App(): JSX.Element {
   }, [api, selectedBridgeMessageId]);
 
   useEffect(() => {
-    if (!selectedTask?.conversation_id || !settings.userId) {
+    if (!selectedTask?.conversation_id || !hasConfiguredUser) {
       setTokenStats(null);
       return;
     }
@@ -238,10 +245,10 @@ export function App(): JSX.Element {
     return () => {
       cancelled = true;
     };
-  }, [api, selectedTask?.conversation_id, selectedTaskId, settings.userId]);
+  }, [api, hasConfiguredUser, selectedTask?.conversation_id, selectedTaskId]);
 
   useEffect(() => {
-    if (!selectedTaskId || !settings.userId) return;
+    if (!selectedTaskId || !hasConfiguredUser) return;
     let cancelled = false;
     Promise.all([api.logs(selectedTaskId), api.approvals(selectedTaskId)])
       .then(([logs, taskApprovals]) => {
@@ -256,10 +263,10 @@ export function App(): JSX.Element {
     return () => {
       cancelled = true;
     };
-  }, [api, selectedTaskId, settings.userId]);
+  }, [api, hasConfiguredUser, selectedTaskId]);
 
   useEffect(() => {
-    if (!selectedTaskId || !settings.userId) return;
+    if (!selectedTaskId || !hasConfiguredUser) return;
     let socket: WebSocket | null = null;
     let stopped = false;
     const afterEventId = selectedEvents[selectedEvents.length - 1]?.event_id;
@@ -289,7 +296,7 @@ export function App(): JSX.Element {
       stopped = true;
       socket?.close();
     };
-  }, [api, selectedTaskId, settings.userId]);
+  }, [api, hasConfiguredUser, selectedTaskId]);
 
   function appendEvents(taskId: string, events: LocalEvent[]): void {
     if (!events.length) return;
@@ -366,7 +373,16 @@ export function App(): JSX.Element {
 
   async function saveSettings(): Promise<void> {
     try {
-      const validated = await api.validateSettings(draftSettings);
+      const normalizedDraft = {
+        ...draftSettings,
+        userId: draftSettings.userId.trim()
+      };
+      const validationClient = new LocalApiClient({
+        ...settings,
+        apiBaseUrl: normalizedDraft.apiBaseUrl,
+        userId: normalizedDraft.userId
+      });
+      const validated = await validationClient.validateSettings(normalizedDraft);
       await window.assistantDesktop.saveSettings(validated);
       setSettings(validated);
       setDraftSettings(validated);
@@ -434,7 +450,7 @@ export function App(): JSX.Element {
             </label>
             <button
               className="primary-action"
-              disabled={connection !== "connected" || !settings.userId}
+              disabled={connection !== "connected" || !hasConfiguredUser}
               onClick={() => void createTask()}
             >
               Create
