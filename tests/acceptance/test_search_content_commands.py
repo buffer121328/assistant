@@ -24,8 +24,8 @@ from agent import (
     WorkPlan,
     WorkPlanStep,
 )
-from model_gateway.deepseek import DeepSeekAdapter
-from agent.tool_management import (
+from models.deepseek import DeepSeekAdapter
+from tools import (
     NormalizedSearchSource,
     SearchWebTool,
     TavilyClientError,

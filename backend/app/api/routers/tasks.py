@@ -23,7 +23,7 @@ from domain.models import (
     TaskStatus,
     ToolLog,
 )
-from model_gateway import sanitize_text
+from models import sanitize_text
 from app.api.schemas import (
     ApprovalDecisionRequest,
     ApprovalDecisionResponse,

@@ -50,8 +50,8 @@ def client(sessionmaker: async_sessionmaker[AsyncSession]) -> TestClient:
         deepseek_base_url="https://deepseek.invalid/v1",
         deepseek_light_model="deepseek-light-test",
         deepseek_standard_model="deepseek-standard-test",
-        model_gateway_timeout_seconds=0.1,
-        model_gateway_retry_attempts=2,
+        models_timeout_seconds=0.1,
+        models_retry_attempts=2,
     )
     app = create_app(settings)
     app.state.db_sessionmaker = sessionmaker
@@ -144,7 +144,7 @@ def assert_no_sensitive_text(value: str) -> None:
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_01_model_gateway_returns_unified_response(
+async def test_01_models_returns_unified_response(
     client: TestClient,
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> None:
@@ -174,7 +174,7 @@ async def test_01_model_gateway_returns_unified_response(
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_02_model_gateway_does_not_execute_downstream_work(
+async def test_02_models_does_not_execute_downstream_work(
     client: TestClient,
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> None:
@@ -304,10 +304,10 @@ async def test_07_unsupported_routing_inputs_return_stable_errors(
         return_value=httpx.Response(200, json=deepseek_success())
     )
     cases = [
-        ("unknown_type", None, "model_gateway_validation_error"),
-        ("plan", "tiny", "model_gateway_validation_error"),
-        ("plan", "complex", "model_gateway_unsupported_model"),
-        ("coding_plan", None, "model_gateway_unsupported_model"),
+        ("unknown_type", None, "models_validation_error"),
+        ("plan", "tiny", "models_validation_error"),
+        ("plan", "complex", "models_unsupported_model"),
+        ("coding_plan", None, "models_unsupported_model"),
     ]
 
     for task_type, model_class, expected_code in cases:
@@ -397,7 +397,7 @@ async def test_10_timeout_is_mapped_to_gateway_error_and_logged(
     )
 
     assert response.status_code == 504
-    assert response.json()["error"]["code"] == "model_gateway_timeout"
+    assert response.json()["error"]["code"] == "models_timeout"
     assert route.calls.call_count == 2
     assert_no_sensitive_text(response.text)
     logs = await fetch_model_logs(sessionmaker)
@@ -441,7 +441,7 @@ async def test_11_provider_error_is_mapped_and_success_or_failure_is_logged(
 
     assert success.status_code == 200
     assert failure.status_code == 502
-    assert failure.json()["error"]["code"] == "model_gateway_provider_error"
+    assert failure.json()["error"]["code"] == "models_provider_error"
     assert route.calls.call_count == 3
     logs = await fetch_model_logs(sessionmaker)
     assert len(logs) == 2

@@ -5,7 +5,7 @@ from typing import Protocol, TypeVar
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent.core.budget import BudgetExceededError, RunBudget
+from runtime.budget import BudgetExceededError, RunBudget
 
 from agent import (
     AgentDecision,
@@ -16,7 +16,7 @@ from agent import (
     parse_review_decision,
     parse_work_plan,
 )
-from model_gateway import (
+from models import (
     DeepSeekConfig,
     GatewayRequest,
     GatewayResult,
@@ -84,9 +84,9 @@ class AgentGatewayModel:
         self.settings = settings
         self.agent_run_id = agent_run_id
         if adapter is None:
-            from model_gateway.pool_factory import build_pooled_model_gateway
+            from models.pool_factory import build_pooled_models
 
-            adapter = build_pooled_model_gateway(settings)
+            adapter = build_pooled_models(settings)
         self.adapter = adapter
         self.repository = ModelLogRepository(session)
         self.sensitive_values = _sensitive_values(settings)
@@ -332,8 +332,8 @@ def _deepseek_config(settings: Settings) -> DeepSeekConfig:
         base_url=settings.deepseek_base_url,
         light_model=settings.deepseek_light_model,
         standard_model=settings.deepseek_standard_model,
-        timeout_seconds=settings.model_gateway_timeout_seconds,
-        retry_attempts=settings.model_gateway_retry_attempts,
+        timeout_seconds=settings.models_timeout_seconds,
+        retry_attempts=settings.models_retry_attempts,
     )
 
 

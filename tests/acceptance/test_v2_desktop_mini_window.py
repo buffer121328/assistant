@@ -17,7 +17,7 @@ from app.main import create_app
 from domain.models import Approval, Base, Task, TaskStatus, ToolLog, User
 from domain.services import TaskService
 from agent import HumanApprovalRequest
-from agent.tool_management import (
+from tools import (
     ToolApprovalRequiredError,
     ToolInvocation,
     ToolRegistry,

@@ -12,7 +12,7 @@ from sqlalchemy.pool import NullPool
 from domain.memory_candidates import MemoryCandidatePipeline, MemoryPolicyService
 from domain.models import Base, Memory, MemoryPolicy, User
 from domain.services import MemoryService
-from agent.memory.candidates import CandidateDraft, SourceEvent
+from memory.candidates import CandidateDraft, SourceEvent
 
 
 class StaticExtractor:
@@ -258,7 +258,7 @@ async def test_fast_pool_adapter_is_strict_and_success_hook_failure_cannot_flip_
 ) -> None:
     from domain.models import Task, TaskStatus
     from domain.services import TaskService
-    from agent.memory.candidates import FastPoolMemoryCandidateExtractor
+    from memory.candidates import FastPoolMemoryCandidateExtractor
 
     class Client:
         async def extract_candidate(self, payload: dict[str, object]) -> object:

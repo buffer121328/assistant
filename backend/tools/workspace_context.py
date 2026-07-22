@@ -7,7 +7,7 @@ from pathlib import Path, PurePosixPath
 import time
 from typing import Any, Literal
 
-from model_gateway import sanitize_text
+from models import sanitize_text
 
 from .catalog import ToolDescriptor
 from .registry import ToolInvocation, ToolRiskLevel, ToolSpec

@@ -25,7 +25,7 @@ from agent import (
     ToolCapability,
     UnsupportedModelClassError,
 )
-from agent.tool_management import NormalizedSearchSource, SearchWebResult
+from tools import NormalizedSearchSource, SearchWebResult
 
 
 @pytest_asyncio.fixture

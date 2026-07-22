@@ -11,7 +11,7 @@ Current shared implementation points:
 - Task creation and lifecycle: `backend/domain/task_lifecycle.py`
 - Runtime execution: `backend/workers/runtime.py`
 - Agent profile adapter: `backend/agent/planning/profiles.py`
-- Planning and execution loop: `backend/agent/core`
+- Planning and execution loop: `backend/runtime`
 - Prompt templates: `backend/resources/prompts`
 - Skill packages: `backend/resources/skillpacks`
 - Acceptance tests: `tests/acceptance`

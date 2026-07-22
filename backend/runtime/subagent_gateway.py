@@ -3,10 +3,10 @@ from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from agent import AgentModelRequest, SubAgentRequest, SubAgentResult
-from model_gateway import GatewayMessage
+from models import GatewayMessage
 from observability import Observability
 
-from model_gateway.agent_model import AgentGatewayModel
+from models.agent_model import AgentGatewayModel
 from infrastructure.config import Settings
 
 

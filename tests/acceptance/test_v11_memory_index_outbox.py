@@ -9,8 +9,8 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from agent.memory.index_outbox import MemoryIndexOutboxConsumer
-from agent.memory.semantic import NoopSemanticMemory
+from memory.index_outbox import MemoryIndexOutboxConsumer
+from memory.semantic import NoopSemanticMemory
 from domain.models import Base, Memory, MemoryIndexOutbox, User
 
 

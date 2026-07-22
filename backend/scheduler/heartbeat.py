@@ -9,13 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from infrastructure.config import Settings
 from workers.monitoring import run_phase09_monitoring
 from agent.governance.evolution import BehaviorEvolutionService
-from agent.memory.consolidation import run_memory_consolidation_maintenance
-from agent.memory.maintenance import maintain_memories
-from agent.memory.index_outbox import MemoryIndexOutboxConsumer
-from agent.memory.semantic import Mem0MemoryAdapter
+from memory.consolidation import run_memory_consolidation_maintenance
+from memory.maintenance import maintain_memories
+from memory.index_outbox import MemoryIndexOutboxConsumer
+from memory.semantic import Mem0MemoryAdapter
 from notifications import ReminderService, deliver_langbot_due
 from channels.langbot.service import LangBotResultClient
-from agent.tool_management.schedule_tools import AgentScheduleService
+from tools.schedule_tools import AgentScheduleService
 from domain.models import AgentScheduleRun, ToolLog
 from domain.task_events import TaskEventRepository
 

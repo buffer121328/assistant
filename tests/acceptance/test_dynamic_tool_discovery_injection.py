@@ -13,7 +13,7 @@ from agent import (
     TaskContext,
 )
 from capabilities import CapabilityKind, build_default_registry
-from agent.tool_management import (
+from tools import (
     MCPToolDescription,
     MCPToolSource,
     StaticToolSource,

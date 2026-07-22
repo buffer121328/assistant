@@ -32,7 +32,7 @@ from agent.governance.evolution import (
     BehaviorMetrics,
     EvolutionSuggestion,
 )
-from agent.core.langgraph_executor import LangGraphExecutor
+from runtime.langgraph_executor import LangGraphExecutor
 from agent.governance.governed_evolution import (
     EvolutionApprovalError,
     EvolutionError,
@@ -40,8 +40,8 @@ from agent.governance.governed_evolution import (
     EvolutionValidationError,
     GovernedEvolutionService,
 )
-from agent.core.loop import ControlledLoop, LoopStepLimitError
-from agent.core.runner import (
+from runtime.loop import ControlledLoop, LoopStepLimitError
+from runtime.runner import (
     AgentHarness,
     AgentHarnessError,
     ExecutionBoundary,
@@ -96,7 +96,7 @@ from agent.skill_management.store import (
     ManagedSkillStore,
     ManagedSkillStoreError,
 )
-from agent.core.subagents import (
+from runtime.subagents import (
     SubAgentCoordinator,
     SubAgentRequest,
     SubAgentResult,

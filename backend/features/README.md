@@ -10,7 +10,7 @@ Use it when adding or changing a scenario such as `plan`, `learn`, `daily`, `off
 - Add or adjust Agent profile adaptation in `backend/agent/planning/profiles.py`.
 - Put reusable prompt templates under `backend/resources/prompts`.
 - Put Skill packages under `backend/resources/skillpacks`.
-- Put shared tools under `backend/agent/tool_management` and providers under `backend/integrations`.
+- Put shared tools under `backend/tools` and providers under `backend/integrations`.
 - Add acceptance coverage under `tests/acceptance`.
 
 Keep cross-cutting runtime code in shared backend layers. Feature directories should make ownership and extension points obvious; they should not become dumping grounds for unrelated infrastructure.

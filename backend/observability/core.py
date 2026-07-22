@@ -5,7 +5,7 @@ from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass
 from typing import Any, Literal, Protocol
 
-from model_gateway import sanitize_text
+from models import sanitize_text
 
 
 ObservationType = Literal[

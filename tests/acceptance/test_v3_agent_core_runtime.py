@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.pool import NullPool
 
-from model_gateway.agent_model import AgentGatewayModel
+from models.agent_model import AgentGatewayModel
 from infrastructure.checkpoints import (
     AgentCheckpointConfigurationError,
     build_checkpoint_serializer,
@@ -56,9 +56,9 @@ from agent.modeling.agent_model import (
     build_agent_model_request,
     parse_agent_decision,
 )
-from model_gateway import GatewayResult, GatewayUsage
+from models import GatewayResult, GatewayUsage
 from observability import NoopObservation
-from agent.tool_management import (
+from tools import (
     ToolCatalog,
     ToolDescriptor,
     ToolInvocation,

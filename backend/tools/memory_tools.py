@@ -5,17 +5,17 @@ from typing import Any, cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent.memory.agentic import classify_memory_query_type, rrf_weights_for_query
-from agent.memory.retrieval import RetrievalWeights, retrieve_memories
-from agent.memory.safety import classify_memory_sensitivity
-from agent.memory.semantic import SemanticMemory
+from memory.agentic import classify_memory_query_type, rrf_weights_for_query
+from memory.retrieval import RetrievalWeights, retrieve_memories
+from memory.safety import classify_memory_sensitivity
+from memory.semantic import SemanticMemory
 from domain.services import (
     ForbiddenMemoryContentError,
     MemoryNotFoundError,
     MemoryService,
 )
 from domain.models import ToolLog
-from model_gateway import sanitize_text
+from models import sanitize_text
 
 from .catalog import ToolDescriptor
 from .registry import ToolInvocation, ToolRiskLevel, ToolSpec

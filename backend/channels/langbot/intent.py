@@ -5,8 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from model_gateway import GatewayMessage, GatewayRequest, ModelGatewayError, route_model
-from model_gateway.pool_factory import build_pooled_model_gateway
+from models import GatewayMessage, GatewayRequest, ModelGatewayError, route_model
+from models.pool_factory import build_pooled_models
 
 from infrastructure.config import Settings
 
@@ -70,7 +70,7 @@ async def classify_langbot_intent(
         )
 
     try:
-        adapter = build_pooled_model_gateway(settings)
+        adapter = build_pooled_models(settings)
         gateway_request = GatewayRequest(
             user_id="langbot-intent-router",
             task_id="langbot-intent-router",

@@ -9,7 +9,7 @@ from typing import Any, cast
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent.memory.retrieval import RetrievalWeights
+from memory.retrieval import RetrievalWeights
 
 from domain.models import (
     MemoryEffectiveness,

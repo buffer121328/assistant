@@ -20,7 +20,7 @@ from domain.models import (
     TaskStatus,
     utc_now,
 )
-from model_gateway import sanitize_text
+from models import sanitize_text
 
 PromptModuleName = Literal[
     "SYSTEM", "MEMORY_GUIDE", "TOOL_POLICY", "RESPONSE_STYLE", "AGENT_CONFIG"

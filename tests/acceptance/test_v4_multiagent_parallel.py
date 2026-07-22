@@ -13,13 +13,13 @@ from sqlalchemy.pool import NullPool
 from domain.models import Base, Task, User
 from agent import AgentDecision
 from agent.modeling.agent_model import AgentDecisionError, parse_agent_decision
-from agent.core.subagents import (
+from runtime.subagents import (
     SubAgentCoordinator,
     SubAgentRequest,
     SubAgentResult,
 )
-from agent.core import subagent_gateway as subagent_gateway_module
-from agent.tool_management import ToolInvocation, ToolNotAllowedError, ToolRegistry, ToolSpec
+from runtime import subagent_gateway as subagent_gateway_module
+from tools import ToolInvocation, ToolNotAllowedError, ToolRegistry, ToolSpec
 
 
 @pytest_asyncio.fixture

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from features import feature_for_task_type, planning_task_types
-from model_gateway import SUPPORTED_MODEL_CLASSES
+from models import SUPPORTED_MODEL_CLASSES
 
 
 ExecutorKind = Literal["langgraph"]

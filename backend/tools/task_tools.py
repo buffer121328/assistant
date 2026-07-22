@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from domain.models import Task, TaskEvent, TaskStatus, ToolLog
 from domain.services import TaskNotFoundError, TaskService
 from domain.task_events import TaskEventRepository, event_record
-from model_gateway import sanitize_text
+from models import sanitize_text
 
 from .catalog import ToolDescriptor
 from .registry import ToolInvocation, ToolRiskLevel, ToolSpec

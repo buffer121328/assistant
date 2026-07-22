@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from model_gateway import sanitize_text
+from models import sanitize_text
 
 from domain.models import TaskEvent
 

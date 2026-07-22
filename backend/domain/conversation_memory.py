@@ -8,8 +8,8 @@ from typing import Protocol
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent.memory.working_set import ConversationCompactionPolicy, estimate_tokens
-from model_gateway import sanitize_text
+from memory.working_set import ConversationCompactionPolicy, estimate_tokens
+from models import sanitize_text
 
 from domain.conversations import ConversationError, ConversationService
 from domain.models import (

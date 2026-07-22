@@ -8,8 +8,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from agent.tool_management import ToolInvocation, ToolRegistry
-from agent.tool_management.workspace_context import (
+from tools import ToolInvocation, ToolRegistry
+from tools.workspace_context import (
     ReadonlyShellRunner,
     WorkspaceContextError,
     WorkspaceContextStore,

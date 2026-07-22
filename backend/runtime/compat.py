@@ -5,7 +5,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent.memory import SemanticMemory
+from memory import SemanticMemory
 
 from agent.ports import ConversationContextPack
 
@@ -164,7 +164,7 @@ async def load_conversation_context(
     """
     from domain.conversation_memory import ConversationMemoryService
     from domain.conversations import ConversationService
-    from agent.memory.working_set import ConversationMessageRef, build_context_pack
+    from memory.working_set import ConversationMessageRef, build_context_pack
 
     messages = await ConversationService(session).list_messages(
         conversation_id=conversation_id,

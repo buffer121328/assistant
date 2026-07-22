@@ -24,7 +24,7 @@ from agent import (
     WorkPlan,
     WorkPlanStep,
 )
-from agent.tool_management import (
+from tools import (
     MCPToolAdapter,
     MCPToolDescription,
     SearchWebTool,

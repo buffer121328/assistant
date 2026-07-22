@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from domain.models import AgentSchedule, AgentScheduleRun, ToolLog, utc_now
 from domain.services import TaskService
 from domain.task_events import TaskEventRepository
-from model_gateway import sanitize_text
+from models import sanitize_text
 
 from .catalog import ToolDescriptor
 from .registry import ToolInvocation, ToolRiskLevel, ToolSpec

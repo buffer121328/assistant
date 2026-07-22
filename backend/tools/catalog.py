@@ -7,7 +7,7 @@ import re
 from types import MappingProxyType
 from typing import Any, Literal, Protocol, cast
 
-from model_gateway import sanitize_text
+from models import sanitize_text
 
 from .registry import ToolRiskLevel
 

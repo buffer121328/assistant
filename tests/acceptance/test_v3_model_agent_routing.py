@@ -24,7 +24,7 @@ from capabilities import (
     CapabilityMetadata,
     CapabilityRegistry,
 )
-from model_gateway import GatewayResult, GatewayUsage
+from models import GatewayResult, GatewayUsage
 
 
 @pytest_asyncio.fixture

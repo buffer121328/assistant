@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from agent.tool_management import (
+from tools import (
     ToolApprovalRequiredError,
     ToolArgumentsInvalidError,
     ToolInvocation,
@@ -18,7 +18,7 @@ from agent.tool_management import (
     ToolSnapshotStaleError,
     ToolSpec,
 )
-from agent.tool_management.registry import ToolHandler
+from tools.registry import ToolHandler
 from domain.models import Base, Task, TaskStatus, ToolLog, User
 
 

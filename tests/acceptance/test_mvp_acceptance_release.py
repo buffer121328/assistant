@@ -25,8 +25,8 @@ from agent import (
     AgentRunInput,
     LangGraphExecutionResult,
 )
-from model_gateway.deepseek import DeepSeekAdapter
-from agent.tool_management import TavilySearchRequest
+from models.deepseek import DeepSeekAdapter
+from tools import TavilySearchRequest
 
 
 TAVILY_API_KEY = "fake-tavily-api-key"

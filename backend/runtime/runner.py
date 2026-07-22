@@ -8,9 +8,9 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent.memory import SemanticMemory, load_memory_context
-from model_gateway import sanitize_text
-from agent.tool_management import ToolCandidateSelector, ToolCatalogSnapshot
+from memory import SemanticMemory, load_memory_context
+from models import sanitize_text
+from tools.catalog import ToolCandidateSelector, ToolCatalogSnapshot
 
 from agent.planning.capabilities import (
     CapabilitiesBuilder,
@@ -244,7 +244,7 @@ class ExecutionBoundary:
             )
             return
 
-        from agent.core.compat import record_execution_trace
+        from runtime.compat import record_execution_trace
 
         await record_execution_trace(
             self.session,
@@ -380,7 +380,7 @@ class AgentHarness:
         if task.task_type == "memory":
             if self.local_tasks is not None:
                 return await self.local_tasks.execute_memory_task(task.id)
-            from agent.core.compat import execute_memory_task
+            from runtime.compat import execute_memory_task
 
             return await execute_memory_task(
                 self.session,
@@ -390,7 +390,7 @@ class AgentHarness:
         if task.task_type == "status":
             if self.local_tasks is not None:
                 return await self.local_tasks.execute_status_task(task.id)
-            from agent.core.compat import execute_status_task
+            from runtime.compat import execute_status_task
 
             return await execute_status_task(self.session, task_id=task.id)
 
@@ -604,7 +604,7 @@ class AgentHarness:
         """
         task_lifecycle: Any
         if self.task_lifecycle is None:
-            from agent.core.compat import task_lifecycle as build_task_lifecycle
+            from runtime.compat import task_lifecycle as build_task_lifecycle
 
             task_lifecycle = build_task_lifecycle(
                 self.session, success_hook=self.memory_candidate_hook
@@ -685,7 +685,7 @@ class AgentHarness:
         """
         if self.task_lifecycle is not None:
             return await self.task_lifecycle.load_pending(task_id)
-        from agent.core.compat import load_pending_task
+        from runtime.compat import load_pending_task
 
         return await load_pending_task(
             self.session,
@@ -703,7 +703,7 @@ class AgentHarness:
         """
         if self.user_lookup is not None:
             return await self.user_lookup.load_user(user_id)
-        from agent.core.compat import load_user
+        from runtime.compat import load_user
 
         return await load_user(
             self.session,
@@ -738,7 +738,7 @@ class AgentHarness:
                 long_term_memory=long_term_memory,
             )
 
-        from agent.core.compat import load_conversation_context
+        from runtime.compat import load_conversation_context
 
         return await load_conversation_context(
             self.session,
@@ -778,7 +778,7 @@ class AgentHarness:
 
 def _default_skills_root() -> Path:
     """执行 处理 default skills root 的内部辅助逻辑。"""
-    return Path(__file__).resolve().parents[2] / "resources" / "skillpacks"
+    return Path(__file__).resolve().parents[1] / "resources" / "skillpacks"
 
 
 def _build_langgraph_result(plan: ExecutionPlan, context: TaskContext) -> str:

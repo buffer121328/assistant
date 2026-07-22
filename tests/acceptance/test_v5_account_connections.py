@@ -31,14 +31,14 @@ from integrations import (
     ProviderError,
     SmtpProvider,
 )
-from agent.tool_management import (
+from tools import (
     ToolApprovalRequiredError,
     ToolInvocation,
     ToolRegistry,
     ToolSpec,
     external_approval_binding,
 )
-from agent.tool_management.personal import build_personal_tool_descriptors
+from tools.personal import build_personal_tool_descriptors
 
 MASTER_KEY = "test-account-master-key-with-more-than-32-chars"
 

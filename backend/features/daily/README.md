@@ -12,7 +12,7 @@ Current shared implementation points:
 - Runtime execution: `backend/workers/runtime.py`
 - Agent profile adapter: `backend/agent/planning/profiles.py`
 - Notification services: `backend/notifications`
-- Memory services: `backend/agent/memory`
+- Memory services: `backend/memory`
 - Prompt templates: `backend/resources/prompts`
 - Skill packages: `backend/resources/skillpacks`
 - Acceptance tests: `tests/acceptance`

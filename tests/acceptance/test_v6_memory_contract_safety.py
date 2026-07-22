@@ -19,7 +19,7 @@ from domain.models import (
     User,
 )
 from domain.services import ForbiddenMemoryContentError, MemoryService
-from agent.memory.semantic import SemanticMemoryResult
+from memory.semantic import SemanticMemoryResult
 
 
 class FailingSemanticMemory:

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from agent.tool_management.workspace import (
+from tools.workspace import (
     SessionWorkspacePathError,
     SessionWorkspaceStore,
 )
@@ -104,7 +104,7 @@ def test_rejects_symlink_escape_for_existing_file_target(tmp_path: Path) -> None
 
 
 def test_task_workspace_legacy_aliases_are_removed() -> None:
-    import agent.tool_management.workspace as workspace
+    import tools.workspace as workspace
 
     assert not hasattr(workspace, "TaskWorkspaceStore")
     assert not hasattr(workspace, "TaskWorkspace")

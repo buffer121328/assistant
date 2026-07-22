@@ -6,12 +6,12 @@ import json
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent.memory import (
+from memory import (
     classify_memory_sensitivity,
     memory_content_hash,
     normalize_memory_content,
 )
-from agent.memory.candidates import (
+from memory.candidates import (
     MemoryCandidateExtractor,
     SourceEvent,
     candidate_should_activate,

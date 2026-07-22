@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from agent.tool_management import (
+from tools import (
     ToolInvocation,
     ToolNotAllowedError,
     ToolRegistry,
@@ -164,7 +164,7 @@ async def test_v12_06_knowledge_injection_does_not_expand_tool_authority(
         async def handler(_invocation: ToolInvocation) -> dict[str, bool]:
             return {"executed": True}
 
-        from agent.tool_management.registry import ToolHandler, ToolSpec
+        from tools.registry import ToolHandler, ToolSpec
 
         registry.register(
             ToolSpec(

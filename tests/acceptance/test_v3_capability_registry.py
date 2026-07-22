@@ -19,7 +19,7 @@ from capabilities import (
     build_default_registry,
     discover_skill_metadata,
 )
-from agent.tool_management import (
+from tools import (
     ToolInvocation,
     ToolNotAllowedError,
     ToolRegistry,

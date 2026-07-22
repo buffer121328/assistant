@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from agent.memory.working_set import (
+from memory.working_set import (
     ConversationMessageRef,
     build_context_pack,
     estimate_tokens,

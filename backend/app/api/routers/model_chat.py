@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from infrastructure.database import get_session
-from model_gateway.chat_service import handle_model_chat
+from models.chat_service import handle_model_chat
 from app.api.schemas import (
     ModelChatRequest,
     ModelChatResponse,

@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from agent.skill_management.lifecycle import SkillInventoryItem, SkillLifecycleService
 from domain.models import ApprovalType, EvolutionChange, new_id
 from infrastructure.repositories import ApprovalRepository
-from model_gateway import sanitize_text
+from models import sanitize_text
 
 
 class SkillAcquisitionDecisionType(str, Enum):

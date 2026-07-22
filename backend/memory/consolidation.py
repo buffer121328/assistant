@@ -18,8 +18,8 @@ from domain.models import (
     MemoryLink,
     new_id,
 )
-from agent.memory.candidates import obvious_preference_conflict
-from agent.memory.safety import memory_content_hash, normalize_memory_content
+from memory.candidates import obvious_preference_conflict
+from memory.safety import memory_content_hash, normalize_memory_content
 
 
 @dataclass(frozen=True)

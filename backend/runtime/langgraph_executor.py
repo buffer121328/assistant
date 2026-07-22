@@ -11,23 +11,18 @@ from langgraph.types import Command, interrupt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent.core.budget import RunBudget
+from runtime.budget import RunBudget
 from domain.models import Approval, ApprovalStatus, Task
-from agent.tool_management.approval import (
+from tools.approval import (
     EXACT_APPROVAL_TOOLS,
     external_approval_binding,
     external_audit_arguments,
 )
-from model_gateway import sanitize_text
+from models import sanitize_text
 from observability import NoopObservability, Observability
-from agent.tool_management import (
-    SearchWebResult,
-    ToolCatalogSnapshot,
-    ToolInvocation,
-    ToolRegistry,
-    ToolSnapshotStaleError,
-    build_planned_tool_schemas,
-)
+from tools.catalog import ToolCatalogSnapshot, build_planned_tool_schemas
+from tools.registry import ToolInvocation, ToolRegistry, ToolSnapshotStaleError
+from tools.search import SearchWebResult
 
 from agent.modeling.agent_model import (
     AgentDecision,
@@ -44,8 +39,8 @@ from agent.modeling.executors import (
     ApprovalTypeName,
     HumanApprovalRequest,
 )
-from agent.core.loop import ControlledLoop
-from agent.core.subagents import SubAgentCoordinator, SubAgentRequest
+from runtime.loop import ControlledLoop
+from runtime.subagents import SubAgentCoordinator, SubAgentRequest
 
 
 _AGENT_CORE_VERSION = "v2"

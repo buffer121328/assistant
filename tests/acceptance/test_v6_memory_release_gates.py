@@ -25,7 +25,7 @@ from domain.models import (
 )
 from domain.services import MemoryService, TaskServiceError
 from evaluation.memory_release import evaluate_memory_release_fixture
-from agent.memory.context import load_memory_context
+from memory.context import load_memory_context
 
 
 DATASET = Path(__file__).parents[1] / "evals/datasets/memory_release_v6_07.json"

@@ -11,7 +11,7 @@ from jsonschema.validators import validator_for
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent.core.budget import BudgetExceededError, RunBudget
+from runtime.budget import BudgetExceededError, RunBudget
 from domain.models import (
     Approval,
     ApprovalStatus,
@@ -19,7 +19,7 @@ from domain.models import (
     Task,
     ToolLog,
 )
-from model_gateway import sanitize_text
+from models import sanitize_text
 
 from .approval import (
     EXACT_APPROVAL_TOOLS,

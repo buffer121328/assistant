@@ -17,7 +17,7 @@ from domain.models import (
     User,
 )
 from domain.services import MemoryService
-from agent.memory.consolidation import (
+from memory.consolidation import (
     MemoryConsolidationService,
     ReconciliationReport,
 )

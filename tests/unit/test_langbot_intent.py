@@ -25,7 +25,7 @@ async def test_classifier_falls_back_to_confirmation_when_model_unavailable(
         raise RuntimeError("model unavailable")
 
     monkeypatch.setattr(
-        "channels.langbot.intent.build_pooled_model_gateway",
+        "channels.langbot.intent.build_pooled_models",
         raise_unavailable,
     )
 

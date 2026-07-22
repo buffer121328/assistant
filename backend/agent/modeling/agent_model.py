@@ -5,7 +5,7 @@ import json
 import re
 from typing import Any, Literal, Protocol
 
-from model_gateway import GatewayMessage, sanitize_text
+from models import GatewayMessage, sanitize_text
 
 from agent.modeling.executors import AgentRunInput
 

@@ -19,10 +19,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from model_gateway import sanitize_text
+from models import sanitize_text
 
 from domain.conversations import ConversationError, ConversationService
-from agent.tool_management.workspace import SessionWorkspaceStore
+from tools.workspace import SessionWorkspaceStore
 from infrastructure.database import get_session
 from app.support.errors import AppError
 from domain.models import ApprovalStatus, Task, TaskEvent, TaskStatus, ToolLog

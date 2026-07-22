@@ -16,10 +16,10 @@ from domain.models import (
 )
 from agent.skill_management.lifecycle import SkillInventoryItem
 
-MODEL_GATEWAY_VALIDATION_ERROR = "model_gateway_validation_error"
-MODEL_GATEWAY_UNSUPPORTED_MODEL = "model_gateway_unsupported_model"
-MODEL_GATEWAY_TIMEOUT = "model_gateway_timeout"
-MODEL_GATEWAY_PROVIDER_ERROR = "model_gateway_provider_error"
+MODEL_GATEWAY_VALIDATION_ERROR = "models_validation_error"
+MODEL_GATEWAY_UNSUPPORTED_MODEL = "models_unsupported_model"
+MODEL_GATEWAY_TIMEOUT = "models_timeout"
+MODEL_GATEWAY_PROVIDER_ERROR = "models_provider_error"
 
 
 class ModelGatewayMessage(BaseModel):

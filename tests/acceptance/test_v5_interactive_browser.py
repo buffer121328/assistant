@@ -26,9 +26,9 @@ from integrations import (
     CredentialCipher,
     ProviderError,
 )
-from agent.tool_management import ToolInvocation, ToolRegistry, external_approval_binding
-from agent.tool_management.browser import BrowserDestinationError, PublicUrlPolicy
-from agent.tool_management.browser_interact import (
+from tools import ToolInvocation, ToolRegistry, external_approval_binding
+from tools.browser import BrowserDestinationError, PublicUrlPolicy
+from tools.browser_interact import (
     BrowserInteractionResult,
     BrowserInteractor,
     build_browser_tool_descriptors,

@@ -4,7 +4,7 @@ from collections.abc import AsyncIterator
 
 import pytest
 
-from model_gateway import (
+from models import (
     GatewayMessage,
     GatewayRequest,
     GatewayResult,

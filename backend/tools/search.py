@@ -10,7 +10,7 @@ import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from domain.models import ToolLog
-from model_gateway import sanitize_text
+from models import sanitize_text
 
 
 SEARCH_WEB_TOOL_NAME = "search.web"

@@ -18,7 +18,7 @@ if str(API_ROOT) not in sys.path:
     sys.path.insert(0, str(API_ROOT))
 
 from integrations import CalDavProvider, ProviderError, SmtpProvider  # noqa: E402
-from agent.tool_management import (  # noqa: E402
+from tools import (  # noqa: E402
     TavilyApiClient,
     TavilyConfig,
     TavilySearchRequest,
@@ -35,7 +35,7 @@ class SmokeResult:
 Probe = Callable[[Mapping[str, str]], Awaitable[None]]
 REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "langbot": ("SMOKE_LANGBOT_HEALTH_URL", "SMOKE_LANGBOT_API_KEY"),
-    "model_gateway": ("SMOKE_MODEL_GATEWAY_HEALTH_URL", "SMOKE_MODEL_GATEWAY_API_KEY"),
+    "models": ("SMOKE_MODEL_GATEWAY_HEALTH_URL", "SMOKE_MODEL_GATEWAY_API_KEY"),
     "tavily": ("SMOKE_TAVILY_BASE_URL", "SMOKE_TAVILY_API_KEY"),
     "smtp": (
         "SMOKE_SMTP_HOST",
@@ -99,7 +99,7 @@ async def run_provider_smoke(
 def _default_probes() -> dict[str, Probe]:
     return {
         "langbot": _probe_langbot,
-        "model_gateway": _probe_model_gateway,
+        "models": _probe_models,
         "tavily": _probe_tavily,
         "smtp": _probe_smtp,
         "caldav": _probe_caldav,
@@ -111,7 +111,7 @@ async def _probe_langbot(values: Mapping[str, str]) -> None:
     await _http_health(values["SMOKE_LANGBOT_HEALTH_URL"], values["SMOKE_LANGBOT_API_KEY"])
 
 
-async def _probe_model_gateway(values: Mapping[str, str]) -> None:
+async def _probe_models(values: Mapping[str, str]) -> None:
     await _http_health(
         values["SMOKE_MODEL_GATEWAY_HEALTH_URL"],
         values["SMOKE_MODEL_GATEWAY_API_KEY"],

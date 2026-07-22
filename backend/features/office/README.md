@@ -11,7 +11,7 @@ Current shared implementation points:
 - Account connection APIs: `backend/app/api/routers/accounts.py`
 - Runtime execution: `backend/workers/runtime.py`
 - Agent profile adapter: `backend/agent/planning/profiles.py`
-- Productivity tools: `backend/agent/tool_management`
+- Productivity tools: `backend/tools`
 - Account-backed providers: `backend/integrations`
 - Prompt templates: `backend/resources/prompts`
 - Skill packages: `backend/resources/skillpacks`

@@ -3,23 +3,23 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from model_gateway import ModelNode, OpenAICompatibleAdapter, PooledModelGateway
+from models import ModelNode, OpenAICompatibleAdapter, PooledModelGateway
 
 from infrastructure.config import Settings
 
 
-def build_pooled_model_gateway(settings: Settings) -> PooledModelGateway:
+def build_pooled_models(settings: Settings) -> PooledModelGateway:
     """构建 pooled model gateway。
 
     Args:
         settings: settings 参数。
     """
     nodes = list(_legacy_nodes(settings))
-    nodes.extend(_configured_nodes(settings.model_gateway_nodes_json))
+    nodes.extend(_configured_nodes(settings.models_nodes_json))
     adapters = {
         node.node_id: OpenAICompatibleAdapter(
-            timeout_seconds=settings.model_gateway_timeout_seconds,
-            retry_attempts=settings.model_gateway_retry_attempts,
+            timeout_seconds=settings.models_timeout_seconds,
+            retry_attempts=settings.models_retry_attempts,
         )
         for node in nodes
     }

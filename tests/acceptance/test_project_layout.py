@@ -36,23 +36,22 @@ def test_project_has_clear_frontend_backend_legacy_layout() -> None:
         "ports.py",
     ]
     for layer in (
-        "core",
         "governance",
-        "memory",
         "modeling",
         "planning",
         "review",
         "skill_management",
-        "tool_management",
     ):
         assert (ROOT / "backend" / "agent" / layer / "__init__.py").is_file()
+    for package in ("runtime", "tools", "memory"):
+        assert (ROOT / "backend" / package / "__init__.py").is_file()
     assert (ROOT / "backend" / "channels" / "langbot" / "router.py").is_file()
     assert (ROOT / "backend" / "channels" / "desktop" / "router.py").is_file()
     assert (ROOT / "backend" / "domain").is_dir()
     assert (ROOT / "backend" / "infrastructure").is_dir()
     assert (ROOT / "backend" / "integrations").is_dir()
     assert (ROOT / "backend" / "knowledge").is_dir()
-    assert (ROOT / "backend" / "model_gateway").is_dir()
+    assert (ROOT / "backend" / "models").is_dir()
     assert (ROOT / "backend" / "migrations" / "versions").is_dir()
     assert (ROOT / "backend" / "scheduler").is_dir()
     assert (ROOT / "backend" / "resources" / "prompts" / "README.md").is_file()
@@ -66,8 +65,10 @@ def test_project_has_clear_frontend_backend_legacy_layout() -> None:
     assert not (ROOT / "backend" / "packages").exists()
     assert not (ROOT / "backend" / "prompts").exists()
     assert not (ROOT / "backend" / "skills").exists()
-    assert not (ROOT / "backend" / "tools").exists()
-    assert not (ROOT / "backend" / "memory").exists()
+    assert not (ROOT / "backend" / "agent" / "core").exists()
+    assert not (ROOT / "backend" / "agent" / "tool_management").exists()
+    assert not (ROOT / "backend" / "agent" / "memory").exists()
+    assert not (ROOT / "backend" / "model_gateway").exists()
     assert not (ROOT / "apps" / "api").exists()
     assert not (ROOT / "apps" / "desktop-web").exists()
     assert not (ROOT / "apps" / "desktop").exists()
@@ -123,7 +124,7 @@ def test_first_party_runtime_imports_rag_not_legacy_knowledge_package() -> None:
     first_party_paths = [
         ROOT / "backend" / "workers" / "runtime.py",
         ROOT / "backend" / "app" / "api" / "routers" / "knowledge.py",
-        ROOT / "backend" / "agent" / "tool_management" / "knowledge.py",
+        ROOT / "backend" / "tools" / "knowledge.py",
         ROOT / "backend" / "evaluation" / "rag_retrieval.py",
     ]
 
@@ -180,13 +181,16 @@ def test_runtime_metadata_uses_new_layout_paths() -> None:
         "backend/channels",
         "backend/domain",
         "backend/agent",
+        "backend/runtime",
+        "backend/tools",
+        "backend/memory",
         "backend/capabilities",
         "backend/evaluation",
         "backend/infrastructure",
         "backend/integrations",
         "backend/knowledge",
         "backend/rag",
-        "backend/model_gateway",
+        "backend/models",
         "backend/notifications",
         "backend/observability",
         "backend/scheduler",

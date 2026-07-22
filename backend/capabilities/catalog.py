@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
     from agent.skill_management.store import ManagedSkillStore
-    from agent.tool_management import ToolCatalogSnapshot
+    from tools import ToolCatalogSnapshot
 
 
 _SAFE_SKILL_NAME = re.compile(r"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$")

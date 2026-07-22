@@ -10,10 +10,10 @@ MODEL_CLASS_LIGHT = "light"
 MODEL_CLASS_STANDARD = "standard"
 PROVIDER_DEEPSEEK = "deepseek"
 
-MODEL_GATEWAY_VALIDATION_ERROR = "model_gateway_validation_error"
-MODEL_GATEWAY_UNSUPPORTED_MODEL = "model_gateway_unsupported_model"
-MODEL_GATEWAY_TIMEOUT = "model_gateway_timeout"
-MODEL_GATEWAY_PROVIDER_ERROR = "model_gateway_provider_error"
+MODEL_GATEWAY_VALIDATION_ERROR = "models_validation_error"
+MODEL_GATEWAY_UNSUPPORTED_MODEL = "models_unsupported_model"
+MODEL_GATEWAY_TIMEOUT = "models_timeout"
+MODEL_GATEWAY_PROVIDER_ERROR = "models_provider_error"
 
 LIGHT_TASK_TYPES = frozenset(
     {

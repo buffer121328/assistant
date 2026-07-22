@@ -11,7 +11,7 @@ from sqlalchemy.pool import NullPool
 
 from domain.models import Base, Memory, Task, User
 from domain.services import MemoryService
-from agent.memory import SemanticMemoryResult, load_memory_summary
+from memory import SemanticMemoryResult, load_memory_summary
 
 
 @pytest_asyncio.fixture

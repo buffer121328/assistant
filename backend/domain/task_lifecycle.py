@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from model_gateway import sanitize_text
+from models import sanitize_text
 
 from domain.models import (
     Approval,

@@ -8,8 +8,8 @@ from typing import Any, Protocol
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from model_gateway import sanitize_text
-from agent.memory import (
+from models import sanitize_text
+from memory import (
     NoopSemanticMemory,
     SemanticMemory,
     classify_memory_sensitivity,

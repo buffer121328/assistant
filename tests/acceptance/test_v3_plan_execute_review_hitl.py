@@ -34,7 +34,7 @@ from agent import (
 )
 from agent.planning.capabilities import CapabilitySnapshot
 from agent.planning.context import ContextBuilder
-from agent.tool_management import (
+from tools import (
     ToolApprovalRequiredError,
     ToolCatalog,
     ToolDescriptor,

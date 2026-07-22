@@ -11,10 +11,10 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from agent.core.budget import BudgetExceededError, RunBudget
-from agent.core.loop import ControlledLoop, LoopStepLimitError
-from agent.tool_management import ToolInvocation, ToolRegistry, ToolSpec
-from agent.tool_management.registry import ToolHandler
+from runtime.budget import BudgetExceededError, RunBudget
+from runtime.loop import ControlledLoop, LoopStepLimitError
+from tools import ToolInvocation, ToolRegistry, ToolSpec
+from tools.registry import ToolHandler
 from domain.models import (
     Approval,
     ApprovalStatus,
@@ -26,7 +26,7 @@ from domain.models import (
     ToolLog,
     User,
 )
-from model_gateway import (
+from models import (
     GatewayMessage,
     GatewayRequest,
     GatewayResult,
@@ -331,7 +331,7 @@ class FakeAdapter:
 
 
 @pytest.mark.asyncio
-async def test_model_gateway_cooldown_fallback_rate_limit_and_cost_diagnostics() -> None:
+async def test_models_cooldown_fallback_rate_limit_and_cost_diagnostics() -> None:
     now_value = 1000.0
 
     def now() -> float:
@@ -389,7 +389,7 @@ async def test_model_gateway_cooldown_fallback_rate_limit_and_cost_diagnostics()
     assert adapters["fast-a"].calls == 1
     assert adapters["fast-b"].calls == 2
     assert gateway.balancer.metrics("fast-a").health_status == "cooldown"
-    assert events[0]["event_type"] == "model_gateway.fallback"
+    assert events[0]["event_type"] == "models.fallback"
     assert events[0]["from_node"] == "fast-a"
     assert events[0]["to_node"] == "fast-b"
     assert first.estimated_cost == pytest.approx(0.07)

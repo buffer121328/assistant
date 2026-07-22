@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent.memory.semantic import SemanticMemory
+from memory.semantic import SemanticMemory
 from domain.models import Memory, MemoryIndexOutbox, utc_now
 
 

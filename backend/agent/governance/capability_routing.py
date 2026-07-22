@@ -12,7 +12,7 @@ from agent.governance.routing import (
     parse_agent_route_decision,
 )
 from capabilities import CapabilityRegistry
-from model_gateway import (
+from models import (
     DeepSeekAdapter,
     DeepSeekConfig,
     GatewayRequest,
@@ -183,8 +183,8 @@ def _deepseek_config(settings: Settings) -> DeepSeekConfig:
         base_url=settings.deepseek_base_url,
         light_model=settings.deepseek_light_model,
         standard_model=settings.deepseek_standard_model,
-        timeout_seconds=settings.model_gateway_timeout_seconds,
-        retry_attempts=settings.model_gateway_retry_attempts,
+        timeout_seconds=settings.models_timeout_seconds,
+        retry_attempts=settings.models_retry_attempts,
     )
 
 

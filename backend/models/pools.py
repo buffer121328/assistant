@@ -17,7 +17,7 @@ POOL_FAST = "fast"
 POOL_REASONING = "reasoning"
 POOL_PRIVATE = "private"
 SUPPORTED_POOLS = frozenset({POOL_FAST, POOL_REASONING, POOL_PRIVATE})
-MODEL_GATEWAY_RATE_LIMITED = "model_gateway_rate_limited"
+MODEL_GATEWAY_RATE_LIMITED = "models_rate_limited"
 
 
 @dataclass(frozen=True)
@@ -544,7 +544,7 @@ class PooledModelGateway:
         from_node, error_code = failed_from
         self.diagnostic_sink(
             {
-                "event_type": "model_gateway.fallback",
+                "event_type": "models.fallback",
                 "from_node": from_node,
                 "to_node": to_node.node_id,
                 "error_code": error_code,

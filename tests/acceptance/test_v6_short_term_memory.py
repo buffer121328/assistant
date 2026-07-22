@@ -224,7 +224,7 @@ def test_v6_short_term_migration_is_linear_and_reversible() -> None:
 async def test_context_loading_automatically_creates_summary_before_pack(
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> None:
-    from agent.memory.working_set import ConversationCompactionPolicy
+    from memory.working_set import ConversationCompactionPolicy
     from infrastructure.agent_ports import SqlAlchemyConversationContextPort
 
     user, conversation_id = await create_conversation(sessionmaker)
@@ -275,7 +275,7 @@ async def test_context_loading_automatically_creates_summary_before_pack(
 async def test_automatic_compaction_reuses_fresh_summary_without_rewrite(
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> None:
-    from agent.memory.working_set import ConversationCompactionPolicy
+    from memory.working_set import ConversationCompactionPolicy
     from infrastructure.agent_ports import SqlAlchemyConversationContextPort
 
     user, conversation_id = await create_conversation(sessionmaker)
@@ -324,7 +324,7 @@ async def test_automatic_compaction_reuses_fresh_summary_without_rewrite(
 async def test_automatic_compaction_failure_preserves_previous_summary(
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> None:
-    from agent.memory.working_set import ConversationCompactionPolicy
+    from memory.working_set import ConversationCompactionPolicy
 
     user, conversation_id = await create_conversation(sessionmaker)
     async with sessionmaker() as session:

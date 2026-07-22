@@ -19,8 +19,8 @@ from agent.governance.evolution import (
     EVOLUTION_SUGGESTION_TOOL_NAME,
     BehaviorEvolutionService,
 )
-from agent.memory.context import load_memory_summary
-from agent.memory.maintenance import maintain_memories
+from memory.context import load_memory_summary
+from memory.maintenance import maintain_memories
 
 
 ROOT = Path(__file__).resolve().parents[2]

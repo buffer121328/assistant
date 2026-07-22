@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent.memory import SemanticMemory
+from memory import SemanticMemory
 
 from agent.ports import (
     ConversationContextPack,
@@ -26,7 +26,7 @@ from domain.task_lifecycle import (
 )
 
 if TYPE_CHECKING:
-    from agent.memory.working_set import ConversationCompactionPolicy
+    from memory.working_set import ConversationCompactionPolicy
     from domain.conversation_memory import ConversationSummarizer
 
 
@@ -269,7 +269,7 @@ class SqlAlchemyConversationContextPort(ConversationContextPort):
             current_input: current_input 参数。
             long_term_memory: long_term_memory 参数。
         """
-        from agent.memory.working_set import (
+        from memory.working_set import (
             ConversationMessageRef,
             build_context_pack,
         )

@@ -17,8 +17,8 @@ from agent import (
     ManagedSkillStore,
     SubAgentCoordinator,
 )
-from model_gateway import sanitize_text
-from agent.memory import Mem0MemoryAdapter
+from models import sanitize_text
+from memory import Mem0MemoryAdapter
 from agent.skill_management.acquisition import SkillAcquisitionService
 from agent.skill_management.lifecycle import SkillLifecycleService
 from agent.prompting import PromptBuilder, PromptStore
@@ -33,7 +33,7 @@ from integrations import (
 )
 from agent.review import JudgeModel, QualityEvaluator, SamplingPolicy
 from capabilities import CapabilityRegistry, build_default_registry
-from agent.tool_management import (
+from tools import (
     AgentScheduleService,
     AgentTaskToolService,
     AgentMemoryToolService,
@@ -78,7 +78,7 @@ from agent.tool_management import (
 )
 
 from infrastructure.config import Settings
-from model_gateway.agent_model import AgentGatewayModel
+from models.agent_model import AgentGatewayModel
 from infrastructure.agent_ports import (
     SqlAlchemyConversationContextPort,
     SqlAlchemyExecutionTracePort,
@@ -96,7 +96,7 @@ from domain.models import AgentRun, EvolutionChange, Task, TaskStatus, utc_now
 from infrastructure.observability import build_observability
 from agent.review.gateway import GatewayJudgeModel
 from domain.services import DISPATCHABLE_TASK_STATUSES, ResultDispatcher
-from agent.core.subagent_gateway import GatewaySubAgentRunner
+from runtime.subagent_gateway import GatewaySubAgentRunner
 from domain.task_events import TASK_EVENT_STATUS, TaskEventPublisher
 
 BUILTIN_SKILL_ROOT = Path(__file__).resolve().parents[1] / "resources" / "skillpacks"

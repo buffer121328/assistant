@@ -35,8 +35,8 @@ from infrastructure.config import Settings
 from app.main import create_app
 from knowledge import KnowledgeError, KnowledgeService, SUPPORTED_MEDIA_TYPES
 from knowledge.extractors import PARSER_VERSION
-from agent.tool_management import ToolInvocation, ToolRegistry
-from agent.tool_management.knowledge import (
+from tools import ToolInvocation, ToolRegistry
+from tools.knowledge import (
     build_knowledge_tool_descriptor,
     build_knowledge_tool_spec,
 )

@@ -17,8 +17,8 @@ from domain.models import (
     User,
 )
 from domain.services import MemoryService
-from agent.memory.retrieval import RetrievalWeights, retrieve_memories
-from agent.memory.semantic import SemanticMemoryResult
+from memory.retrieval import RetrievalWeights, retrieve_memories
+from memory.semantic import SemanticMemoryResult
 
 
 class FakeSemantic:
