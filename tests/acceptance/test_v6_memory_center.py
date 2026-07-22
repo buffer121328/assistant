@@ -9,7 +9,7 @@ from sqlalchemy.pool import NullPool
 from infrastructure.config import Settings
 from app.main import create_app
 from domain.models import Base, User
-from application.services import MemoryService
+from application.memory_service import MemoryService
 
 
 @pytest_asyncio.fixture

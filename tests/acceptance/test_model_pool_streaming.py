@@ -140,7 +140,7 @@ def test_desktop_event_renderer_shows_plan_and_appends_content(tmp_path) -> None
 
 
 def test_final_answer_decoder_emits_only_answer_text() -> None:
-    from app.support.answer_stream import FinalAnswerDeltaDecoder
+    from models.streaming import FinalAnswerDeltaDecoder
 
     decoder = FinalAnswerDeltaDecoder()
     assert decoder.feed('{"action":"tool_call","tool_name":"search.web"}') == ""

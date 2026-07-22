@@ -9,7 +9,7 @@ from memory.agentic import classify_memory_query_type, rrf_weights_for_query
 from memory.retrieval import RetrievalWeights, retrieve_memories
 from memory.safety import classify_memory_sensitivity
 from memory.semantic import SemanticMemory
-from application.services import (
+from application.memory_service import (
     ForbiddenMemoryContentError,
     MemoryNotFoundError,
     MemoryService,

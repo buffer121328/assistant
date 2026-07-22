@@ -16,7 +16,7 @@ from domain.models import (
     MemoryRetrievalTraceItem,
     User,
 )
-from application.services import MemoryService
+from application.memory_service import MemoryService
 from memory.retrieval import RetrievalWeights, retrieve_memories
 from memory.semantic import SemanticMemoryResult
 

@@ -93,7 +93,7 @@ from channels.langbot.service import LangBotResultClient
 from domain.models import EvolutionChange, Task, TaskStatus
 from infrastructure.observability import build_observability
 from agent.review.gateway import GatewayJudgeModel
-from application.services import ResultDispatcher
+from application.dispatch import ResultDispatcher
 from policies.task_status import DISPATCHABLE_TASK_STATUSES
 from runtime.subagent_gateway import GatewaySubAgentRunner
 from application.task_events import TASK_EVENT_STATUS, TaskEventPublisher

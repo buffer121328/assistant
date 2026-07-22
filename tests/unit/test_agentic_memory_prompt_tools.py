@@ -17,7 +17,7 @@ from tools.builtin.memory_tools import AgentMemoryToolService, build_memory_tool
 from tools.builtin.prompt_tools import PromptToolService, build_prompt_tool_descriptors
 from tools.core.registry import ToolInvocation
 from domain.models import Approval, ApprovalStatus, Base, EvolutionVersion, Memory, Task, ToolLog, User
-from application.services import MemoryService, MemoryNotFoundError, ForbiddenMemoryContentError
+from application.memory_service import MemoryService, MemoryNotFoundError, ForbiddenMemoryContentError
 
 
 @pytest_asyncio.fixture

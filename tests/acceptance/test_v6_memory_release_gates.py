@@ -23,7 +23,8 @@ from domain.models import (
     MemoryRetrievalPolicyVersion,
     User,
 )
-from application.services import MemoryService, TaskServiceError
+from application.memory_service import MemoryService
+from application.task_lifecycle import TaskServiceError
 from evaluation.memory_release import evaluate_memory_release_fixture
 from memory.context import load_memory_context
 

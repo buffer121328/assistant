@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from domain.models import Task, TaskEvent, TaskStatus, ToolLog
-from application.services import TaskNotFoundError, TaskService
+from application.task_lifecycle import TaskNotFoundError, TaskService
 from application.task_events import TaskEventRepository, event_record
 from common.redaction import sanitize_text
 

@@ -35,7 +35,7 @@ from app.api.schemas import (
     approval_response,
     task_response,
 )
-from application.services import ApprovalService, TaskService, TaskServiceError
+from application.task_lifecycle import ApprovalService, TaskService, TaskServiceError
 from application.task_events import TaskEventRepository, event_record
 from workers.worker import enqueue_task_execution as _default_enqueue_task_execution
 

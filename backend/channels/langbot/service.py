@@ -15,7 +15,7 @@ from app.support.errors import AppError
 from domain.models import Task
 from infrastructure.repositories import MessageRepository, ProcessedMessageCreate
 from app.api.schemas import LangBotWebhookRequest
-from application.services import TaskService, TaskServiceError
+from application.task_lifecycle import TaskService, TaskServiceError
 
 from channels.langbot.intent import (
     ALL_COMMAND_TASK_TYPES,

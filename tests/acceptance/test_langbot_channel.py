@@ -23,7 +23,7 @@ from domain.models import (
     ToolLog,
     User,
 )
-from application.services import ResultDispatcher
+from application.dispatch import ResultDispatcher
 from channels.langbot.intent import LANGBOT_INTENT_OUTCOMES, LangBotIntentDecision
 
 

@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from domain.models import AgentSchedule, AgentScheduleRun, ToolLog, utc_now
-from application.services import TaskService
+from application.task_lifecycle import TaskService
 from application.task_events import TaskEventRepository
 from common.redaction import sanitize_text
 

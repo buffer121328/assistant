@@ -19,7 +19,8 @@ from domain.models import (
     User,
     utc_now,
 )
-from application.services import MemoryService, TaskServiceError, UserNotFoundError
+from application.memory_service import MemoryService
+from application.task_lifecycle import TaskServiceError, UserNotFoundError
 
 
 _VERSION = re.compile(r"^[a-z0-9][a-z0-9.-]{0,63}$")

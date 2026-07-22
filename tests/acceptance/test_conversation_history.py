@@ -12,7 +12,7 @@ from sqlalchemy.pool import NullPool
 from infrastructure.config import Settings
 from app.main import create_app
 from domain.models import Base, TaskStatus, User
-from application.services import TaskService
+from application.task_lifecycle import TaskService
 
 
 @pytest_asyncio.fixture

@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import NullPool
 
 from domain.models import Base, Memory, Task, TaskStatus, ToolLog, User
-from application.services import MemoryService
+from application.memory_service import MemoryService
 from agent.planning.capabilities import CapabilitiesBuilder, ToolCapability
 from agent.planning.context import ContextBuilder
 from agent.governance.evolution import (

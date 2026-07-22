@@ -12,7 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import NullPool
 
 from domain.models import Base, Memory, Task, TaskStatus, User
-from application.services import MemoryService, StatusService
+from application.memory_service import MemoryService
+from application.status_service import StatusService
 from agent import AgentHarness, ExecutionOutcome
 
 

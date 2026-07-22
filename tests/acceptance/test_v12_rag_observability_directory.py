@@ -278,14 +278,14 @@ async def test_v12_07_task_diagnostics_correlate_logs_approvals_and_retrieval(
     assert payload["retrieval"]["sources"][0]["source_id"] == f"memory:{memory.id}"
 
 
-def test_v12_08_rag_facade_and_docs_describe_incremental_boundary() -> None:
-    from knowledge import KnowledgeService as LegacyKnowledgeService
-    from knowledge.extractors import PARSER_VERSION as LegacyParserVersion
-    from knowledge.service import KnowledgeService as LegacyModuleKnowledgeService
+def test_v12_08_rag_primary_package_replaces_legacy_knowledge_shim() -> None:
     from rag import KnowledgeService as FacadeKnowledgeService
     from rag.extractors import PARSER_VERSION as RagParserVersion
+    from rag.service import KnowledgeService as ModuleKnowledgeService
 
-    assert FacadeKnowledgeService is LegacyKnowledgeService
-    assert FacadeKnowledgeService is LegacyModuleKnowledgeService
-    assert RagParserVersion == LegacyParserVersion
-    assert (Path(__file__).parents[2] / "backend/rag/__init__.py").exists()
+    root = Path(__file__).parents[2]
+
+    assert FacadeKnowledgeService is ModuleKnowledgeService
+    assert isinstance(RagParserVersion, str)
+    assert (root / "backend/rag/__init__.py").exists()
+    assert not (root / "backend/knowledge").exists()

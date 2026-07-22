@@ -16,7 +16,7 @@ from domain.models import (
     MemoryLink,
     User,
 )
-from application.services import MemoryService
+from application.memory_service import MemoryService
 from memory.consolidation import (
     MemoryConsolidationService,
     ReconciliationReport,

@@ -66,7 +66,6 @@ def test_project_has_clear_frontend_backend_legacy_layout() -> None:
         "memory_candidates",
         "memory_release",
         "memory_service",
-        "services",
         "status_service",
         "task_commands",
         "task_events",
@@ -75,7 +74,6 @@ def test_project_has_clear_frontend_backend_legacy_layout() -> None:
         assert (ROOT / "backend" / "application" / f"{module}.py").is_file()
     assert (ROOT / "backend" / "infrastructure").is_dir()
     assert (ROOT / "backend" / "integrations").is_dir()
-    assert (ROOT / "backend" / "knowledge").is_dir()
     assert (ROOT / "backend" / "models").is_dir()
     assert (ROOT / "backend" / "migrations" / "versions").is_dir()
     assert (ROOT / "backend" / "scheduler").is_dir()
@@ -93,6 +91,7 @@ def test_project_has_clear_frontend_backend_legacy_layout() -> None:
     assert not (ROOT / "backend" / "agent" / "core").exists()
     assert not (ROOT / "backend" / "agent" / "tool_management").exists()
     assert not (ROOT / "backend" / "agent" / "memory").exists()
+    assert not (ROOT / "backend" / "knowledge").exists()
     assert not (ROOT / "backend" / "model_gateway").exists()
     assert not (ROOT / "apps" / "api").exists()
     assert not (ROOT / "apps" / "desktop-web").exists()
@@ -116,33 +115,19 @@ def test_backend_directory_basenames_are_unique() -> None:
     assert duplicates == {}
 
 
-def test_rag_is_primary_implementation_and_knowledge_is_compatibility_shim() -> None:
+def test_rag_is_primary_implementation_without_legacy_knowledge_package() -> None:
     rag_service = (ROOT / "backend" / "rag" / "service.py").read_text(
         encoding="utf-8"
     )
     rag_extractors = (ROOT / "backend" / "rag" / "extractors.py").read_text(
         encoding="utf-8"
     )
-    knowledge_init = (ROOT / "backend" / "knowledge" / "__init__.py").read_text(
-        encoding="utf-8"
-    )
-    knowledge_service = (ROOT / "backend" / "knowledge" / "service.py").read_text(
-        encoding="utf-8"
-    )
-    knowledge_extractors = (
-        ROOT / "backend" / "knowledge" / "extractors.py"
-    ).read_text(encoding="utf-8")
 
     assert "class KnowledgeService:" in rag_service
     assert "def extract_text(" in rag_extractors
     assert "from .extractors import" in rag_service
     assert "from knowledge" not in rag_service
-    assert "from rag import" in knowledge_init
-    assert "from rag.service import" in knowledge_service
-    assert "from rag.extractors import" in knowledge_extractors
-    assert "class KnowledgeService:" not in knowledge_init
-    assert "class KnowledgeService:" not in knowledge_service
-    assert "def extract_text(" not in knowledge_extractors
+    assert not (ROOT / "backend" / "knowledge").exists()
 
 
 def test_first_party_runtime_imports_rag_not_legacy_knowledge_package() -> None:
@@ -156,7 +141,7 @@ def test_first_party_runtime_imports_rag_not_legacy_knowledge_package() -> None:
     for path in first_party_paths:
         text = path.read_text(encoding="utf-8")
         assert "from rag import" in text, path
-        assert "from knowledge import" not in text, path
+        assert "from knowledge" not in text, path
 
 
 def test_backend_features_make_core_agent_scenarios_visible() -> None:
@@ -215,7 +200,6 @@ def test_runtime_metadata_uses_new_layout_paths() -> None:
         "backend/evaluation",
         "backend/infrastructure",
         "backend/integrations",
-        "backend/knowledge",
         "backend/rag",
         "backend/models",
         "backend/notifications",

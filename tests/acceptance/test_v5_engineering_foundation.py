@@ -67,7 +67,7 @@ def test_compose_and_ci_define_engineering_boundaries() -> None:
 
 
 def test_agent_engineering_packages_have_explicit_owners() -> None:
-    for package in ("integrations", "knowledge", "notifications"):
+    for package in ("integrations", "rag", "notifications"):
         assert (ROOT / "backend" / package / "__init__.py").is_file()
     assert (ROOT / "tests/integration/README.md").is_file()
 

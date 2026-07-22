@@ -20,7 +20,7 @@ from memory.candidates import (
 )
 
 from domain.models import Memory, MemoryPolicy
-from application.services import MemoryService
+from application.memory_service import MemoryService
 
 
 @dataclass(frozen=True)

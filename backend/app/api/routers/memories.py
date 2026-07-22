@@ -22,7 +22,8 @@ from domain.models import (
     Task,
     User,
 )
-from application.services import MemoryService, TaskServiceError
+from application.memory_service import MemoryService
+from application.task_lifecycle import TaskServiceError
 
 router = APIRouter()
 

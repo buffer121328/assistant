@@ -17,7 +17,8 @@ from agent.ports import (
 )
 
 from domain.models import Task, TaskStatus, ToolLog, User
-from application.services import MemoryService, StatusService
+from application.memory_service import MemoryService
+from application.status_service import StatusService
 from application.task_lifecycle import (
     InvalidTaskStatusTransitionError,
     TaskNotFoundError,
