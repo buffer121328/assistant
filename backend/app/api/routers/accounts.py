@@ -24,6 +24,12 @@ router = APIRouter()
 def account_service(
     request: Request, session: AsyncSession
 ) -> AccountConnectionService:
+    """处理 account service。
+
+    Args:
+        request: request 参数。
+        session: session 参数。
+    """
     try:
         cipher = CredentialCipher(
             request.app.state.settings.credential_master_key.get_secret_value()
@@ -42,6 +48,11 @@ def account_service(
 
 
 def raise_account_error(exc: AccountConnectionError) -> None:
+    """处理 raise account error。
+
+    Args:
+        exc: exc 参数。
+    """
     raise AppError(
         code=exc.code,
         message="Account connection operation failed.",
@@ -55,6 +66,13 @@ async def list_connections(
     user_id: Annotated[str, Query(min_length=1)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> AccountConnectionListResponse:
+    """列出 connections。
+
+    Args:
+        request: request 参数。
+        user_id: user_id 参数。
+        session: session 参数。
+    """
     items = await account_service(request, session).list(user_id)
     return AccountConnectionListResponse(
         items=[account_connection_response(item) for item in items]
@@ -71,6 +89,13 @@ async def create_connection(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> AccountConnectionResponse:
+    """创建 connection。
+
+    Args:
+        payload: payload 参数。
+        request: request 参数。
+        session: session 参数。
+    """
     try:
         item = await account_service(request, session).create(
             user_id=payload.user_id,
@@ -91,6 +116,15 @@ async def update_connection_status(
     user_id: str,
     new_status: str,
 ) -> AccountConnectionResponse:
+    """更新 connection status。
+
+    Args:
+        request: request 参数。
+        session: session 参数。
+        connection_id: connection_id 参数。
+        user_id: user_id 参数。
+        new_status: new_status 参数。
+    """
     try:
         item = await account_service(request, session).set_status(
             connection_id, user_id, new_status
@@ -110,6 +144,14 @@ async def test_connection(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> AccountConnectionResponse:
+    """测试 connection。
+
+    Args:
+        connection_id: connection_id 参数。
+        payload: payload 参数。
+        request: request 参数。
+        session: session 参数。
+    """
     try:
         item = await account_service(request, session).test(
             connection_id, payload.user_id
@@ -129,6 +171,14 @@ async def disable_connection(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> AccountConnectionResponse:
+    """处理 disable connection。
+
+    Args:
+        connection_id: connection_id 参数。
+        payload: payload 参数。
+        request: request 参数。
+        session: session 参数。
+    """
     return await update_connection_status(
         request=request,
         session=session,
@@ -148,6 +198,14 @@ async def revoke_connection(
     user_id: Annotated[str, Query(min_length=1)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> AccountConnectionResponse:
+    """处理 revoke connection。
+
+    Args:
+        connection_id: connection_id 参数。
+        request: request 参数。
+        user_id: user_id 参数。
+        session: session 参数。
+    """
     return await update_connection_status(
         request=request,
         session=session,

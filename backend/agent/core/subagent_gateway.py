@@ -11,6 +11,8 @@ from infrastructure.config import Settings
 
 
 class GatewaySubAgentRunner:
+    """表示 处理 gateway sub agent runner 的后端数据结构或服务对象。"""
+
     def __init__(
         self,
         *,
@@ -18,11 +20,23 @@ class GatewaySubAgentRunner:
         settings: Settings,
         observability: Observability,
     ) -> None:
+        """初始化对象实例。
+
+        Args:
+            sessionmaker: sessionmaker 参数。
+            settings: settings 参数。
+            observability: observability 参数。
+        """
         self.sessionmaker = sessionmaker
         self.settings = settings
         self.observability = observability
 
     async def run(self, request: SubAgentRequest) -> SubAgentResult:
+        """运行。
+
+        Args:
+            request: request 参数。
+        """
         messages = (
             GatewayMessage(
                 role="system",

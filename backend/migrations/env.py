@@ -20,6 +20,7 @@ PLACEHOLDER_DATABASE_URL = "postgresql+asyncpg://placeholder"
 
 
 def get_database_url() -> str:
+    """获取 database url。"""
     settings_url = load_settings().database_url
     if settings_url != PLACEHOLDER_DATABASE_URL:
         return settings_url
@@ -27,6 +28,7 @@ def get_database_url() -> str:
 
 
 def run_migrations_offline() -> None:
+    """运行 migrations offline。"""
     context.configure(
         url=get_database_url(),
         target_metadata=target_metadata,
@@ -39,6 +41,11 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection) -> None:  # type: ignore[no-untyped-def]
+    """处理 do run migrations。
+
+    Args:
+        connection: connection 参数。
+    """
     context.configure(connection=connection, target_metadata=target_metadata)
 
     with context.begin_transaction():
@@ -46,6 +53,7 @@ def do_run_migrations(connection) -> None:  # type: ignore[no-untyped-def]
 
 
 async def run_async_migrations() -> None:
+    """运行 async migrations。"""
     configuration = config.get_section(config.config_ini_section, {})
     configuration["sqlalchemy.url"] = get_database_url()
     connectable = async_engine_from_config(
@@ -61,6 +69,7 @@ async def run_async_migrations() -> None:
 
 
 def run_migrations_online() -> None:
+    """运行 migrations online。"""
     import asyncio
 
     asyncio.run(run_async_migrations())

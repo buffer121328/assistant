@@ -1,0 +1,58 @@
+{
+  "version": "v12-06",
+  "cases": [
+    {
+      "id": "citation-present",
+      "category": "citation",
+      "passed": true,
+      "evidence": [
+        "source_id",
+        "citation"
+      ]
+    },
+    {
+      "id": "no-answer-explicit",
+      "category": "abstention",
+      "passed": true,
+      "evidence": [
+        "answerable=false"
+      ]
+    },
+    {
+      "id": "deleted-document-hidden",
+      "category": "deletion",
+      "passed": true,
+      "evidence": [
+        "deleted status",
+        "zero chunks"
+      ]
+    },
+    {
+      "id": "document-instruction-untrusted",
+      "category": "injection",
+      "passed": true,
+      "evidence": [
+        "untrusted_document",
+        "tool allowlist"
+      ]
+    },
+    {
+      "id": "conflicting-sources-traced",
+      "category": "conflict",
+      "passed": true,
+      "evidence": [
+        "source ids preserved",
+        "no silent overwrite"
+      ]
+    },
+    {
+      "id": "long-document-bounded-chunks",
+      "category": "long_document",
+      "passed": true,
+      "evidence": [
+        "bounded chunk content",
+        "bounded result limit"
+      ]
+    }
+  ]
+}

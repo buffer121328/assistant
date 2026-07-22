@@ -18,6 +18,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    """执行数据库迁移升级步骤。"""
     with op.batch_alter_table("processed_messages") as batch_op:
         batch_op.drop_constraint(
             "uq_processed_messages_platform_message_id",
@@ -45,6 +46,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """执行数据库迁移回滚步骤。"""
     op.drop_index("ix_model_logs_agent_run_id", table_name="model_logs")
     op.drop_column("model_logs", "agent_run_id")
 

@@ -7,41 +7,62 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from model_gateway import sanitize_text
 
-from domain.models import Approval, ApprovalStatus, ApprovalType, Task, TaskStatus, utc_now
+from domain.models import (
+    Approval,
+    ApprovalStatus,
+    ApprovalType,
+    Task,
+    TaskStatus,
+    utc_now,
+)
 from infrastructure.repositories import ApprovalRepository, TaskCreate, TaskRepository
 
 
 class TaskServiceError(ValueError):
+    """表示 处理 task service error 的后端数据结构或服务对象。"""
+
     code = "task_service_error"
     status_code = 400
 
 
 class UserNotFoundError(TaskServiceError):
+    """表示 处理 user not found error 的后端数据结构或服务对象。"""
+
     code = "user_not_found"
     status_code = 404
 
 
 class TaskNotFoundError(TaskServiceError):
+    """表示 处理 task not found error 的后端数据结构或服务对象。"""
+
     code = "task_not_found"
     status_code = 404
 
 
 class InvalidTaskStatusTransitionError(TaskServiceError):
+    """表示 处理 invalid task status transition error 的后端数据结构或服务对象。"""
+
     code = "invalid_task_status_transition"
     status_code = 409
 
 
 class ApprovalNotFoundError(TaskServiceError):
+    """表示 处理 approval not found error 的后端数据结构或服务对象。"""
+
     code = "approval_not_found"
     status_code = 404
 
 
 class ApprovalDecisionConflictError(TaskServiceError):
+    """表示 处理 approval decision conflict error 的后端数据结构或服务对象。"""
+
     code = "approval_decision_conflict"
     status_code = 409
 
 
 class InvalidCommandTaskError(TaskServiceError):
+    """表示 处理 invalid command task error 的后端数据结构或服务对象。"""
+
     code = "invalid_command_task"
     status_code = 400
 
@@ -70,6 +91,11 @@ DISPATCHABLE_TASK_STATUSES = TERMINAL_TASK_STATUSES | {
 def _normalize_approval_requests(
     requests: Iterable[object],
 ) -> tuple[tuple[str, str, str, str | None], ...]:
+    """执行 规范化 approval requests 的内部辅助逻辑。
+
+    Args:
+        requests: requests 参数。
+    """
     normalized: list[tuple[str, str, str, str | None]] = []
     for request in requests:
         if isinstance(request, Mapping):
@@ -102,12 +128,20 @@ def _normalize_approval_requests(
 
 
 class TaskService:
+    """表示 处理 task service 的后端数据结构或服务对象。"""
+
     def __init__(
         self,
         session: AsyncSession,
         *,
         success_hook: Callable[[Task], Awaitable[None]] | None = None,
     ) -> None:
+        """初始化对象实例。
+
+        Args:
+            session: session 参数。
+            success_hook: success_hook 参数。
+        """
         self.session = session
         self.repository = TaskRepository(session)
         self.success_hook = success_hook
@@ -124,6 +158,18 @@ class TaskService:
         conversation_id: str | None = None,
         commit: bool = True,
     ) -> Task:
+        """创建 task。
+
+        Args:
+            user_id: user_id 参数。
+            platform: platform 参数。
+            task_type: task_type 参数。
+            input_text: input_text 参数。
+            workflow_key: workflow_key 参数。
+            model_class: model_class 参数。
+            conversation_id: conversation_id 参数。
+            commit: commit 参数。
+        """
         if not await self.repository.user_exists(user_id):
             raise UserNotFoundError(f"User not found: {user_id}")
 
@@ -161,23 +207,45 @@ class TaskService:
         return task
 
     async def get_task(self, task_id: str) -> Task:
+        """获取 task。
+
+        Args:
+            task_id: task_id 参数。
+        """
         task = await self.repository.get_task(task_id)
         if task is None:
             raise TaskNotFoundError(f"Task not found: {task_id}")
         return task
 
     async def get_task_by_user(self, *, task_id: str, user_id: str) -> Task:
+        """获取 task by user。
+
+        Args:
+            task_id: task_id 参数。
+            user_id: user_id 参数。
+        """
         task = await self.repository.get_task_by_user(task_id=task_id, user_id=user_id)
         if task is None:
             raise TaskNotFoundError(f"Task not found: {task_id}")
         return task
 
     async def list_tasks(self, user_id: str) -> list[Task]:
+        """列出 tasks。
+
+        Args:
+            user_id: user_id 参数。
+        """
         if not await self.repository.user_exists(user_id):
             raise UserNotFoundError(f"User not found: {user_id}")
         return await self.repository.list_tasks_by_user(user_id)
 
     async def update_status(self, task_id: str, status: TaskStatus) -> Task:
+        """更新 status。
+
+        Args:
+            task_id: task_id 参数。
+            status: status 参数。
+        """
         task = await self.get_task(task_id)
         self._validate_transition(task, status)
         task.status = status.value
@@ -186,6 +254,12 @@ class TaskService:
         return task
 
     async def save_success(self, task_id: str, result_text: str) -> Task:
+        """保存 success。
+
+        Args:
+            task_id: task_id 参数。
+            result_text: result_text 参数。
+        """
         task = await self.get_task(task_id)
         self._validate_transition(task, TaskStatus.SUCCESS)
         task.status = TaskStatus.SUCCESS.value
@@ -202,6 +276,12 @@ class TaskService:
         return task
 
     async def save_failure(self, task_id: str, error_message: str) -> Task:
+        """保存 failure。
+
+        Args:
+            task_id: task_id 参数。
+            error_message: error_message 参数。
+        """
         task = await self.get_task(task_id)
         self._validate_transition(task, TaskStatus.FAILED)
         task.status = TaskStatus.FAILED.value
@@ -220,6 +300,14 @@ class TaskService:
         requested_tools: Iterable[str] = (),
         approval_requests: Iterable[object] = (),
     ) -> Task:
+        """保存 waiting approval。
+
+        Args:
+            task_id: task_id 参数。
+            message: message 参数。
+            requested_tools: requested_tools 参数。
+            approval_requests: approval_requests 参数。
+        """
         task = await self.get_task(task_id)
         self._validate_transition(task, TaskStatus.WAITING_APPROVAL)
         task.status = TaskStatus.WAITING_APPROVAL.value
@@ -265,6 +353,12 @@ class TaskService:
         return task
 
     async def _append_assistant_message(self, task: Task, content: str) -> None:
+        """执行 处理 append assistant message 的内部辅助逻辑。
+
+        Args:
+            task: task 参数。
+            content: content 参数。
+        """
         if task.conversation_id is None:
             return
         from domain.conversations import ConversationService
@@ -278,6 +372,12 @@ class TaskService:
         )
 
     def _validate_transition(self, task: Task, next_status: TaskStatus) -> None:
+        """执行 校验 transition 的内部辅助逻辑。
+
+        Args:
+            task: task 参数。
+            next_status: next_status 参数。
+        """
         current_status = TaskStatus(task.status)
         if next_status not in VALID_TRANSITIONS.get(current_status, set()):
             raise InvalidTaskStatusTransitionError(
@@ -288,18 +388,33 @@ class TaskService:
 
 @dataclass(frozen=True)
 class ApprovalDecisionResult:
+    """表示 处理 approval decision result 的后端数据结构或服务对象。"""
+
     approval: Approval
     task: Task
     changed: bool
 
 
 class ApprovalService:
+    """表示 处理 approval service 的后端数据结构或服务对象。"""
+
     def __init__(self, session: AsyncSession) -> None:
+        """初始化对象实例。
+
+        Args:
+            session: session 参数。
+        """
         self.session = session
         self.task_repository = TaskRepository(session)
         self.repository = ApprovalRepository(session)
 
     async def list_for_owner(self, *, task_id: str, user_id: str) -> list[Approval]:
+        """列出 for owner。
+
+        Args:
+            task_id: task_id 参数。
+            user_id: user_id 参数。
+        """
         await self._get_owned_task(task_id=task_id, user_id=user_id)
         return await self.repository.list_by_task(task_id)
 
@@ -311,6 +426,14 @@ class ApprovalService:
         user_id: str,
         decision: ApprovalStatus,
     ) -> ApprovalDecisionResult:
+        """处理 decide。
+
+        Args:
+            task_id: task_id 参数。
+            approval_id: approval_id 参数。
+            user_id: user_id 参数。
+            decision: decision 参数。
+        """
         if decision is ApprovalStatus.PENDING:
             raise ApprovalDecisionConflictError("Pending is not a decision")
 
@@ -359,6 +482,12 @@ class ApprovalService:
         )
 
     async def _get_owned_task(self, *, task_id: str, user_id: str) -> Task:
+        """执行 获取 owned task 的内部辅助逻辑。
+
+        Args:
+            task_id: task_id 参数。
+            user_id: user_id 参数。
+        """
         task = await self.task_repository.get_task_by_user(
             task_id=task_id,
             user_id=user_id,

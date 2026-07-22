@@ -14,6 +14,11 @@ SKILL_TOOL_VERSION = "v10-skills-v1"
 
 
 def build_skill_tool_descriptors(*, enabled: bool = True) -> tuple[ToolDescriptor, ...]:
+    """构建 skill tool descriptors。
+
+    Args:
+        enabled: enabled 参数。
+    """
     return tuple(
         ToolDescriptor(
             name=name,
@@ -33,7 +38,18 @@ def build_skill_tool_descriptors(*, enabled: bool = True) -> tuple[ToolDescripto
 
 
 def build_skill_tool_specs(service: SkillAcquisitionService) -> tuple[ToolSpec, ...]:
+    """构建 skill tool specs。
+
+    Args:
+        service: service 参数。
+    """
+
     async def search(invocation: ToolInvocation) -> Any:
+        """搜索。
+
+        Args:
+            invocation: invocation 参数。
+        """
         decision = await service.recommend(
             capability_gap=str(invocation.arguments.get("capability_gap") or ""),
             query=str(invocation.arguments.get("query") or ""),
@@ -43,6 +59,11 @@ def build_skill_tool_specs(service: SkillAcquisitionService) -> tuple[ToolSpec, 
         return decision.to_dict()
 
     async def recommend(invocation: ToolInvocation) -> Any:
+        """处理 recommend。
+
+        Args:
+            invocation: invocation 参数。
+        """
         decision = await service.recommend(
             capability_gap=str(invocation.arguments.get("capability_gap") or ""),
             query=str(invocation.arguments.get("query") or ""),
@@ -53,12 +74,19 @@ def build_skill_tool_specs(service: SkillAcquisitionService) -> tuple[ToolSpec, 
         return decision.to_dict()
 
     async def install_candidate(invocation: ToolInvocation) -> Any:
+        """处理 install candidate。
+
+        Args:
+            invocation: invocation 参数。
+        """
         candidate = _candidate_from_args(invocation.arguments)
         package = invocation.arguments.get("package_bytes")
         if not isinstance(package, bytes):
             package_b64 = invocation.arguments.get("package_b64")
             if not isinstance(package_b64, str):
-                raise ValueError("package_b64 must be provided for marketplace installs")
+                raise ValueError(
+                    "package_b64 must be provided for marketplace installs"
+                )
             package = base64.b64decode(package_b64.encode("ascii"), validate=True)
         item = await service.install_candidate(
             user_id=invocation.user_id,
@@ -68,6 +96,11 @@ def build_skill_tool_specs(service: SkillAcquisitionService) -> tuple[ToolSpec, 
         return {"name": item.name, "enabled": item.enabled, "source": item.source}
 
     async def propose_create(invocation: ToolInvocation) -> Any:
+        """处理 propose create。
+
+        Args:
+            invocation: invocation 参数。
+        """
         change = await service.propose_create(
             session=service.lifecycle.session,
             task_id=invocation.task_id,
@@ -76,17 +109,40 @@ def build_skill_tool_specs(service: SkillAcquisitionService) -> tuple[ToolSpec, 
             instructions=str(invocation.arguments.get("instructions") or ""),
             evidence=str(invocation.arguments.get("evidence") or ""),
         )
-        return {"change_id": change.id, "status": change.status, "target_name": change.target_name}
+        return {
+            "change_id": change.id,
+            "status": change.status,
+            "target_name": change.target_name,
+        }
 
     async def enable(invocation: ToolInvocation) -> Any:
-        item = await service.enable(user_id=invocation.user_id, name=str(invocation.arguments.get("name") or ""))
+        """处理 enable。
+
+        Args:
+            invocation: invocation 参数。
+        """
+        item = await service.enable(
+            user_id=invocation.user_id, name=str(invocation.arguments.get("name") or "")
+        )
         return {"name": item.name, "enabled": item.enabled}
 
     async def disable(invocation: ToolInvocation) -> Any:
-        item = await service.disable(user_id=invocation.user_id, name=str(invocation.arguments.get("name") or ""))
+        """处理 disable。
+
+        Args:
+            invocation: invocation 参数。
+        """
+        item = await service.disable(
+            user_id=invocation.user_id, name=str(invocation.arguments.get("name") or "")
+        )
         return {"name": item.name, "enabled": item.enabled}
 
     async def refresh(invocation: ToolInvocation) -> Any:
+        """处理 refresh。
+
+        Args:
+            invocation: invocation 参数。
+        """
         return service.refresh_capabilities()
 
     handlers = {
@@ -113,12 +169,22 @@ def build_skill_tool_specs(service: SkillAcquisitionService) -> tuple[ToolSpec, 
 
 
 def _string_list(value: object) -> tuple[str, ...]:
+    """执行 处理 string list 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+    """
     if not isinstance(value, Sequence) or isinstance(value, str | bytes):
         return ()
     return tuple(str(item) for item in value if str(item).strip())
 
 
 def _candidate_from_args(arguments: dict[str, Any]) -> SkillCandidate:
+    """执行 处理 candidate from args 的内部辅助逻辑。
+
+    Args:
+        arguments: arguments 参数。
+    """
     return SkillCandidate(
         skill_id=str(arguments.get("skill_id") or arguments.get("name") or ""),
         name=str(arguments.get("name") or ""),
@@ -137,37 +203,92 @@ _SKILL_TOOL_DEFS: tuple[tuple[str, str, str, dict[str, Any]], ...] = (
         "skills.search",
         "Search local and marketplace Skills for a capability gap",
         "L1",
-        {"type": "object", "properties": {"query": {"type": "string"}, "capability_gap": {"type": "string"}, "tags": _STRING_ARRAY, "allow_create": {"type": "boolean", "default": True}}, "additionalProperties": False},
+        {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "capability_gap": {"type": "string"},
+                "tags": _STRING_ARRAY,
+                "allow_create": {"type": "boolean", "default": True},
+            },
+            "additionalProperties": False,
+        },
     ),
     (
         "skills.recommend",
         "Recommend reuse, install, compose, create, or no safe Skill option",
         "L1",
-        {"type": "object", "properties": {"query": {"type": "string"}, "capability_gap": {"type": "string"}, "tags": _STRING_ARRAY, "composable_tools": _STRING_ARRAY, "allow_create": {"type": "boolean", "default": True}}, "additionalProperties": False},
+        {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "capability_gap": {"type": "string"},
+                "tags": _STRING_ARRAY,
+                "composable_tools": _STRING_ARRAY,
+                "allow_create": {"type": "boolean", "default": True},
+            },
+            "additionalProperties": False,
+        },
     ),
     (
         "skills.install_candidate",
         "Install an approved marketplace Skill package as disabled by default",
         "L3",
-        {"type": "object", "properties": {"skill_id": {"type": "string"}, "name": {"type": "string"}, "display_name": {"type": "string"}, "summary": {"type": "string"}, "version": {"type": "string"}, "source": {"type": "string"}, "trust_level": {"type": "string"}, "capability_match": {"type": "number", "default": 1.0}, "dependency_risk": {"type": "string", "default": "low"}, "permission_risk": {"type": "string", "default": "low"}, "package_b64": {"type": "string"}}, "required": ["name", "package_b64"], "additionalProperties": False},
+        {
+            "type": "object",
+            "properties": {
+                "skill_id": {"type": "string"},
+                "name": {"type": "string"},
+                "display_name": {"type": "string"},
+                "summary": {"type": "string"},
+                "version": {"type": "string"},
+                "source": {"type": "string"},
+                "trust_level": {"type": "string"},
+                "capability_match": {"type": "number", "default": 1.0},
+                "dependency_risk": {"type": "string", "default": "low"},
+                "permission_risk": {"type": "string", "default": "low"},
+                "package_b64": {"type": "string"},
+            },
+            "required": ["name", "package_b64"],
+            "additionalProperties": False,
+        },
     ),
     (
         "skills.propose_create",
         "Create a governed Skill candidate proposal without enabling it",
         "L2",
-        {"type": "object", "properties": {"name": {"type": "string"}, "instructions": {"type": "string"}, "evidence": {"type": "string"}}, "required": ["name", "instructions"], "additionalProperties": False},
+        {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "instructions": {"type": "string"},
+                "evidence": {"type": "string"},
+            },
+            "required": ["name", "instructions"],
+            "additionalProperties": False,
+        },
     ),
     (
         "skills.enable",
         "Enable an installed managed Skill with governance",
         "L2",
-        {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"], "additionalProperties": False},
+        {
+            "type": "object",
+            "properties": {"name": {"type": "string"}},
+            "required": ["name"],
+            "additionalProperties": False,
+        },
     ),
     (
         "skills.disable",
         "Disable an installed managed Skill",
         "L2",
-        {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"], "additionalProperties": False},
+        {
+            "type": "object",
+            "properties": {"name": {"type": "string"}},
+            "required": ["name"],
+            "additionalProperties": False,
+        },
     ),
     (
         "skills.refresh_capabilities",

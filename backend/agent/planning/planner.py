@@ -14,6 +14,8 @@ MAX_PLAN_TOOLS = 15
 
 @dataclass(frozen=True)
 class ExecutionPlan:
+    """表示 处理 execution plan 的后端数据结构或服务对象。"""
+
     goal: str
     steps: tuple[str, ...]
     allowed_tools: tuple[str, ...]
@@ -38,16 +40,28 @@ class ExecutionPlan:
 
 
 class PlanningLayerProtocol(Protocol):
+    """表示 处理 planning layer protocol 的后端数据结构或服务对象。"""
+
     def build_plan(
         self,
         *,
         task: Any,
         profile: AgentProfile,
         context: TaskContext,
-    ) -> ExecutionPlan: ...
+    ) -> ExecutionPlan:
+        """构建 plan。
+
+        Args:
+            task: task 参数。
+            profile: profile 参数。
+            context: context 参数。
+        """
+        ...
 
 
 class DefaultPlanningLayer:
+    """表示 处理 default planning layer 的后端数据结构或服务对象。"""
+
     def __init__(
         self,
         *,
@@ -55,6 +69,13 @@ class DefaultPlanningLayer:
         max_timeout_seconds: float = MAX_PLAN_TIMEOUT_SECONDS,
         max_tool_count: int = MAX_PLAN_TOOLS,
     ) -> None:
+        """初始化对象实例。
+
+        Args:
+            max_steps: max_steps 参数。
+            max_timeout_seconds: max_timeout_seconds 参数。
+            max_tool_count: max_tool_count 参数。
+        """
         self.max_steps = max(1, min(max_steps, MAX_PLAN_STEPS))
         self.max_timeout_seconds = max(
             1.0,
@@ -69,6 +90,13 @@ class DefaultPlanningLayer:
         profile: AgentProfile,
         context: TaskContext,
     ) -> ExecutionPlan:
+        """构建 plan。
+
+        Args:
+            task: task 参数。
+            profile: profile 参数。
+            context: context 参数。
+        """
         steps = profile.default_steps or ("读取任务上下文", "完成输出")
         allowed_tools = context.allowed_tools[: self.max_tool_count]
         remaining = max(0, self.max_tool_count - len(allowed_tools))
@@ -112,6 +140,12 @@ class DefaultPlanningLayer:
 
 
 def _plan_goal(input_text: str, task_type: str) -> str:
+    """执行 处理 plan goal 的内部辅助逻辑。
+
+    Args:
+        input_text: input_text 参数。
+        task_type: task_type 参数。
+    """
     command = f"/{task_type}"
     if input_text.startswith(command):
         goal = input_text.removeprefix(command).strip()

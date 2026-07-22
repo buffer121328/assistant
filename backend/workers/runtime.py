@@ -87,7 +87,10 @@ from infrastructure.agent_ports import (
     SqlAlchemyUserLookupPort,
 )
 from infrastructure.checkpoints import open_agent_checkpointer
-from agent.governance.capability_routing import CapabilityRoutingService, RoutingModelAdapter
+from agent.governance.capability_routing import (
+    CapabilityRoutingService,
+    RoutingModelAdapter,
+)
 from channels.langbot.service import LangBotResultClient
 from domain.models import AgentRun, EvolutionChange, Task, TaskStatus, utc_now
 from infrastructure.observability import build_observability
@@ -95,6 +98,8 @@ from agent.review.gateway import GatewayJudgeModel
 from domain.services import DISPATCHABLE_TASK_STATUSES, ResultDispatcher
 from agent.core.subagent_gateway import GatewaySubAgentRunner
 from domain.task_events import TASK_EVENT_STATUS, TaskEventPublisher
+
+BUILTIN_SKILL_ROOT = Path(__file__).resolve().parents[1] / "resources" / "skillpacks"
 
 
 async def execute_task_by_id(
@@ -112,6 +117,22 @@ async def execute_task_by_id(
     observability: Observability | None = None,
     judge_model: JudgeModel | None = None,
 ) -> Task:
+    """执行 task by id。
+
+    Args:
+        task_id: task_id 参数。
+        sessionmaker: sessionmaker 参数。
+        settings: settings 参数。
+        langgraph_executor: langgraph_executor 参数。
+        tavily_client: tavily_client 参数。
+        langbot_client: langbot_client 参数。
+        routing_adapter: routing_adapter 参数。
+        capability_registry: capability_registry 参数。
+        agent_model: agent_model 参数。
+        checkpointer: checkpointer 参数。
+        observability: observability 参数。
+        judge_model: judge_model 参数。
+    """
     sensitive_values = _sensitive_values(settings)
     runtime_observability = observability or build_observability(settings)
     owns_observability = observability is None
@@ -235,6 +256,23 @@ async def _execute_with_runtime_dependencies(
     observability: Observability,
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> Task:
+    """执行 执行 with runtime dependencies 的内部辅助逻辑。
+
+    Args:
+        task_id: task_id 参数。
+        agent_run_id: agent_run_id 参数。
+        session: session 参数。
+        settings: settings 参数。
+        sensitive_values: sensitive_values 参数。
+        langgraph_executor: langgraph_executor 参数。
+        tavily_client: tavily_client 参数。
+        routing_adapter: routing_adapter 参数。
+        capability_registry: capability_registry 参数。
+        agent_model: agent_model 参数。
+        checkpointer: checkpointer 参数。
+        observability: observability 参数。
+        sessionmaker: sessionmaker 参数。
+    """
     if langgraph_executor is not None:
         return await _execute_with_harness(
             task_id,
@@ -301,6 +339,23 @@ async def _execute_with_harness(
     observability: Observability,
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> Task:
+    """执行 执行 with harness 的内部辅助逻辑。
+
+    Args:
+        task_id: task_id 参数。
+        agent_run_id: agent_run_id 参数。
+        session: session 参数。
+        settings: settings 参数。
+        sensitive_values: sensitive_values 参数。
+        langgraph_executor: langgraph_executor 参数。
+        tavily_client: tavily_client 参数。
+        routing_adapter: routing_adapter 参数。
+        capability_registry: capability_registry 参数。
+        agent_model: agent_model 参数。
+        checkpointer: checkpointer 参数。
+        observability: observability 参数。
+        sessionmaker: sessionmaker 参数。
+    """
     pending_changes = list(
         await session.scalars(
             select(EvolutionChange).where(
@@ -315,9 +370,7 @@ async def _execute_with_harness(
             prompt_root=settings.managed_prompts_root,
             skill_root=settings.managed_skills_root,
             skill_store=ManagedSkillStore(
-                builtin_root=(
-                    Path(__file__).resolve().parents[2] / "skills"
-                ),
+                builtin_root=(BUILTIN_SKILL_ROOT),
                 managed_root=settings.managed_skills_root,
             ),
             skill_package_root=settings.skill_packages_root,
@@ -327,9 +380,11 @@ async def _execute_with_harness(
 
     task = await session.get(Task, task_id)
     if task is not None and task.task_type == "agent":
+        # fmt: off
         registry = capability_registry or build_default_registry(
-            Path(__file__).resolve().parents[2] / "skills"
+            BUILTIN_SKILL_ROOT
         )
+        # fmt: on
         await CapabilityRoutingService(
             session=session,
             settings=settings,
@@ -497,7 +552,9 @@ async def _execute_with_harness(
         browser=browser,
         sandbox=sandbox,
         email_provider=(external_providers if "smtp" in active_providers else None),
-        calendar_provider=(external_providers if "caldav" in active_providers else None),
+        calendar_provider=(
+            external_providers if "caldav" in active_providers else None
+        ),
     )
     browser_specs = (
         build_browser_tool_specs(browser_interactor)
@@ -505,11 +562,12 @@ async def _execute_with_harness(
         else ()
     )
     skill_store = ManagedSkillStore(
-        builtin_root=Path(__file__).resolve().parents[2] / "resources" / "skillpacks",
+        builtin_root=BUILTIN_SKILL_ROOT,
         managed_root=settings.managed_skills_root,
     )
 
     def refresh_skill_registry() -> None:
+        """处理 refresh skill registry。"""
         return None
 
     skill_specs = build_skill_tool_specs(
@@ -521,7 +579,13 @@ async def _execute_with_harness(
             )
         )
     )
+
     def enqueue_background_task(background_task_id: str) -> bool:
+        """处理 enqueue background task。
+
+        Args:
+            background_task_id: background_task_id 参数。
+        """
         from workers.worker import enqueue_task_execution
 
         return enqueue_task_execution(
@@ -538,11 +602,25 @@ async def _execute_with_harness(
         AgentMemoryToolService(session=session, semantic_memory=semantic_memory)
     )
     prompt_store = PromptStore(
-        defaults_root=Path(__file__).resolve().parents[1] / "resources" / "prompts" / "defaults",
+        defaults_root=Path(__file__).resolve().parents[1]
+        / "resources"
+        / "prompts"
+        / "defaults",
         managed_root=settings.managed_prompts_root,
     )
-    prompt_specs = build_prompt_tool_specs(PromptToolService(session=session, store=prompt_store))
-    for spec in (*workspace_specs, *personal_specs, *browser_specs, *skill_specs, *task_specs, *schedule_specs, *memory_specs, *prompt_specs):
+    prompt_specs = build_prompt_tool_specs(
+        PromptToolService(session=session, store=prompt_store)
+    )
+    for spec in (
+        *workspace_specs,
+        *personal_specs,
+        *browser_specs,
+        *skill_specs,
+        *task_specs,
+        *schedule_specs,
+        *memory_specs,
+        *prompt_specs,
+    ):
         descriptor = tool_snapshot.get(spec.name)
         if descriptor is None or not descriptor.enabled:
             continue
@@ -564,6 +642,12 @@ async def _execute_with_harness(
     event_publisher = TaskEventPublisher(sessionmaker)
 
     async def publish_event(event_type: str, payload: dict[str, object]) -> None:
+        """发布 event。
+
+        Args:
+            event_type: event_type 参数。
+            payload: payload 参数。
+        """
         current = await session.get(Task, task_id)
         if current is not None:
             await event_publisher.publish(
@@ -633,16 +717,25 @@ async def _execute_with_harness(
 
 
 async def _start_agent_run(session: AsyncSession, task: Task) -> AgentRun:
+    """执行 启动 agent run 的内部辅助逻辑。
+
+    Args:
+        session: session 参数。
+        task: task 参数。
+    """
     last_error: IntegrityError | None = None
     for _ in range(3):
-        attempt_no = int(
-            await session.scalar(
-                select(func.coalesce(func.max(AgentRun.attempt_no), 0)).where(
-                    AgentRun.task_id == task.id
+        attempt_no = (
+            int(
+                await session.scalar(
+                    select(func.coalesce(func.max(AgentRun.attempt_no), 0)).where(
+                        AgentRun.task_id == task.id
+                    )
                 )
+                or 0
             )
-            or 0
-        ) + 1
+            + 1
+        )
         agent_run = AgentRun(
             task_id=task.id,
             user_id=task.user_id,
@@ -674,6 +767,14 @@ async def _finish_agent_run(
     task: Task,
     sensitive_values: tuple[str | None, ...],
 ) -> AgentRun:
+    """执行 处理 finish agent run 的内部辅助逻辑。
+
+    Args:
+        session: session 参数。
+        agent_run: agent_run 参数。
+        task: task 参数。
+        sensitive_values: sensitive_values 参数。
+    """
     agent_run.status = task.status
     agent_run.ended_at = utc_now()
     agent_run.model_class = task.model_class
@@ -694,6 +795,14 @@ async def _record_worker_failure(
     error: Exception,
     sensitive_values: tuple[str | None, ...],
 ) -> Task:
+    """执行 记录 worker failure 的内部辅助逻辑。
+
+    Args:
+        session: session 参数。
+        task_id: task_id 参数。
+        error: error 参数。
+        sensitive_values: sensitive_values 参数。
+    """
     await session.rollback()
     task = await session.get(Task, task_id)
     if task is None:
@@ -722,6 +831,13 @@ async def _sanitize_failed_task(
     task: Task,
     sensitive_values: tuple[str | None, ...],
 ) -> Task:
+    """执行 处理 sanitize failed task 的内部辅助逻辑。
+
+    Args:
+        session: session 参数。
+        task: task 参数。
+        sensitive_values: sensitive_values 参数。
+    """
     if task.status != TaskStatus.FAILED.value or task.error_message is None:
         return task
 
@@ -744,6 +860,13 @@ def _safe_worker_summary(
     sensitive_values: tuple[str | None, ...],
     limit: int = 1000,
 ) -> str:
+    """执行 处理 safe worker summary 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+        sensitive_values: sensitive_values 参数。
+        limit: limit 参数。
+    """
     text = sanitize_text(value, extra_sensitive_values=sensitive_values).strip()
     if "traceback" in text.lower():
         text = "内部错误已脱敏"
@@ -753,6 +876,11 @@ def _safe_worker_summary(
 
 
 def _sensitive_values(settings: Settings) -> tuple[str | None, ...]:
+    """执行 处理 sensitive values 的内部辅助逻辑。
+
+    Args:
+        settings: settings 参数。
+    """
     return (
         settings.langbot_webhook_secret,
         settings.langbot_api_base_url,

@@ -30,12 +30,23 @@ def create_app(
     *,
     observability: Observability | None = None,
 ) -> FastAPI:
+    """创建 app。
+
+    Args:
+        settings: settings 参数。
+        observability: observability 参数。
+    """
     settings = settings or load_settings()
     logger = configure_logging(settings.log_level)
     runtime_observability = observability or build_observability(settings)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        """处理 lifespan。
+
+        Args:
+            _app: _app 参数。
+        """
         try:
             yield
         finally:
@@ -47,7 +58,9 @@ def create_app(
     app.state.observability = runtime_observability
     app.state.db_sessionmaker = create_database_sessionmaker(settings.database_url)
     app.state.connection_tester = DefaultConnectionTester()
-    builtin_skills_root = Path(__file__).resolve().parents[1] / "resources" / "skillpacks"
+    builtin_skills_root = (
+        Path(__file__).resolve().parents[1] / "resources" / "skillpacks"
+    )
     app.state.managed_skill_store = ManagedSkillStore(
         builtin_root=builtin_skills_root,
         managed_root=settings.managed_skills_root,

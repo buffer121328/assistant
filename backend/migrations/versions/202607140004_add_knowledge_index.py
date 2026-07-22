@@ -16,6 +16,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    """执行数据库迁移升级步骤。"""
     op.create_table(
         "knowledge_documents",
         sa.Column("id", sa.String(36), nullable=False),
@@ -32,9 +33,15 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("user_id", "source_path", name="uq_knowledge_documents_user_source"),
+        sa.UniqueConstraint(
+            "user_id", "source_path", name="uq_knowledge_documents_user_source"
+        ),
     )
-    op.create_index("ix_knowledge_documents_user_status", "knowledge_documents", ["user_id", "status"])
+    op.create_index(
+        "ix_knowledge_documents_user_status",
+        "knowledge_documents",
+        ["user_id", "status"],
+    )
     op.create_table(
         "knowledge_chunks",
         sa.Column("id", sa.String(36), nullable=False),
@@ -46,9 +53,15 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["document_id"], ["knowledge_documents.id"]),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("document_id", "ordinal", name="uq_knowledge_chunks_document_ordinal"),
+        sa.UniqueConstraint(
+            "document_id", "ordinal", name="uq_knowledge_chunks_document_ordinal"
+        ),
     )
-    op.create_index("ix_knowledge_chunks_user_document", "knowledge_chunks", ["user_id", "document_id"])
+    op.create_index(
+        "ix_knowledge_chunks_user_document",
+        "knowledge_chunks",
+        ["user_id", "document_id"],
+    )
     op.create_table(
         "import_audits",
         sa.Column("id", sa.String(36), nullable=False),
@@ -62,13 +75,18 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_import_audits_user_created", "import_audits", ["user_id", "created_at"])
+    op.create_index(
+        "ix_import_audits_user_created", "import_audits", ["user_id", "created_at"]
+    )
 
 
 def downgrade() -> None:
+    """执行数据库迁移回滚步骤。"""
     op.drop_index("ix_import_audits_user_created", table_name="import_audits")
     op.drop_table("import_audits")
     op.drop_index("ix_knowledge_chunks_user_document", table_name="knowledge_chunks")
     op.drop_table("knowledge_chunks")
-    op.drop_index("ix_knowledge_documents_user_status", table_name="knowledge_documents")
+    op.drop_index(
+        "ix_knowledge_documents_user_status", table_name="knowledge_documents"
+    )
     op.drop_table("knowledge_documents")

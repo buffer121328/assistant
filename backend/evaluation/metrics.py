@@ -7,6 +7,8 @@ from .models import EvaluationRubric
 
 @dataclass(frozen=True)
 class RubricScore:
+    """表示 处理 rubric score 的后端数据结构或服务对象。"""
+
     score: float
     passed: bool
     reason: str
@@ -16,9 +18,19 @@ class DeterministicRubricMetric:
     """Framework-neutral deterministic checks used by pytest and local CI."""
 
     def __init__(self, rubric: EvaluationRubric) -> None:
+        """初始化对象实例。
+
+        Args:
+            rubric: rubric 参数。
+        """
         self.rubric = rubric
 
     def measure(self, actual_output: str) -> RubricScore:
+        """处理 measure。
+
+        Args:
+            actual_output: actual_output 参数。
+        """
         missing_required = tuple(
             phrase
             for phrase in self.rubric.required_phrases
@@ -30,8 +42,14 @@ class DeterministicRubricMetric:
             if phrase in actual_output
         )
         checks = [
-            *(phrase not in missing_required for phrase in self.rubric.required_phrases),
-            *(phrase not in present_forbidden for phrase in self.rubric.forbidden_phrases),
+            *(
+                phrase not in missing_required
+                for phrase in self.rubric.required_phrases
+            ),
+            *(
+                phrase not in present_forbidden
+                for phrase in self.rubric.forbidden_phrases
+            ),
             len(actual_output) >= self.rubric.min_length,
             len(actual_output) <= self.rubric.max_length,
         ]

@@ -9,6 +9,8 @@ from agent.skill_management import SkillDefinition
 
 @dataclass(frozen=True)
 class TaskContext:
+    """表示 处理 task context 的后端数据结构或服务对象。"""
+
     task_id: str
     user_id: str
     task_type: str
@@ -34,6 +36,8 @@ class TaskContext:
 
 
 class ContextBuilder:
+    """表示 处理 context builder 的后端数据结构或服务对象。"""
+
     def build(
         self,
         *,
@@ -50,6 +54,22 @@ class ContextBuilder:
         context_trace: tuple[dict[str, Any], ...] = (),
         conversation_compacted: bool = False,
     ) -> TaskContext:
+        """构建。
+
+        Args:
+            task: task 参数。
+            user: user 参数。
+            memory_summary: memory_summary 参数。
+            skills: skills 参数。
+            capabilities: capabilities 参数。
+            search_query: search_query 参数。
+            sources: sources 参数。
+            conversation_history: conversation_history 参数。
+            conversation_summary: conversation_summary 参数。
+            memory_blocks: memory_blocks 参数。
+            context_trace: context_trace 参数。
+            conversation_compacted: conversation_compacted 参数。
+        """
         return TaskContext(
             task_id=str(task.id),
             user_id=str(user.id),

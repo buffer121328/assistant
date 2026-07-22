@@ -15,6 +15,8 @@ MEMORY_MAINTENANCE_TOOL_NAME = "memory.maintenance"
 
 @dataclass(frozen=True)
 class MemoryMaintenanceResult:
+    """表示 处理 memory maintenance result 的后端数据结构或服务对象。"""
+
     archived_memory_ids: tuple[str, ...]
 
 
@@ -26,6 +28,15 @@ async def maintain_memories(
     max_stale_importance: int = 1,
     max_stale_access_count: int = 0,
 ) -> MemoryMaintenanceResult:
+    """处理 maintain memories。
+
+    Args:
+        session: session 参数。
+        now: now 参数。
+        stale_after_days: stale_after_days 参数。
+        max_stale_importance: max_stale_importance 参数。
+        max_stale_access_count: max_stale_access_count 参数。
+    """
     evaluated_at = now or utc_now()
     stale_before = evaluated_at - timedelta(days=stale_after_days)
     memories = list(

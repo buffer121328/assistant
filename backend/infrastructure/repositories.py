@@ -29,6 +29,8 @@ from domain.models import (
 
 @dataclass(frozen=True)
 class TaskCreate:
+    """表示 处理 task create 的后端数据结构或服务对象。"""
+
     user_id: str
     platform: str
     task_type: str
@@ -39,13 +41,30 @@ class TaskCreate:
 
 
 class TaskRepository:
+    """表示 处理 task repository 的后端数据结构或服务对象。"""
+
     def __init__(self, session: AsyncSession) -> None:
+        """初始化对象实例。
+
+        Args:
+            session: session 参数。
+        """
         self.session = session
 
     async def user_exists(self, user_id: str) -> bool:
+        """处理 user exists。
+
+        Args:
+            user_id: user_id 参数。
+        """
         return await self.session.get(User, user_id) is not None
 
     async def create_task(self, data: TaskCreate) -> Task:
+        """创建 task。
+
+        Args:
+            data: data 参数。
+        """
         task = Task(
             user_id=data.user_id,
             platform=data.platform,
@@ -61,9 +80,20 @@ class TaskRepository:
         return task
 
     async def get_task(self, task_id: str) -> Task | None:
+        """获取 task。
+
+        Args:
+            task_id: task_id 参数。
+        """
         return await self.session.get(Task, task_id)
 
     async def get_task_by_user(self, *, task_id: str, user_id: str) -> Task | None:
+        """获取 task by user。
+
+        Args:
+            task_id: task_id 参数。
+            user_id: user_id 参数。
+        """
         return await self.session.scalar(
             select(Task).where(Task.id == task_id, Task.user_id == user_id)
         )
@@ -74,6 +104,12 @@ class TaskRepository:
         user_id: str,
         exclude_task_id: str,
     ) -> Task | None:
+        """获取 latest non status task。
+
+        Args:
+            user_id: user_id 参数。
+            exclude_task_id: exclude_task_id 参数。
+        """
         return await self.session.scalar(
             select(Task)
             .where(
@@ -86,6 +122,11 @@ class TaskRepository:
         )
 
     async def list_tasks_by_user(self, user_id: str) -> list[Task]:
+        """列出 tasks by user。
+
+        Args:
+            user_id: user_id 参数。
+        """
         result = await self.session.scalars(
             select(Task)
             .where(Task.user_id == user_id)
@@ -95,10 +136,23 @@ class TaskRepository:
 
 
 class ApprovalRepository:
+    """表示 处理 approval repository 的后端数据结构或服务对象。"""
+
     def __init__(self, session: AsyncSession) -> None:
+        """初始化对象实例。
+
+        Args:
+            session: session 参数。
+        """
         self.session = session
 
     async def create_pending(self, *, task_id: str, tool_name: str) -> Approval:
+        """创建 pending。
+
+        Args:
+            task_id: task_id 参数。
+            tool_name: tool_name 参数。
+        """
         return await self.create_pending_request(
             task_id=task_id,
             approval_type=ApprovalType.TOOL.value,
@@ -116,6 +170,15 @@ class ApprovalRepository:
         tool_name: str,
         request_summary: str | None,
     ) -> Approval:
+        """创建 pending request。
+
+        Args:
+            task_id: task_id 参数。
+            approval_type: approval_type 参数。
+            subject: subject 参数。
+            tool_name: tool_name 参数。
+            request_summary: request_summary 参数。
+        """
         approval = Approval(
             task_id=task_id,
             tool_name=tool_name,
@@ -134,6 +197,12 @@ class ApprovalRepository:
         task_id: str,
         tool_name: str,
     ) -> Approval | None:
+        """获取 active for tool。
+
+        Args:
+            task_id: task_id 参数。
+            tool_name: tool_name 参数。
+        """
         return await self.session.scalar(
             select(Approval).where(
                 Approval.task_id == task_id,
@@ -156,6 +225,13 @@ class ApprovalRepository:
         approval_type: str,
         subject: str,
     ) -> Approval | None:
+        """获取 active for request。
+
+        Args:
+            task_id: task_id 参数。
+            approval_type: approval_type 参数。
+            subject: subject 参数。
+        """
         return await self.session.scalar(
             select(Approval).where(
                 Approval.task_id == task_id,
@@ -176,6 +252,12 @@ class ApprovalRepository:
         approval_id: str,
         task_id: str,
     ) -> Approval | None:
+        """获取 by task。
+
+        Args:
+            approval_id: approval_id 参数。
+            task_id: task_id 参数。
+        """
         return await self.session.scalar(
             select(Approval).where(
                 Approval.id == approval_id,
@@ -184,6 +266,11 @@ class ApprovalRepository:
         )
 
     async def list_by_task(self, task_id: str) -> list[Approval]:
+        """列出 by task。
+
+        Args:
+            task_id: task_id 参数。
+        """
         result = await self.session.scalars(
             select(Approval)
             .where(Approval.task_id == task_id)
@@ -194,6 +281,8 @@ class ApprovalRepository:
 
 @dataclass(frozen=True)
 class ProcessedMessageCreate:
+    """表示 处理 processed message create 的后端数据结构或服务对象。"""
+
     platform: str
     message_id: str
     reason: str
@@ -211,7 +300,14 @@ class ProcessedMessageCreate:
 
 
 class MessageRepository:
+    """表示 处理 message repository 的后端数据结构或服务对象。"""
+
     def __init__(self, session: AsyncSession) -> None:
+        """初始化对象实例。
+
+        Args:
+            session: session 参数。
+        """
         self.session = session
 
     async def get_user_id_by_platform_account(
@@ -220,6 +316,12 @@ class MessageRepository:
         platform: str,
         platform_user_id: str,
     ) -> str | None:
+        """获取 user id by platform account。
+
+        Args:
+            platform: platform 参数。
+            platform_user_id: platform_user_id 参数。
+        """
         return await self.session.scalar(
             select(PlatformAccount.user_id).where(
                 PlatformAccount.platform == platform,
@@ -234,6 +336,13 @@ class MessageRepository:
         adapter: str | None,
         message_id: str,
     ) -> ProcessedMessage | None:
+        """获取 processed message。
+
+        Args:
+            platform: platform 参数。
+            adapter: adapter 参数。
+            message_id: message_id 参数。
+        """
         return await self.session.scalar(
             select(ProcessedMessage).where(
                 ProcessedMessage.platform == platform,
@@ -246,6 +355,11 @@ class MessageRepository:
         self,
         data: ProcessedMessageCreate,
     ) -> ProcessedMessage:
+        """创建 processed message。
+
+        Args:
+            data: data 参数。
+        """
         processed_message = ProcessedMessage(
             platform=data.platform,
             message_id=data.message_id,
@@ -267,6 +381,11 @@ class MessageRepository:
         return processed_message
 
     async def get_task_dispatch_record(self, task_id: str) -> ProcessedMessage | None:
+        """获取 task dispatch record。
+
+        Args:
+            task_id: task_id 参数。
+        """
         return await self.session.scalar(
             select(ProcessedMessage)
             .where(
@@ -282,6 +401,11 @@ class MessageRepository:
         *,
         limit: int = 20,
     ) -> list[ProcessedMessage]:
+        """列出 recent bridge sessions。
+
+        Args:
+            limit: limit 参数。
+        """
         result = await self.session.scalars(
             select(ProcessedMessage)
             .where(ProcessedMessage.platform == "langbot")
@@ -291,6 +415,11 @@ class MessageRepository:
         return list(result)
 
     async def get_bridge_session(self, message_id: str) -> ProcessedMessage | None:
+        """获取 bridge session。
+
+        Args:
+            message_id: message_id 参数。
+        """
         return await self.session.scalar(
             select(ProcessedMessage).where(
                 ProcessedMessage.platform == "langbot",
@@ -307,6 +436,15 @@ class MessageRepository:
         result_json: str | None = None,
         delivery_status: str | None = None,
     ) -> ProcessedMessage | None:
+        """记录 delivery attempt。
+
+        Args:
+            task_id: task_id 参数。
+            status: status 参数。
+            error_summary: error_summary 参数。
+            result_json: result_json 参数。
+            delivery_status: delivery_status 参数。
+        """
         record = await self.get_task_dispatch_record(task_id)
         if record is None:
             return None
@@ -321,6 +459,8 @@ class MessageRepository:
 
 @dataclass(frozen=True)
 class ModelLogCreate:
+    """表示 处理 model log create 的后端数据结构或服务对象。"""
+
     task_id: str | None
     model_class: str | None
     request_text: str | None
@@ -330,10 +470,22 @@ class ModelLogCreate:
 
 
 class ModelLogRepository:
+    """表示 处理 model log repository 的后端数据结构或服务对象。"""
+
     def __init__(self, session: AsyncSession) -> None:
+        """初始化对象实例。
+
+        Args:
+            session: session 参数。
+        """
         self.session = session
 
     async def create_model_log(self, data: ModelLogCreate) -> ModelLog:
+        """创建 model log。
+
+        Args:
+            data: data 参数。
+        """
         model_log = ModelLog(
             task_id=data.task_id,
             agent_run_id=data.agent_run_id,
@@ -349,6 +501,8 @@ class ModelLogRepository:
 
 @dataclass(frozen=True)
 class MemoryCreate:
+    """表示 处理 memory create 的后端数据结构或服务对象。"""
+
     user_id: str
     content: str
     normalized_content: str
@@ -374,10 +528,22 @@ class MemoryCreate:
 
 
 class MemoryRepository:
+    """表示 处理 memory repository 的后端数据结构或服务对象。"""
+
     def __init__(self, session: AsyncSession) -> None:
+        """初始化对象实例。
+
+        Args:
+            session: session 参数。
+        """
         self.session = session
 
     async def create_memory(self, data: MemoryCreate) -> Memory:
+        """创建 memory。
+
+        Args:
+            data: data 参数。
+        """
         memory = Memory(
             user_id=data.user_id,
             content=data.content,
@@ -410,6 +576,13 @@ class MemoryRepository:
     async def get_by_source_message(
         self, *, user_id: str, source_kind: str, source_message_id: str
     ) -> Memory | None:
+        """获取 by source message。
+
+        Args:
+            user_id: user_id 参数。
+            source_kind: source_kind 参数。
+            source_message_id: source_message_id 参数。
+        """
         return await self.session.scalar(
             select(Memory).where(
                 Memory.user_id == user_id,
@@ -421,6 +594,13 @@ class MemoryRepository:
     async def queue_index_operation(
         self, *, memory: Memory, operation: str, error_code: str
     ) -> MemoryIndexOutbox:
+        """处理 queue index operation。
+
+        Args:
+            memory: memory 参数。
+            operation: operation 参数。
+            error_code: error_code 参数。
+        """
         existing = await self.session.scalar(
             select(MemoryIndexOutbox).where(
                 MemoryIndexOutbox.memory_id == memory.id,
@@ -448,6 +628,13 @@ class MemoryRepository:
         status: str | None = None,
         scope_kind: str | None = None,
     ) -> list[Memory]:
+        """列出 memories。
+
+        Args:
+            user_id: user_id 参数。
+            status: status 参数。
+            scope_kind: scope_kind 参数。
+        """
         statement = select(Memory).where(Memory.user_id == user_id)
         if status is not None:
             statement = statement.where(Memory.status == status)
@@ -459,6 +646,11 @@ class MemoryRepository:
         return list(result)
 
     async def list_links_for_memory(self, *, memory_id: str) -> list[MemoryLink]:
+        """列出 links for memory。
+
+        Args:
+            memory_id: memory_id 参数。
+        """
         result = await self.session.scalars(
             select(MemoryLink)
             .where(
@@ -474,6 +666,12 @@ class MemoryRepository:
     async def list_feedback_for_memory(
         self, *, memory_id: str, user_id: str
     ) -> list[MemoryFeedback]:
+        """列出 feedback for memory。
+
+        Args:
+            memory_id: memory_id 参数。
+            user_id: user_id 参数。
+        """
         result = await self.session.scalars(
             select(MemoryFeedback)
             .where(
@@ -487,6 +685,12 @@ class MemoryRepository:
     async def list_index_outbox(
         self, *, user_id: str, status: str | None = None
     ) -> list[MemoryIndexOutbox]:
+        """列出 index outbox。
+
+        Args:
+            user_id: user_id 参数。
+            status: status 参数。
+        """
         statement = select(MemoryIndexOutbox).where(
             MemoryIndexOutbox.user_id == user_id
         )
@@ -505,6 +709,12 @@ class MemoryRepository:
         *,
         now: datetime | None = None,
     ) -> list[Memory]:
+        """列出 active memories。
+
+        Args:
+            user_id: user_id 参数。
+            now: now 参数。
+        """
         now = now or utc_now()
         result = await self.session.scalars(
             select(Memory)
@@ -516,6 +726,12 @@ class MemoryRepository:
     async def get_memory_by_user(
         self, *, memory_id: str, user_id: str
     ) -> Memory | None:
+        """获取 memory by user。
+
+        Args:
+            memory_id: memory_id 参数。
+            user_id: user_id 参数。
+        """
         return await self.session.scalar(
             select(Memory).where(Memory.id == memory_id, Memory.user_id == user_id)
         )
@@ -530,6 +746,16 @@ class MemoryRepository:
         confidence: float = 1.0,
         source_evidence_id: str | None = None,
     ) -> MemoryLink:
+        """创建 link。
+
+        Args:
+            source_memory_id: source_memory_id 参数。
+            target_memory_id: target_memory_id 参数。
+            link_type: link_type 参数。
+            created_by: created_by 参数。
+            confidence: confidence 参数。
+            source_evidence_id: source_evidence_id 参数。
+        """
         existing = await self.session.scalar(
             select(MemoryLink).where(
                 MemoryLink.source_memory_id == source_memory_id,
@@ -561,6 +787,16 @@ class MemoryRepository:
         conversation_id: str | None = None,
         retrieval_trace_id: str | None = None,
     ) -> MemoryFeedback:
+        """创建 feedback。
+
+        Args:
+            memory_id: memory_id 参数。
+            user_id: user_id 参数。
+            feedback_type: feedback_type 参数。
+            task_id: task_id 参数。
+            conversation_id: conversation_id 参数。
+            retrieval_trace_id: retrieval_trace_id 参数。
+        """
         feedback = MemoryFeedback(
             memory_id=memory_id,
             user_id=user_id,
@@ -579,6 +815,12 @@ class MemoryRepository:
         memory_id: str,
         user_id: str,
     ) -> Memory | None:
+        """获取 active memory by user。
+
+        Args:
+            memory_id: memory_id 参数。
+            user_id: user_id 参数。
+        """
         now = utc_now()
         return await self.session.scalar(
             select(Memory).where(
@@ -590,6 +832,11 @@ class MemoryRepository:
 
 
 def eligible_memory_conditions(now: datetime) -> tuple[ColumnElement[bool], ...]:
+    """处理 eligible memory conditions。
+
+    Args:
+        now: now 参数。
+    """
     return (
         Memory.is_active.is_(True),
         Memory.status == "active",
@@ -601,6 +848,8 @@ def eligible_memory_conditions(now: datetime) -> tuple[ColumnElement[bool], ...]
 
 @dataclass(frozen=True)
 class ToolLogCreate:
+    """表示 处理 tool log create 的后端数据结构或服务对象。"""
+
     task_id: str | None
     tool_name: str
     status: str
@@ -610,10 +859,22 @@ class ToolLogCreate:
 
 
 class ToolLogRepository:
+    """表示 处理 tool log repository 的后端数据结构或服务对象。"""
+
     def __init__(self, session: AsyncSession) -> None:
+        """初始化对象实例。
+
+        Args:
+            session: session 参数。
+        """
         self.session = session
 
     async def create_tool_log(self, data: ToolLogCreate) -> ToolLog:
+        """创建 tool log。
+
+        Args:
+            data: data 参数。
+        """
         tool_log = ToolLog(
             task_id=data.task_id,
             tool_name=data.tool_name,
@@ -627,6 +888,12 @@ class ToolLogRepository:
         return tool_log
 
     async def has_successful_tool_log(self, *, task_id: str, tool_name: str) -> bool:
+        """处理 has successful tool log。
+
+        Args:
+            task_id: task_id 参数。
+            tool_name: tool_name 参数。
+        """
         existing = await self.session.scalar(
             select(ToolLog.id)
             .where(
@@ -640,10 +907,22 @@ class ToolLogRepository:
 
 
 class SkillAuditRepository:
+    """表示 处理 skill audit repository 的后端数据结构或服务对象。"""
+
     def __init__(self, session: AsyncSession) -> None:
+        """初始化对象实例。
+
+        Args:
+            session: session 参数。
+        """
         self.session = session
 
     async def user_exists(self, user_id: str) -> bool:
+        """处理 user exists。
+
+        Args:
+            user_id: user_id 参数。
+        """
         return await self.session.get(User, user_id) is not None
 
     async def create_started(
@@ -653,6 +932,13 @@ class SkillAuditRepository:
         skill_name: str | None,
         action: str,
     ) -> SkillAuditLog:
+        """创建 started。
+
+        Args:
+            actor_user_id: actor_user_id 参数。
+            skill_name: skill_name 参数。
+            action: action 参数。
+        """
         audit = SkillAuditLog(
             actor_user_id=actor_user_id,
             skill_name=skill_name,
@@ -672,6 +958,15 @@ class SkillAuditRepository:
         version: str | None,
         error_code: str | None,
     ) -> SkillAuditLog:
+        """处理 finish。
+
+        Args:
+            audit_id: audit_id 参数。
+            status: status 参数。
+            skill_name: skill_name 参数。
+            version: version 参数。
+            error_code: error_code 参数。
+        """
         audit = await self.session.get(SkillAuditLog, audit_id)
         if audit is None:
             raise RuntimeError("Skill audit record is unavailable")

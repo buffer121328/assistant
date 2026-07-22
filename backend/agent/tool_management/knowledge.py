@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from dataclasses import asdict
 
-from knowledge import KnowledgeService
+from rag import KnowledgeService
 
 from .catalog import ToolDescriptor
 from .registry import ToolInvocation, ToolSpec
 
 
 def build_knowledge_tool_descriptor() -> ToolDescriptor:
+    """构建 knowledge tool descriptor。"""
     return ToolDescriptor(
         name="knowledge.search",
         description="Search the current user's indexed personal documents",
@@ -25,7 +26,18 @@ def build_knowledge_tool_descriptor() -> ToolDescriptor:
 
 
 def build_knowledge_tool_spec(service: KnowledgeService) -> ToolSpec:
+    """构建 knowledge tool spec。
+
+    Args:
+        service: service 参数。
+    """
+
     async def search(invocation: ToolInvocation) -> list[dict[str, object]]:
+        """搜索。
+
+        Args:
+            invocation: invocation 参数。
+        """
         results = await service.search(
             user_id=invocation.user_id,
             query=str(invocation.arguments["query"]),
@@ -45,6 +57,7 @@ def build_knowledge_tool_spec(service: KnowledgeService) -> ToolSpec:
 
 
 def _schema() -> dict[str, object]:
+    """执行 处理 schema 的内部辅助逻辑。"""
     return {
         "type": "object",
         "properties": {

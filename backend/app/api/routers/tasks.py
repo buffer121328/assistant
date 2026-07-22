@@ -13,7 +13,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from domain.conversations import ConversationError
 from infrastructure.database import get_session
 from app.support.errors import AppError
-from domain.models import ApprovalStatus, Task, TaskStatus
+from domain.models import (
+    Approval,
+    ApprovalStatus,
+    MemoryRetrievalTrace,
+    MemoryRetrievalTraceItem,
+    ModelLog,
+    Task,
+    TaskStatus,
+    ToolLog,
+)
+from model_gateway import sanitize_text
 from app.api.schemas import (
     ApprovalDecisionRequest,
     ApprovalDecisionResponse,
@@ -33,6 +43,12 @@ router = APIRouter()
 
 
 def _enqueue_task_execution(task_id: str, *, runtime_settings: Any = None) -> bool:
+    """执行 处理 enqueue task execution 的内部辅助逻辑。
+
+    Args:
+        task_id: task_id 参数。
+        runtime_settings: runtime_settings 参数。
+    """
     routes_module = sys.modules.get("app.api.router")
     enqueue = getattr(routes_module, "enqueue_task_execution", None)
     if enqueue is None:
@@ -41,6 +57,11 @@ def _enqueue_task_execution(task_id: str, *, runtime_settings: Any = None) -> bo
 
 
 def raise_app_error(exc: TaskServiceError) -> None:
+    """处理 raise app error。
+
+    Args:
+        exc: exc 参数。
+    """
     raise AppError(
         code=exc.code,
         message="Task operation failed.",
@@ -57,6 +78,12 @@ async def create_task(
     payload: TaskCreateRequest,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> TaskResponse:
+    """创建 task。
+
+    Args:
+        payload: payload 参数。
+        session: session 参数。
+    """
     try:
         task = await TaskService(session).create_task(
             user_id=payload.user_id,
@@ -86,6 +113,13 @@ async def submit_task(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> TaskSubmissionResponse:
+    """处理 submit task。
+
+    Args:
+        payload: payload 参数。
+        request: request 参数。
+        session: session 参数。
+    """
     try:
         task = await TaskService(session).create_task(
             user_id=payload.user_id,
@@ -114,6 +148,12 @@ async def list_tasks(
     user_id: Annotated[str, Query(min_length=1)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> TaskListResponse:
+    """列出 tasks。
+
+    Args:
+        user_id: user_id 参数。
+        session: session 参数。
+    """
     try:
         tasks = await TaskService(session).list_tasks(user_id)
     except TaskServiceError as exc:
@@ -127,6 +167,13 @@ async def get_task(
     user_id: Annotated[str, Query(min_length=1)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> TaskResponse:
+    """获取 task。
+
+    Args:
+        task_id: task_id 参数。
+        user_id: user_id 参数。
+        session: session 参数。
+    """
     try:
         task = await TaskService(session).get_task_by_user(
             task_id=task_id,
@@ -137,6 +184,143 @@ async def get_task(
     return task_response(task)
 
 
+@router.get("/api/tasks/{task_id}/diagnostics")
+async def get_task_diagnostics(
+    task_id: str,
+    user_id: Annotated[str, Query(min_length=1)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> dict[str, object]:
+    """获取 task diagnostics。
+
+    Args:
+        task_id: task_id 参数。
+        user_id: user_id 参数。
+        session: session 参数。
+    """
+    task = await session.scalar(
+        select(Task).where(Task.id == task_id, Task.user_id == user_id)
+    )
+    if task is None:
+        raise AppError("task_not_found", "Task not found.", 404)
+
+    events = await TaskEventRepository(session).list_after(task_id=task_id, after=0)
+    model_logs = list(
+        await session.scalars(
+            select(ModelLog)
+            .where(ModelLog.task_id == task_id)
+            .order_by(ModelLog.created_at, ModelLog.id)
+        )
+    )
+    tool_logs = list(
+        await session.scalars(
+            select(ToolLog)
+            .where(ToolLog.task_id == task_id)
+            .order_by(ToolLog.created_at, ToolLog.id)
+        )
+    )
+    approvals = list(
+        await session.scalars(
+            select(Approval)
+            .where(Approval.task_id == task_id)
+            .order_by(Approval.created_at, Approval.id)
+        )
+    )
+    retrieval = await session.scalar(
+        select(MemoryRetrievalTrace)
+        .where(
+            MemoryRetrievalTrace.task_id == task_id,
+            MemoryRetrievalTrace.user_id == user_id,
+        )
+        .order_by(MemoryRetrievalTrace.created_at.desc())
+        .limit(1)
+    )
+    retrieval_items: list[MemoryRetrievalTraceItem] = []
+    if retrieval is not None:
+        retrieval_items = list(
+            await session.scalars(
+                select(MemoryRetrievalTraceItem)
+                .where(MemoryRetrievalTraceItem.trace_id == retrieval.id)
+                .order_by(
+                    MemoryRetrievalTraceItem.final_rank.asc().nulls_last(),
+                    MemoryRetrievalTraceItem.id,
+                )
+            )
+        )
+
+    return {
+        "trace_id": task.id,
+        "task": task_response(task).model_dump(mode="json"),
+        "events": [event_record(item) for item in events],
+        "model_calls": [
+            {
+                "model_log_id": item.id,
+                "model_class": item.model_class,
+                "response_summary": _diagnostic_summary(item.response_text),
+                "error_summary": _diagnostic_summary(item.error_message),
+                "created_at": item.created_at.isoformat(),
+            }
+            for item in model_logs
+        ],
+        "tool_calls": [
+            {
+                "tool_log_id": item.id,
+                "tool_name": item.tool_name,
+                "status": item.status,
+                "output_summary": _diagnostic_summary(item.output_text),
+                "error_summary": _diagnostic_summary(item.error_message),
+                "created_at": item.created_at.isoformat(),
+            }
+            for item in tool_logs
+        ],
+        "approvals": [
+            {
+                "approval_id": item.id,
+                "approval_type": item.approval_type,
+                "subject": item.subject,
+                "tool_name": item.tool_name,
+                "status": item.status,
+                "request_summary": _diagnostic_summary(item.request_summary),
+            }
+            for item in approvals
+        ],
+        "retrieval": (
+            None
+            if retrieval is None
+            else {
+                "retrieval_trace_id": retrieval.id,
+                "mode": retrieval.retrieval_mode,
+                "time_intent": retrieval.time_intent,
+                "candidate_count": retrieval.candidate_count,
+                "injected_count": retrieval.injected_count,
+                "injected_tokens": retrieval.injected_tokens,
+                "sources": [
+                    {
+                        "source_id": f"memory:{item.memory_id}",
+                        "memory_id": item.memory_id,
+                        "filter_reason": item.filter_reason,
+                        "final_rank": item.final_rank,
+                        "injected_tokens": item.injected_tokens,
+                    }
+                    for item in retrieval_items
+                ],
+            }
+        ),
+        "error_summary": _diagnostic_summary(task.error_message),
+    }
+
+
+def _diagnostic_summary(value: str | None, *, limit: int = 1000) -> str | None:
+    """执行 处理 diagnostic summary 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+        limit: limit 参数。
+    """
+    if value is None:
+        return None
+    return sanitize_text(value)[:limit]
+
+
 @router.get("/api/tasks/{task_id}/events/stream")
 async def stream_task_events(
     task_id: str,
@@ -145,6 +329,15 @@ async def stream_task_events(
     session: Annotated[AsyncSession, Depends(get_session)],
     after: Annotated[int, Query(ge=0)] = 0,
 ) -> StreamingResponse:
+    """处理 stream task events。
+
+    Args:
+        task_id: task_id 参数。
+        user_id: user_id 参数。
+        request: request 参数。
+        session: session 参数。
+        after: after 参数。
+    """
     task = await session.scalar(
         select(Task).where(Task.id == task_id, Task.user_id == user_id)
     )
@@ -152,6 +345,7 @@ async def stream_task_events(
         raise AppError("task_not_found", "Task not found.", 404)
 
     async def records():
+        """处理 records。"""
         sequence = after
         terminal = {
             TaskStatus.SUCCESS.value,
@@ -184,6 +378,13 @@ async def list_task_approvals(
     user_id: Annotated[str, Query(min_length=1)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> ApprovalListResponse:
+    """列出 task approvals。
+
+    Args:
+        task_id: task_id 参数。
+        user_id: user_id 参数。
+        session: session 参数。
+    """
     try:
         approvals = await ApprovalService(session).list_for_owner(
             task_id=task_id,
@@ -207,6 +408,15 @@ async def decide_task_approval(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> ApprovalDecisionResponse:
+    """处理 decide task approval。
+
+    Args:
+        task_id: task_id 参数。
+        approval_id: approval_id 参数。
+        payload: payload 参数。
+        request: request 参数。
+        session: session 参数。
+    """
     try:
         result = await ApprovalService(session).decide(
             task_id=task_id,

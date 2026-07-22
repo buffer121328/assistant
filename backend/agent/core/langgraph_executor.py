@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime, timedelta
 import json
 from typing import Any, TypedDict, cast
 
@@ -10,6 +11,7 @@ from langgraph.types import Command, interrupt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from agent.core.budget import RunBudget
 from domain.models import Approval, ApprovalStatus, Task
 from agent.tool_management.approval import (
     EXACT_APPROVAL_TOOLS,
@@ -50,6 +52,8 @@ _AGENT_CORE_VERSION = "v2"
 
 
 class _ExecutionState(TypedDict, total=False):
+    """表示 处理 execution state 的后端数据结构或服务对象。"""
+
     tool_schemas: list[dict[str, Any]]
     history: list[dict[str, Any]]
     decision: dict[str, Any]
@@ -69,6 +73,8 @@ class _ExecutionState(TypedDict, total=False):
 
 
 class LangGraphExecutor:
+    """表示 处理 lang graph executor 的后端数据结构或服务对象。"""
+
     def __init__(
         self,
         *,
@@ -82,6 +88,19 @@ class LangGraphExecutor:
         subagent_coordinator: SubAgentCoordinator | None = None,
         prompt_builder: Any | None = None,
     ) -> None:
+        """初始化对象实例。
+
+        Args:
+            session: session 参数。
+            tool_registry: tool_registry 参数。
+            model: model 参数。
+            checkpointer: checkpointer 参数。
+            sensitive_values: sensitive_values 参数。
+            tool_snapshot: tool_snapshot 参数。
+            observability: observability 参数。
+            subagent_coordinator: subagent_coordinator 参数。
+            prompt_builder: prompt_builder 参数。
+        """
         self.session = session
         self.tool_registry = tool_registry
         self.model = model
@@ -93,11 +112,28 @@ class LangGraphExecutor:
         self.prompt_builder = prompt_builder
 
     async def execute(self, *, run_input: AgentRunInput) -> AgentRunResult:
+        """执行。
+
+        Args:
+            run_input: run_input 参数。
+        """
+        deadline_at = datetime.now(UTC) + timedelta(
+            seconds=run_input.plan.timeout_seconds
+        )
+        budget = RunBudget.from_limits(
+            max_steps=run_input.plan.max_steps,
+            max_tool_calls=run_input.plan.tool_count_budget,
+            deadline_at=deadline_at,
+        )
+        if hasattr(self.model, "set_run_budget"):
+            self.model.set_run_budget(budget)
         loop = ControlledLoop(
             session=self.session,
             task_id=run_input.context.task_id,
             max_steps=run_input.plan.max_steps,
             sensitive_values=self.sensitive_values,
+            budget=budget,
+            now=lambda: datetime.now(UTC),
         )
         graph = self._build_graph(run_input, loop)
         config: dict[str, Any] = {
@@ -135,9 +171,7 @@ class LangGraphExecutor:
         checkpoint_id = self._checkpoint_id(snapshot)
         if snapshot is not None and snapshot.interrupts:
             interrupted_state = cast(_ExecutionState, snapshot.values)
-            approval_requests = _approval_requests_from_interrupts(
-                snapshot.interrupts
-            )
+            approval_requests = _approval_requests_from_interrupts(snapshot.interrupts)
             requested_tools = tuple(
                 request.tool_name or request.subject
                 for request in approval_requests
@@ -170,59 +204,151 @@ class LangGraphExecutor:
         run_input: AgentRunInput,
         loop: ControlledLoop,
     ) -> Any:
+        """执行 构建 graph 的内部辅助逻辑。
+
+        Args:
+            run_input: run_input 参数。
+            loop: loop 参数。
+        """
+
         async def prepare(state: _ExecutionState) -> _ExecutionState:
+            """准备。
+
+            Args:
+                state: state 参数。
+            """
             return await self._prepare(state, run_input, loop)
 
         async def model(state: _ExecutionState) -> _ExecutionState:
+            """处理 model。
+
+            Args:
+                state: state 参数。
+            """
             return await self._model(state, run_input, loop)
 
         async def plan(state: _ExecutionState) -> _ExecutionState:
+            """处理 plan。
+
+            Args:
+                state: state 参数。
+            """
             return await self._plan(state, run_input, loop)
 
         async def review(state: _ExecutionState) -> _ExecutionState:
+            """处理 review。
+
+            Args:
+                state: state 参数。
+            """
             return await self._review(state, run_input, loop)
 
         async def finalize(state: _ExecutionState) -> _ExecutionState:
+            """处理 finalize。
+
+            Args:
+                state: state 参数。
+            """
             return await self._finalize(state, run_input, loop)
 
         async def fail(state: _ExecutionState) -> _ExecutionState:
+            """处理 fail。
+
+            Args:
+                state: state 参数。
+            """
             return await self._fail_review(state, run_input, loop)
 
         async def tool(state: _ExecutionState) -> _ExecutionState:
+            """处理 tool。
+
+            Args:
+                state: state 参数。
+            """
             return await self._tool(state, run_input, loop)
 
         async def tool_batch(state: _ExecutionState) -> _ExecutionState:
+            """处理 tool batch。
+
+            Args:
+                state: state 参数。
+            """
             return await self._tool_batch(state, run_input, loop)
 
         async def subagents(state: _ExecutionState) -> _ExecutionState:
+            """处理 subagents。
+
+            Args:
+                state: state 参数。
+            """
             return await self._subagents(state, run_input, loop)
 
         async def approval(state: _ExecutionState) -> _ExecutionState:
+            """处理 approval。
+
+            Args:
+                state: state 参数。
+            """
             return await self._approval(state, run_input, loop)
 
         async def plan_approval(state: _ExecutionState) -> _ExecutionState:
+            """处理 plan approval。
+
+            Args:
+                state: state 参数。
+            """
             return await self._plan_approval(state, run_input, loop)
 
         async def human_review(state: _ExecutionState) -> _ExecutionState:
+            """处理 human review。
+
+            Args:
+                state: state 参数。
+            """
             return await self._human_review(state, run_input, loop)
 
         def route_after_model(state: _ExecutionState) -> str:
+            """路由 after model。
+
+            Args:
+                state: state 参数。
+            """
             return self._route_after_model(state, run_input)
 
         def route_after_prepare(_state: _ExecutionState) -> str:
+            """路由 after prepare。
+
+            Args:
+                _state: _state 参数。
+            """
             if run_input.plan.execution_mode == "plan_execute_review":
                 return "plan"
             return "model"
 
         def route_after_plan(state: _ExecutionState) -> str:
+            """路由 after plan。
+
+            Args:
+                state: state 参数。
+            """
             if run_input.plan.require_plan_approval:
                 return "approval"
             return "subagents" if self._should_delegate(state, run_input) else "model"
 
         def route_after_plan_approval(state: _ExecutionState) -> str:
+            """路由 after plan approval。
+
+            Args:
+                state: state 参数。
+            """
             return "subagents" if self._should_delegate(state, run_input) else "model"
 
         def route_after_review(state: _ExecutionState) -> str:
+            """路由 after review。
+
+            Args:
+                state: state 参数。
+            """
             return self._route_after_review(state)
 
         graph = StateGraph(_ExecutionState)
@@ -290,7 +416,16 @@ class LangGraphExecutor:
         run_input: AgentRunInput,
         loop: ControlledLoop,
     ) -> _ExecutionState:
+        """执行 准备 的内部辅助逻辑。
+
+        Args:
+            _state: _state 参数。
+            run_input: run_input 参数。
+            loop: loop 参数。
+        """
+
         async def prepare() -> _ExecutionState:
+            """准备。"""
             return {"tool_schemas": list(self.planned_tool_schemas(run_input))}
 
         update = await self._run_observed_step(
@@ -307,7 +442,16 @@ class LangGraphExecutor:
         run_input: AgentRunInput,
         loop: ControlledLoop,
     ) -> _ExecutionState:
+        """执行 处理 model 的内部辅助逻辑。
+
+        Args:
+            state: state 参数。
+            run_input: run_input 参数。
+            loop: loop 参数。
+        """
+
         async def decide() -> _ExecutionState:
+            """处理 decide。"""
             request = build_agent_model_request(
                 run_input,
                 tool_schemas=tuple(state.get("tool_schemas", [])),
@@ -342,6 +486,12 @@ class LangGraphExecutor:
         state: _ExecutionState,
         run_input: AgentRunInput,
     ) -> str:
+        """执行 路由 after model 的内部辅助逻辑。
+
+        Args:
+            state: state 参数。
+            run_input: run_input 参数。
+        """
         decision = state.get("decision", {})
         action = decision.get("action")
         if action == "tool_batch":
@@ -360,12 +510,17 @@ class LangGraphExecutor:
         state: _ExecutionState,
         run_input: AgentRunInput,
     ) -> bool:
+        """执行 处理 should delegate 的内部辅助逻辑。
+
+        Args:
+            state: state 参数。
+            run_input: run_input 参数。
+        """
         if self.subagent_coordinator is None or run_input.plan.max_subagents <= 0:
             return False
         work_plan = _work_plan_from_state(state)
         return bool(
-            work_plan
-            and any(step.agent_role is not None for step in work_plan.steps)
+            work_plan and any(step.agent_role is not None for step in work_plan.steps)
         )
 
     async def _subagents(
@@ -374,7 +529,16 @@ class LangGraphExecutor:
         run_input: AgentRunInput,
         loop: ControlledLoop,
     ) -> _ExecutionState:
+        """执行 处理 subagents 的内部辅助逻辑。
+
+        Args:
+            state: state 参数。
+            run_input: run_input 参数。
+            loop: loop 参数。
+        """
+
         async def delegate() -> _ExecutionState:
+            """处理 delegate。"""
             work_plan = _work_plan_from_state(state)
             coordinator = self.subagent_coordinator
             if work_plan is None or coordinator is None:
@@ -431,10 +595,18 @@ class LangGraphExecutor:
         _run_input: AgentRunInput,
         loop: ControlledLoop,
     ) -> _ExecutionState:
+        """执行 处理 approval 的内部辅助逻辑。
+
+        Args:
+            state: state 参数。
+            _run_input: _run_input 参数。
+            loop: loop 参数。
+        """
         if self.checkpointer is None:
             raise RuntimeError("Approval interrupt requires a checkpointer")
 
         async def wait_for_approval() -> _ExecutionState:
+            """处理 wait for approval。"""
             decision = state.get("decision", {})
             tool_name = decision.get("tool_name")
             arguments = decision.get("arguments")
@@ -473,7 +645,16 @@ class LangGraphExecutor:
         run_input: AgentRunInput,
         loop: ControlledLoop,
     ) -> _ExecutionState:
+        """执行 处理 plan 的内部辅助逻辑。
+
+        Args:
+            state: state 参数。
+            run_input: run_input 参数。
+            loop: loop 参数。
+        """
+
         async def create_plan() -> _ExecutionState:
+            """创建 plan。"""
             request = build_work_plan_request(
                 run_input,
                 sensitive_values=self.sensitive_values,
@@ -500,10 +681,18 @@ class LangGraphExecutor:
         run_input: AgentRunInput,
         loop: ControlledLoop,
     ) -> _ExecutionState:
+        """执行 处理 plan approval 的内部辅助逻辑。
+
+        Args:
+            state: state 参数。
+            run_input: run_input 参数。
+            loop: loop 参数。
+        """
         if self.checkpointer is None:
             raise RuntimeError("Plan approval interrupt requires a checkpointer")
 
         async def wait_for_approval() -> _ExecutionState:
+            """处理 wait for approval。"""
             subject = f"plan:{state.get('replan_count', 0)}"
             summary = sanitize_text(
                 _work_plan_summary(state),
@@ -542,7 +731,16 @@ class LangGraphExecutor:
         run_input: AgentRunInput,
         loop: ControlledLoop,
     ) -> _ExecutionState:
+        """执行 处理 review 的内部辅助逻辑。
+
+        Args:
+            state: state 参数。
+            run_input: run_input 参数。
+            loop: loop 参数。
+        """
+
         async def review_candidate() -> _ExecutionState:
+            """处理 review candidate。"""
             work_plan = _work_plan_from_state(state)
             candidate_result = state.get("candidate_result", "")
             if work_plan is None or not candidate_result:
@@ -601,6 +799,11 @@ class LangGraphExecutor:
         return update
 
     def _route_after_review(self, state: _ExecutionState) -> str:
+        """执行 路由 after review 的内部辅助逻辑。
+
+        Args:
+            state: state 参数。
+        """
         status = state.get("review_decision", {}).get("status")
         if status == "pass":
             return "finalize"
@@ -618,10 +821,18 @@ class LangGraphExecutor:
         run_input: AgentRunInput,
         loop: ControlledLoop,
     ) -> _ExecutionState:
+        """执行 处理 human review 的内部辅助逻辑。
+
+        Args:
+            state: state 参数。
+            run_input: run_input 参数。
+            loop: loop 参数。
+        """
         if self.checkpointer is None:
             raise RuntimeError("Human review interrupt requires a checkpointer")
 
         async def wait_for_review() -> _ExecutionState:
+            """处理 wait for review。"""
             subject = (
                 f"review:{state.get('review_retry_count', 0)}:"
                 f"{state.get('replan_count', 0)}"
@@ -665,7 +876,16 @@ class LangGraphExecutor:
         run_input: AgentRunInput,
         loop: ControlledLoop,
     ) -> _ExecutionState:
+        """执行 处理 finalize 的内部辅助逻辑。
+
+        Args:
+            state: state 参数。
+            run_input: run_input 参数。
+            loop: loop 参数。
+        """
+
         async def finalize() -> _ExecutionState:
+            """处理 finalize。"""
             candidate = state.get("candidate_result", "")
             if not candidate:
                 raise RuntimeError("Reviewed candidate is unavailable")
@@ -685,7 +905,16 @@ class LangGraphExecutor:
         run_input: AgentRunInput,
         loop: ControlledLoop,
     ) -> _ExecutionState:
+        """执行 处理 fail review 的内部辅助逻辑。
+
+        Args:
+            state: state 参数。
+            run_input: run_input 参数。
+            loop: loop 参数。
+        """
+
         async def fail() -> _ExecutionState:
+            """处理 fail。"""
             feedback = state.get("review_feedback", "Review rejected candidate")
             raise RuntimeError(f"Review failed: {feedback}")
 
@@ -702,6 +931,13 @@ class LangGraphExecutor:
         approval_type: str,
         subject: str,
     ) -> bool:
+        """执行 处理 is human approved 的内部辅助逻辑。
+
+        Args:
+            run_input: run_input 参数。
+            approval_type: approval_type 参数。
+            subject: subject 参数。
+        """
         approval_id = await self.session.scalar(
             select(Approval.id)
             .join(Task, Task.id == Approval.task_id)
@@ -722,7 +958,16 @@ class LangGraphExecutor:
         run_input: AgentRunInput,
         loop: ControlledLoop,
     ) -> _ExecutionState:
+        """执行 处理 tool 的内部辅助逻辑。
+
+        Args:
+            state: state 参数。
+            run_input: run_input 参数。
+            loop: loop 参数。
+        """
+
         async def call_tool() -> _ExecutionState:
+            """处理 call tool。"""
             decision = state.get("decision", {})
             tool_name = decision.get("tool_name")
             arguments = decision.get("arguments")
@@ -733,9 +978,7 @@ class LangGraphExecutor:
                 user_id=run_input.context.user_id,
                 name=tool_name,
                 arguments=arguments,
-                tool_snapshot_revision=(
-                    run_input.plan.tool_snapshot_revision or None
-                ),
+                tool_snapshot_revision=(run_input.plan.tool_snapshot_revision or None),
                 tool_version=dict(run_input.plan.tool_versions).get(tool_name),
             )
             with self.observability.observe(
@@ -759,6 +1002,7 @@ class LangGraphExecutor:
                     invocation,
                     allowed_tools=run_input.plan.allowed_tools,
                     approval_required_tools=run_input.plan.approval_required_tools,
+                    budget=loop.budget,
                 )
                 observation.update(output={"status": "success"})
             sources = list(state.get("sources", []))
@@ -792,7 +1036,16 @@ class LangGraphExecutor:
         run_input: AgentRunInput,
         loop: ControlledLoop,
     ) -> _ExecutionState:
+        """执行 处理 tool batch 的内部辅助逻辑。
+
+        Args:
+            state: state 参数。
+            run_input: run_input 参数。
+            loop: loop 参数。
+        """
+
         async def call_tools() -> _ExecutionState:
+            """处理 call tools。"""
             decision = state.get("decision", {})
             raw_calls = decision.get("tool_calls")
             if not isinstance(raw_calls, list):
@@ -824,6 +1077,7 @@ class LangGraphExecutor:
                 tuple(invocations),
                 allowed_tools=run_input.plan.allowed_tools,
                 approval_required_tools=run_input.plan.approval_required_tools,
+                budget=loop.budget,
             )
             history = list(state.get("history", []))
             for name, result in zip(names, results, strict=True):
@@ -853,6 +1107,13 @@ class LangGraphExecutor:
         run_input: AgentRunInput,
         operation: Any,
     ) -> _ExecutionState:
+        """执行 运行 observed step 的内部辅助逻辑。
+
+        Args:
+            step_name: step_name 参数。
+            run_input: run_input 参数。
+            operation: operation 参数。
+        """
         with self.observability.observe(
             f"agent.graph.{step_name}",
             input={"step": step_name},
@@ -869,6 +1130,11 @@ class LangGraphExecutor:
         self,
         run_input: AgentRunInput,
     ) -> tuple[dict[str, Any], ...]:
+        """处理 planned tool schemas。
+
+        Args:
+            run_input: run_input 参数。
+        """
         if self.tool_snapshot is None:
             if run_input.plan.allowed_tools or run_input.plan.approval_required_tools:
                 raise ToolSnapshotStaleError("Tool snapshot is unavailable")
@@ -897,11 +1163,22 @@ class LangGraphExecutor:
         return schemas
 
     async def _snapshot(self, graph: Any, config: dict[str, Any]) -> Any | None:
+        """执行 处理 snapshot 的内部辅助逻辑。
+
+        Args:
+            graph: graph 参数。
+            config: config 参数。
+        """
         if self.checkpointer is None:
             return None
         return await graph.aget_state(config)
 
     def _checkpoint_id(self, snapshot: Any | None) -> str | None:
+        """执行 处理 checkpoint id 的内部辅助逻辑。
+
+        Args:
+            snapshot: snapshot 参数。
+        """
         if snapshot is None:
             return None
         configurable = snapshot.config.get("configurable", {})
@@ -909,6 +1186,11 @@ class LangGraphExecutor:
         return str(checkpoint_id) if checkpoint_id else None
 
     def _safe_json(self, value: Any) -> str:
+        """执行 处理 safe json 的内部辅助逻辑。
+
+        Args:
+            value: value 参数。
+        """
         return sanitize_text(
             json.dumps(
                 value,
@@ -922,6 +1204,11 @@ class LangGraphExecutor:
 
 
 def _decision_payload(decision: AgentDecision) -> dict[str, Any]:
+    """执行 处理 decision payload 的内部辅助逻辑。
+
+    Args:
+        decision: decision 参数。
+    """
     return {
         "action": decision.action,
         "answer": decision.answer,
@@ -942,6 +1229,11 @@ def _decision_payload(decision: AgentDecision) -> dict[str, Any]:
 def _approval_requests_from_interrupts(
     interrupts: tuple[Any, ...],
 ) -> tuple[HumanApprovalRequest, ...]:
+    """执行 处理 approval requests from interrupts 的内部辅助逻辑。
+
+    Args:
+        interrupts: interrupts 参数。
+    """
     requests: list[HumanApprovalRequest] = []
     for item in interrupts:
         value = getattr(item, "value", None)
@@ -973,6 +1265,11 @@ def _approval_requests_from_interrupts(
 
 
 def _work_plan_payload(work_plan: WorkPlan) -> dict[str, Any]:
+    """执行 处理 work plan payload 的内部辅助逻辑。
+
+    Args:
+        work_plan: work_plan 参数。
+    """
     return {
         "goal": work_plan.goal,
         "steps": [
@@ -987,6 +1284,11 @@ def _work_plan_payload(work_plan: WorkPlan) -> dict[str, Any]:
 
 
 def _work_plan_from_state(state: _ExecutionState) -> WorkPlan | None:
+    """执行 处理 work plan from state 的内部辅助逻辑。
+
+    Args:
+        state: state 参数。
+    """
     payload = state.get("work_plan")
     if not isinstance(payload, dict):
         return None
@@ -1018,6 +1320,11 @@ def _work_plan_from_state(state: _ExecutionState) -> WorkPlan | None:
 
 
 def _work_plan_summary(state: _ExecutionState) -> str:
+    """执行 处理 work plan summary 的内部辅助逻辑。
+
+    Args:
+        state: state 参数。
+    """
     work_plan = _work_plan_from_state(state)
     if work_plan is None:
         raise RuntimeError("Work plan is unavailable for approval")

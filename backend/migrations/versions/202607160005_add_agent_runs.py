@@ -17,6 +17,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    """执行数据库迁移升级步骤。"""
     op.create_table(
         "agent_runs",
         sa.Column("id", sa.String(36), primary_key=True),
@@ -48,6 +49,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """执行数据库迁移回滚步骤。"""
     op.drop_index("ix_agent_runs_user_started", table_name="agent_runs")
     op.drop_index("ix_agent_runs_task_started", table_name="agent_runs")
     op.drop_table("agent_runs")

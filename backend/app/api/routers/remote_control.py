@@ -21,12 +21,22 @@ from app.support.errors import AppError
 router = APIRouter()
 
 
-@router.get("/api/remote-control/bridge/sessions", response_model=RemoteControlBridgeSessionListResponse)
+@router.get(
+    "/api/remote-control/bridge/sessions",
+    response_model=RemoteControlBridgeSessionListResponse,
+)
 async def list_remote_control_bridge_sessions(
     session: Annotated[AsyncSession, Depends(get_session)],
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     conversation_id: Annotated[str | None, Query(min_length=1)] = None,
 ) -> RemoteControlBridgeSessionListResponse:
+    """列出 remote control bridge sessions。
+
+    Args:
+        session: session 参数。
+        limit: limit 参数。
+        conversation_id: conversation_id 参数。
+    """
     query = (
         select(ProcessedMessage, Task.status)
         .outerjoin(Task, Task.id == ProcessedMessage.task_id)
@@ -53,6 +63,12 @@ async def get_remote_control_bridge_session(
     message_id: str,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> RemoteControlBridgeSessionResponse:
+    """获取 remote control bridge session。
+
+    Args:
+        message_id: message_id 参数。
+        session: session 参数。
+    """
     result = await session.execute(
         select(ProcessedMessage, Task.status)
         .outerjoin(Task, Task.id == ProcessedMessage.task_id)
@@ -82,6 +98,13 @@ async def replay_remote_control_bridge_session(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> RemoteControlBridgeReplayResponse:
+    """处理 replay remote control bridge session。
+
+    Args:
+        message_id: message_id 参数。
+        request: request 参数。
+        session: session 参数。
+    """
     result = await session.execute(
         select(ProcessedMessage, Task.status)
         .outerjoin(Task, Task.id == ProcessedMessage.task_id)

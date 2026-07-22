@@ -6,6 +6,11 @@ from .loader import EvaluationDataError
 
 
 def evaluate_memory_retrieval_fixture(path: Path) -> dict[str, Any]:
+    """处理 evaluate memory retrieval fixture。
+
+    Args:
+        path: path 参数。
+    """
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:

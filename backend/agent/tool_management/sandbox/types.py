@@ -9,6 +9,8 @@ SandboxProvider = Literal["none", "docker"]
 
 @dataclass(frozen=True)
 class SandboxResult:
+    """表示 处理 sandbox result 的后端数据结构或服务对象。"""
+
     stdout: str
     stderr: str
     exit_code: int | None
@@ -18,6 +20,8 @@ class SandboxResult:
 
 @dataclass(frozen=True)
 class DockerSandboxConfig:
+    """表示 处理 docker sandbox config 的后端数据结构或服务对象。"""
+
     enabled: bool = False
     image: str = ""
     allowed_images: tuple[str, ...] = ()

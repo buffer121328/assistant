@@ -24,26 +24,62 @@ logger = logging.getLogger(__name__)
 
 
 class LangfuseObservationClient(Protocol):
-    def update(self, **kwargs: Any) -> Any: ...
+    """表示 处理 langfuse observation client 的后端数据结构或服务对象。"""
+
+    def update(self, **kwargs: Any) -> Any:
+        """更新。
+
+        Args:
+            kwargs: kwargs 参数。
+        """
+        ...
 
 
 class LangfuseClient(Protocol):
-    def start_as_current_observation(self, **kwargs: Any) -> AbstractContextManager[Any]: ...
+    """表示 处理 langfuse client 的后端数据结构或服务对象。"""
 
-    def create_score(self, **kwargs: Any) -> None: ...
+    def start_as_current_observation(
+        self, **kwargs: Any
+    ) -> AbstractContextManager[Any]:
+        """启动 as current observation。
 
-    def flush(self) -> None: ...
+        Args:
+            kwargs: kwargs 参数。
+        """
+        ...
 
-    def shutdown(self) -> None: ...
+    def create_score(self, **kwargs: Any) -> None:
+        """创建 score。
+
+        Args:
+            kwargs: kwargs 参数。
+        """
+        ...
+
+    def flush(self) -> None:
+        """刷新。"""
+        ...
+
+    def shutdown(self) -> None:
+        """关闭。"""
+        ...
 
 
 class _LangfuseObservation:
+    """表示 处理 langfuse observation 的后端数据结构或服务对象。"""
+
     def __init__(
         self,
         client: LangfuseObservationClient,
         *,
         sensitive_values: tuple[str | None, ...],
     ) -> None:
+        """初始化对象实例。
+
+        Args:
+            client: client 参数。
+            sensitive_values: sensitive_values 参数。
+        """
         self.client = client
         self.sensitive_values = sensitive_values
 
@@ -54,6 +90,13 @@ class _LangfuseObservation:
         error: object | None = None,
         metadata: Mapping[str, object] | None = None,
     ) -> None:
+        """更新。
+
+        Args:
+            output: output 参数。
+            error: error 参数。
+            metadata: metadata 参数。
+        """
         payload: dict[str, Any] = {}
         if output is not None:
             payload["output"] = self._safe(output)
@@ -70,6 +113,11 @@ class _LangfuseObservation:
             _warn("Langfuse observation update failed")
 
     def _safe(self, value: object) -> Any:
+        """执行 处理 safe 的内部辅助逻辑。
+
+        Args:
+            value: value 参数。
+        """
         return sanitize_telemetry_value(
             value,
             sensitive_values=self.sensitive_values,
@@ -77,12 +125,20 @@ class _LangfuseObservation:
 
 
 class LangfuseObservability:
+    """表示 处理 langfuse observability 的后端数据结构或服务对象。"""
+
     def __init__(
         self,
         client: LangfuseClient,
         *,
         sensitive_values: tuple[str | None, ...] = (),
     ) -> None:
+        """初始化对象实例。
+
+        Args:
+            client: client 参数。
+            sensitive_values: sensitive_values 参数。
+        """
         self.client = client
         self.sensitive_values = sensitive_values
 
@@ -96,6 +152,15 @@ class LangfuseObservability:
         metadata: Mapping[str, object] | None = None,
         model: str | None = None,
     ) -> Iterator[Observation]:
+        """处理 observe。
+
+        Args:
+            name: name 参数。
+            as_type: as_type 参数。
+            input: input 参数。
+            metadata: metadata 参数。
+            model: model 参数。
+        """
         kwargs: dict[str, Any] = {
             "name": self._safe(name),
             "as_type": as_type,
@@ -137,6 +202,16 @@ class LangfuseObservability:
         data_type: ScoreType | None = None,
         metadata: Mapping[str, object] | None = None,
     ) -> None:
+        """处理 score。
+
+        Args:
+            name: name 参数。
+            value: value 参数。
+            trace_id: trace_id 参数。
+            observation_id: observation_id 参数。
+            data_type: data_type 参数。
+            metadata: metadata 参数。
+        """
         kwargs: dict[str, Any] = {
             "name": self._safe(name),
             "value": value,
@@ -155,12 +230,19 @@ class LangfuseObservability:
             _warn("Langfuse score failed")
 
     def flush(self) -> None:
+        """刷新。"""
         self._safe_lifecycle("flush")
 
     def shutdown(self) -> None:
+        """关闭。"""
         self._safe_lifecycle("shutdown")
 
     def _safe(self, value: object) -> Any:
+        """执行 处理 safe 的内部辅助逻辑。
+
+        Args:
+            value: value 参数。
+        """
         return sanitize_telemetry_value(
             value,
             sensitive_values=self.sensitive_values,
@@ -173,12 +255,25 @@ class LangfuseObservability:
         exc: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        """执行 处理 safe exit 的内部辅助逻辑。
+
+        Args:
+            manager: manager 参数。
+            exc_type: exc_type 参数。
+            exc: exc 参数。
+            traceback: traceback 参数。
+        """
         try:
             manager.__exit__(exc_type, exc, traceback)
         except Exception:
             _warn("Langfuse observation finish failed")
 
     def _safe_lifecycle(self, method_name: str) -> None:
+        """执行 处理 safe lifecycle 的内部辅助逻辑。
+
+        Args:
+            method_name: method_name 参数。
+        """
         try:
             getattr(self.client, method_name)()
         except Exception:
@@ -190,6 +285,12 @@ def build_observability(
     *,
     client_factory: Callable[..., Any] | None = None,
 ) -> Observability:
+    """构建 observability。
+
+    Args:
+        settings: settings 参数。
+        client_factory: client_factory 参数。
+    """
     if not settings.langfuse_public_key or not settings.langfuse_secret_key:
         return NoopObservability()
     try:
@@ -224,4 +325,9 @@ def build_observability(
 
 
 def _warn(message: str) -> None:
+    """执行 处理 warn 的内部辅助逻辑。
+
+    Args:
+        message: message 参数。
+    """
     logger.warning(message)

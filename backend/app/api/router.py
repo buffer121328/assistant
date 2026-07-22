@@ -31,6 +31,11 @@ router.include_router(desktop_router)
 
 @router.get("/health")
 def health_check(request: Request) -> dict[str, str]:
+    """处理 health check。
+
+    Args:
+        request: request 参数。
+    """
     return {
         "service_name": request.app.state.settings.service_name,
         "status": "ok",

@@ -12,6 +12,13 @@ _SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]{0,127}$")
 def export_memory_notes(
     *, root: Path, memories: Iterable[Memory], links: Iterable[MemoryLink] = ()
 ) -> tuple[Path, ...]:
+    """处理 export memory notes。
+
+    Args:
+        root: root 参数。
+        memories: memories 参数。
+        links: links 参数。
+    """
     export_root = root.expanduser().resolve()
     export_root.mkdir(parents=True, exist_ok=True)
     links_by_memory: dict[str, list[str]] = {}
@@ -61,6 +68,11 @@ def export_memory_notes(
 
 
 def _yaml(value: object) -> str:
+    """执行 处理 yaml 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+    """
     return (
         '"'
         + str(value).replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ")

@@ -41,22 +41,32 @@ _POLICY_DOWNGRADE = re.compile(
 
 
 class EvolutionError(ValueError):
+    """表示 处理 evolution error 的后端数据结构或服务对象。"""
+
     pass
 
 
 class EvolutionValidationError(EvolutionError):
+    """表示 处理 evolution validation error 的后端数据结构或服务对象。"""
+
     pass
 
 
 class EvolutionApprovalError(EvolutionError):
+    """表示 处理 evolution approval error 的后端数据结构或服务对象。"""
+
     pass
 
 
 class EvolutionStaleError(EvolutionError):
+    """表示 处理 evolution stale error 的后端数据结构或服务对象。"""
+
     pass
 
 
 class GovernedEvolutionService:
+    """表示 处理 governed evolution service 的后端数据结构或服务对象。"""
+
     def __init__(
         self,
         *,
@@ -66,6 +76,15 @@ class GovernedEvolutionService:
         skill_store: ManagedSkillStore | None = None,
         skill_package_root: Path | None = None,
     ) -> None:
+        """初始化对象实例。
+
+        Args:
+            session: session 参数。
+            prompt_root: prompt_root 参数。
+            skill_root: skill_root 参数。
+            skill_store: skill_store 参数。
+            skill_package_root: skill_package_root 参数。
+        """
         self.session = session
         self.prompt_root = prompt_root.expanduser().resolve()
         self.skill_root = skill_root.expanduser().resolve()
@@ -86,6 +105,16 @@ class GovernedEvolutionService:
         candidate_content: str,
         evidence: str,
     ) -> EvolutionChange:
+        """处理 propose。
+
+        Args:
+            task_id: task_id 参数。
+            user_id: user_id 参数。
+            target_kind: target_kind 参数。
+            target_name: target_name 参数。
+            candidate_content: candidate_content 参数。
+            evidence: evidence 参数。
+        """
         task = await self.session.scalar(
             select(Task).where(Task.id == task_id, Task.user_id == user_id)
         )
@@ -151,6 +180,16 @@ class GovernedEvolutionService:
         guidance: str,
         evidence: str,
     ) -> EvolutionChange:
+        """处理 propose append。
+
+        Args:
+            task_id: task_id 参数。
+            user_id: user_id 参数。
+            target_kind: target_kind 参数。
+            target_name: target_name 参数。
+            guidance: guidance 参数。
+            evidence: evidence 参数。
+        """
         target = self._target(target_kind, target_name)
         current = self._read_target(target)
         bounded_guidance = guidance.strip()[:2_000]
@@ -174,6 +213,14 @@ class GovernedEvolutionService:
         package_name: str,
         evidence: str,
     ) -> EvolutionChange:
+        """处理 propose skill install。
+
+        Args:
+            task_id: task_id 参数。
+            user_id: user_id 参数。
+            package_name: package_name 参数。
+            evidence: evidence 参数。
+        """
         task = await self.session.scalar(
             select(Task).where(Task.id == task_id, Task.user_id == user_id)
         )
@@ -235,6 +282,12 @@ class GovernedEvolutionService:
         return change
 
     async def apply(self, *, change_id: str, user_id: str) -> EvolutionChange:
+        """处理 apply。
+
+        Args:
+            change_id: change_id 参数。
+            user_id: user_id 参数。
+        """
         change = await self._owned_change(change_id, user_id)
         if change.status != "pending":
             raise EvolutionValidationError("Evolution change is not pending")
@@ -281,6 +334,12 @@ class GovernedEvolutionService:
         return change
 
     async def rollback(self, *, change_id: str, user_id: str) -> EvolutionChange:
+        """处理 rollback。
+
+        Args:
+            change_id: change_id 参数。
+            user_id: user_id 参数。
+        """
         change = await self._owned_change(change_id, user_id)
         if change.status != "applied":
             raise EvolutionValidationError("Only an applied change can be rolled back")
@@ -329,6 +388,12 @@ class GovernedEvolutionService:
         *,
         user_id: str,
     ) -> EvolutionChange:
+        """执行 处理 apply skill package 的内部辅助逻辑。
+
+        Args:
+            change: change 参数。
+            user_id: user_id 参数。
+        """
         store = self._required_skill_store()
         package_path = self._skill_package_path(change.target_name)
         package = package_path.read_bytes()
@@ -364,6 +429,13 @@ class GovernedEvolutionService:
         applied: EvolutionVersion,
         user_id: str,
     ) -> EvolutionChange:
+        """执行 处理 rollback skill package 的内部辅助逻辑。
+
+        Args:
+            change: change 参数。
+            applied: applied 参数。
+            user_id: user_id 参数。
+        """
         store = self._required_skill_store()
         payload = json.loads(change.candidate_content)
         skill_name = payload.get("skill_name") if isinstance(payload, dict) else None
@@ -389,6 +461,12 @@ class GovernedEvolutionService:
         return change
 
     async def _owned_change(self, change_id: str, user_id: str) -> EvolutionChange:
+        """执行 处理 owned change 的内部辅助逻辑。
+
+        Args:
+            change_id: change_id 参数。
+            user_id: user_id 参数。
+        """
         change = await self.session.scalar(
             select(EvolutionChange).where(
                 EvolutionChange.id == change_id,
@@ -400,6 +478,11 @@ class GovernedEvolutionService:
         return change
 
     def _skill_package_path(self, package_name: str) -> Path:
+        """执行 处理 skill package path 的内部辅助逻辑。
+
+        Args:
+            package_name: package_name 参数。
+        """
         root = self.skill_package_root
         if (
             root is None
@@ -420,6 +503,11 @@ class GovernedEvolutionService:
         return resolved
 
     def _validate_skill_package(self, package: bytes) -> str:
+        """执行 校验 skill package 的内部辅助逻辑。
+
+        Args:
+            package: package 参数。
+        """
         store = self._required_skill_store()
         with tempfile.TemporaryDirectory(prefix="agent-skill-validation-") as directory:
             validation_store = ManagedSkillStore(
@@ -429,7 +517,9 @@ class GovernedEvolutionService:
             try:
                 record = validation_store.install(package)
             except Exception as exc:
-                raise EvolutionValidationError("Skill package validation failed") from exc
+                raise EvolutionValidationError(
+                    "Skill package validation failed"
+                ) from exc
         try:
             store.get(record.name)
         except ManagedSkillNotFoundError:
@@ -439,11 +529,18 @@ class GovernedEvolutionService:
         raise EvolutionValidationError("Managed Skill already exists")
 
     def _required_skill_store(self) -> ManagedSkillStore:
+        """执行 处理 required skill store 的内部辅助逻辑。"""
         if self.skill_store is None:
             raise EvolutionValidationError("Managed Skill store is unavailable")
         return self.skill_store
 
     def _target(self, target_kind: str, target_name: str) -> Path:
+        """执行 处理 target 的内部辅助逻辑。
+
+        Args:
+            target_kind: target_kind 参数。
+            target_name: target_name 参数。
+        """
         if target_kind == "prompt" and _SAFE_PROMPT.fullmatch(target_name):
             root = self.prompt_root
             root.mkdir(parents=True, exist_ok=True)
@@ -461,7 +558,9 @@ class GovernedEvolutionService:
             if target_kind == "prompt":
                 resolved = target.resolve(strict=False)
             else:
-                raise EvolutionValidationError("Evolution target is unavailable") from exc
+                raise EvolutionValidationError(
+                    "Evolution target is unavailable"
+                ) from exc
         if not resolved.is_relative_to(root):
             raise EvolutionValidationError("Evolution target escaped managed root")
         if resolved.exists() and not resolved.is_file():
@@ -470,6 +569,11 @@ class GovernedEvolutionService:
 
     @staticmethod
     def _read_target(target: Path) -> str:
+        """执行 处理 read target 的内部辅助逻辑。
+
+        Args:
+            target: target 参数。
+        """
         if not target.exists():
             return ""
         if target.stat().st_size > 128 * 1024:
@@ -481,18 +585,33 @@ class GovernedEvolutionService:
 
     @staticmethod
     def _validate_candidate(content: str) -> str:
+        """执行 校验 candidate 的内部辅助逻辑。
+
+        Args:
+            content: content 参数。
+        """
         if not isinstance(content, str):
             raise EvolutionValidationError("Evolution candidate must be text")
         if not content.strip() or len(content.encode("utf-8")) > 128 * 1024:
             raise EvolutionValidationError("Evolution candidate size is invalid")
         if _SENSITIVE_ASSIGNMENT.search(content) or "PRIVATE KEY-----" in content:
-            raise EvolutionValidationError("Evolution candidate contains sensitive data")
+            raise EvolutionValidationError(
+                "Evolution candidate contains sensitive data"
+            )
         if _POLICY_DOWNGRADE.search(content):
-            raise EvolutionValidationError("Evolution candidate weakens governance policy")
+            raise EvolutionValidationError(
+                "Evolution candidate weakens governance policy"
+            )
         return content
 
     @staticmethod
     def _atomic_write(target: Path, content: str) -> None:
+        """执行 处理 atomic write 的内部辅助逻辑。
+
+        Args:
+            target: target 参数。
+            content: content 参数。
+        """
         target.parent.mkdir(parents=True, exist_ok=True)
         descriptor, name = tempfile.mkstemp(
             dir=target.parent,
@@ -511,8 +630,18 @@ class GovernedEvolutionService:
 
 
 def _checksum(content: str) -> str:
+    """执行 处理 checksum 的内部辅助逻辑。
+
+    Args:
+        content: content 参数。
+    """
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
 def _bytes_checksum(content: bytes) -> str:
+    """执行 处理 bytes checksum 的内部辅助逻辑。
+
+    Args:
+        content: content 参数。
+    """
     return hashlib.sha256(content).hexdigest()

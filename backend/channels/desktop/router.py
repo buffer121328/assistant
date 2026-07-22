@@ -6,7 +6,15 @@ from pathlib import Path
 from typing import Annotated, Literal, cast
 from urllib.parse import urlsplit, urlunsplit
 
-from fastapi import APIRouter, Depends, Query, Request, WebSocket, WebSocketDisconnect, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    Query,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,6 +44,8 @@ LOGGER = logging.getLogger("assistant_api")
 
 
 class LocalTaskCreateRequest(BaseModel):
+    """表示 处理 local task create request 的后端数据结构或服务对象。"""
+
     user_id: str = Field(min_length=1)
     task_type: str = Field(min_length=1)
     input_text: str = Field(min_length=1)
@@ -45,11 +55,15 @@ class LocalTaskCreateRequest(BaseModel):
 
 
 class LocalTaskSubmissionResponse(BaseModel):
+    """表示 处理 local task submission response 的后端数据结构或服务对象。"""
+
     task: TaskResponse
     queued: bool
 
 
 class LocalEventResponse(BaseModel):
+    """表示 处理 local event response 的后端数据结构或服务对象。"""
+
     event_id: str
     task_id: str
     type: str
@@ -59,10 +73,14 @@ class LocalEventResponse(BaseModel):
 
 
 class LocalEventListResponse(BaseModel):
+    """表示 处理 local event list response 的后端数据结构或服务对象。"""
+
     items: list[LocalEventResponse]
 
 
 class LocalConversationTokenStatsResponse(BaseModel):
+    """表示 处理 local conversation token stats response 的后端数据结构或服务对象。"""
+
     conversation_id: str
     message_count: int
     user_message_count: int
@@ -76,23 +94,31 @@ class LocalConversationTokenStatsResponse(BaseModel):
 
 
 class LocalMessageAppendRequest(BaseModel):
+    """表示 处理 local message append request 的后端数据结构或服务对象。"""
+
     user_id: str = Field(min_length=1)
     content: str = Field(min_length=1)
 
 
 class LocalApprovalDecisionRequest(BaseModel):
+    """表示 处理 local approval decision request 的后端数据结构或服务对象。"""
+
     user_id: str = Field(min_length=1)
     decision: Literal["approve", "reject"]
     reason: str | None = Field(default=None, max_length=1000)
 
 
 class LocalApprovalDecisionResponse(BaseModel):
+    """表示 处理 local approval decision response 的后端数据结构或服务对象。"""
+
     approval: ApprovalResponse
     task: TaskResponse
     queued: bool
 
 
 class LocalSettingsValidationRequest(BaseModel):
+    """表示 处理 local settings validation request 的后端数据结构或服务对象。"""
+
     api_base_url: str = Field(min_length=1, max_length=500)
     default_workdir: str | None = Field(default=None, max_length=2000)
     default_model_class: Literal["light", "standard"] | None = None
@@ -100,12 +126,19 @@ class LocalSettingsValidationRequest(BaseModel):
 
 
 class LocalSettingsValidationResponse(BaseModel):
+    """表示 处理 local settings validation response 的后端数据结构或服务对象。"""
+
     ok: bool
     settings: dict[str, object]
 
 
 @router.get("/health")
 def local_health(request: Request) -> dict[str, str]:
+    """处理 local health。
+
+    Args:
+        request: request 参数。
+    """
     return {
         "service_name": request.app.state.settings.service_name,
         "status": "ok",
@@ -114,6 +147,11 @@ def local_health(request: Request) -> dict[str, str]:
 
 @router.get("/config")
 def local_config(request: Request) -> dict[str, object]:
+    """处理 local config。
+
+    Args:
+        request: request 参数。
+    """
     settings = request.app.state.settings
     return {
         "service_name": settings.service_name,
@@ -133,6 +171,11 @@ def local_config(request: Request) -> dict[str, object]:
 def local_validate_settings(
     payload: LocalSettingsValidationRequest,
 ) -> LocalSettingsValidationResponse:
+    """处理 local validate settings。
+
+    Args:
+        payload: payload 参数。
+    """
     return LocalSettingsValidationResponse(
         ok=True,
         settings={
@@ -149,6 +192,12 @@ async def local_list_tasks(
     user_id: Annotated[str, Query(min_length=1)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> TaskListResponse:
+    """处理 local list tasks。
+
+    Args:
+        user_id: user_id 参数。
+        session: session 参数。
+    """
     try:
         tasks = await TaskService(session).list_tasks(user_id)
     except TaskServiceError as exc:
@@ -166,6 +215,13 @@ async def local_create_task(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> LocalTaskSubmissionResponse:
+    """处理 local create task。
+
+    Args:
+        payload: payload 参数。
+        request: request 参数。
+        session: session 参数。
+    """
     try:
         conversation_id = payload.conversation_id
         if conversation_id is None:
@@ -189,7 +245,9 @@ async def local_create_task(
             conversation_id=conversation_id,
         )
     except ConversationError as exc:
-        raise AppError(exc.code, "Conversation operation failed.", exc.status_code) from exc
+        raise AppError(
+            exc.code, "Conversation operation failed.", exc.status_code
+        ) from exc
     except TaskServiceError as exc:
         raise_app_error(exc)
     queued = _safe_enqueue_task_execution(
@@ -205,6 +263,13 @@ async def local_get_task(
     user_id: Annotated[str, Query(min_length=1)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> TaskResponse:
+    """处理 local get task。
+
+    Args:
+        task_id: task_id 参数。
+        user_id: user_id 参数。
+        session: session 参数。
+    """
     task = await _get_owned_task(session, task_id=task_id, user_id=user_id)
     return task_response(task)
 
@@ -216,6 +281,14 @@ async def local_append_task_message(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> LocalTaskSubmissionResponse:
+    """处理 local append task message。
+
+    Args:
+        task_id: task_id 参数。
+        payload: payload 参数。
+        request: request 参数。
+        session: session 参数。
+    """
     task = await _get_owned_task(session, task_id=task_id, user_id=payload.user_id)
     conversation_id = task.conversation_id
     if conversation_id is not None:
@@ -250,12 +323,21 @@ async def local_conversation_token_stats(
     user_id: Annotated[str, Query(min_length=1)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> LocalConversationTokenStatsResponse:
+    """处理 local conversation token stats。
+
+    Args:
+        conversation_id: conversation_id 参数。
+        user_id: user_id 参数。
+        session: session 参数。
+    """
     try:
         stats = await ConversationService(session).token_stats(
             conversation_id=conversation_id, user_id=user_id
         )
     except ConversationError as exc:
-        raise AppError(exc.code, "Conversation operation failed.", exc.status_code) from exc
+        raise AppError(
+            exc.code, "Conversation operation failed.", exc.status_code
+        ) from exc
     return LocalConversationTokenStatsResponse(
         conversation_id=stats.conversation_id,
         message_count=stats.message_count,
@@ -277,6 +359,14 @@ async def local_list_task_events(
     session: Annotated[AsyncSession, Depends(get_session)],
     after_event_id: str | None = None,
 ) -> LocalEventListResponse:
+    """处理 local list task events。
+
+    Args:
+        task_id: task_id 参数。
+        user_id: user_id 参数。
+        session: session 参数。
+        after_event_id: after_event_id 参数。
+    """
     await _get_owned_task(session, task_id=task_id, user_id=user_id)
     after_sequence = await _sequence_after_event_id(
         session,
@@ -287,7 +377,9 @@ async def local_list_task_events(
         task_id=task_id,
         after=after_sequence,
     )
-    return LocalEventListResponse(items=[_local_event_response(event) for event in events])
+    return LocalEventListResponse(
+        items=[_local_event_response(event) for event in events]
+    )
 
 
 @router.websocket("/tasks/{task_id}/events/stream")
@@ -297,6 +389,14 @@ async def local_stream_task_events(
     user_id: Annotated[str, Query(min_length=1)],
     after_event_id: str | None = None,
 ) -> None:
+    """处理 local stream task events。
+
+    Args:
+        websocket: websocket 参数。
+        task_id: task_id 参数。
+        user_id: user_id 参数。
+        after_event_id: after_event_id 参数。
+    """
     await websocket.accept()
     try:
         async with websocket.app.state.db_sessionmaker() as session:
@@ -336,6 +436,13 @@ async def local_list_task_logs(
     user_id: Annotated[str, Query(min_length=1)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> LocalEventListResponse:
+    """处理 local list task logs。
+
+    Args:
+        task_id: task_id 参数。
+        user_id: user_id 参数。
+        session: session 参数。
+    """
     await _get_owned_task(session, task_id=task_id, user_id=user_id)
     logs = list(
         await session.scalars(
@@ -345,7 +452,10 @@ async def local_list_task_logs(
         )
     )
     return LocalEventListResponse(
-        items=[_local_tool_log_response(log, sequence=index) for index, log in enumerate(logs, 1)]
+        items=[
+            _local_tool_log_response(log, sequence=index)
+            for index, log in enumerate(logs, 1)
+        ]
     )
 
 
@@ -358,6 +468,13 @@ async def local_list_task_approvals(
     user_id: Annotated[str, Query(min_length=1)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> ApprovalListResponse:
+    """处理 local list task approvals。
+
+    Args:
+        task_id: task_id 参数。
+        user_id: user_id 参数。
+        session: session 参数。
+    """
     try:
         approvals = await ApprovalService(session).list_for_owner(
             task_id=task_id,
@@ -381,6 +498,15 @@ async def local_decide_task_approval(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> LocalApprovalDecisionResponse:
+    """处理 local decide task approval。
+
+    Args:
+        task_id: task_id 参数。
+        approval_id: approval_id 参数。
+        payload: payload 参数。
+        request: request 参数。
+        session: session 参数。
+    """
     decision = (
         ApprovalStatus.APPROVED
         if payload.decision == "approve"
@@ -410,6 +536,13 @@ async def local_decide_task_approval(
 
 
 async def _get_owned_task(session: AsyncSession, *, task_id: str, user_id: str) -> Task:
+    """执行 获取 owned task 的内部辅助逻辑。
+
+    Args:
+        session: session 参数。
+        task_id: task_id 参数。
+        user_id: user_id 参数。
+    """
     task = await session.scalar(
         select(Task).where(Task.id == task_id, Task.user_id == user_id)
     )
@@ -424,10 +557,19 @@ async def _sequence_after_event_id(
     task_id: str,
     after_event_id: str | None,
 ) -> int:
+    """执行 处理 sequence after event id 的内部辅助逻辑。
+
+    Args:
+        session: session 参数。
+        task_id: task_id 参数。
+        after_event_id: after_event_id 参数。
+    """
     if after_event_id is None:
         return 0
     event = await session.scalar(
-        select(TaskEvent).where(TaskEvent.task_id == task_id, TaskEvent.id == after_event_id)
+        select(TaskEvent).where(
+            TaskEvent.task_id == task_id, TaskEvent.id == after_event_id
+        )
     )
     if event is None:
         raise AppError("event_cursor_not_found", "Event cursor not found.", 404)
@@ -435,6 +577,11 @@ async def _sequence_after_event_id(
 
 
 def _local_event_response(event: TaskEvent) -> LocalEventResponse:
+    """执行 处理 local event response 的内部辅助逻辑。
+
+    Args:
+        event: event 参数。
+    """
     return LocalEventResponse(
         event_id=event.id,
         task_id=event.task_id,
@@ -445,8 +592,13 @@ def _local_event_response(event: TaskEvent) -> LocalEventResponse:
     )
 
 
-
 def _local_tool_log_response(log: ToolLog, *, sequence: int) -> LocalEventResponse:
+    """执行 处理 local tool log response 的内部辅助逻辑。
+
+    Args:
+        log: log 参数。
+        sequence: sequence 参数。
+    """
     return LocalEventResponse(
         event_id=f"tool-log-{log.id}",
         task_id=log.task_id or "",
@@ -462,7 +614,13 @@ def _local_tool_log_response(log: ToolLog, *, sequence: int) -> LocalEventRespon
         },
     )
 
+
 def _safe_payload(payload_json: str) -> dict[str, object]:
+    """执行 处理 safe payload 的内部辅助逻辑。
+
+    Args:
+        payload_json: payload_json 参数。
+    """
     import json
 
     loaded = json.loads(payload_json)
@@ -476,6 +634,11 @@ def _safe_payload(payload_json: str) -> dict[str, object]:
 
 
 def _safe_payload_value(value: object) -> object:
+    """执行 处理 safe payload value 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+    """
     if isinstance(value, str):
         return sanitize_text(value)
     if isinstance(value, dict):
@@ -494,14 +657,32 @@ def _safe_payload_value(value: object) -> object:
 
 
 def _is_sensitive_key(key: str) -> bool:
+    """执行 处理 is sensitive key 的内部辅助逻辑。
+
+    Args:
+        key: key 参数。
+    """
     normalized = key.casefold()
     return any(
         marker in normalized
-        for marker in ("authorization", "cookie", "api_key", "apikey", "token", "secret")
+        for marker in (
+            "authorization",
+            "cookie",
+            "api_key",
+            "apikey",
+            "token",
+            "secret",
+        )
     )
 
 
 def _safe_enqueue_task_execution(task_id: str, *, runtime_settings: object) -> bool:
+    """执行 处理 safe enqueue task execution 的内部辅助逻辑。
+
+    Args:
+        task_id: task_id 参数。
+        runtime_settings: runtime_settings 参数。
+    """
     try:
         return _enqueue_task_execution(task_id, runtime_settings=runtime_settings)
     except Exception:
@@ -510,6 +691,11 @@ def _safe_enqueue_task_execution(task_id: str, *, runtime_settings: object) -> b
 
 
 def _validated_local_api_base_url(value: str) -> str:
+    """执行 处理 validated local api base url 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+    """
     parsed = urlsplit(value.strip())
     if (
         parsed.scheme not in {"http", "https"}
@@ -533,6 +719,11 @@ def _validated_local_api_base_url(value: str) -> str:
 
 
 def _validated_workdir(value: str | None) -> str | None:
+    """执行 处理 validated workdir 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+    """
     if value is None or not value.strip():
         return None
     candidate = Path(value).expanduser()

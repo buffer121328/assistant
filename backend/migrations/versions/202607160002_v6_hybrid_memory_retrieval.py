@@ -16,6 +16,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    """执行数据库迁移升级步骤。"""
     op.create_table(
         "memory_retrieval_traces",
         sa.Column("id", sa.String(36), primary_key=True),
@@ -60,5 +61,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """执行数据库迁移回滚步骤。"""
     op.drop_table("memory_retrieval_trace_items")
     op.drop_table("memory_retrieval_traces")

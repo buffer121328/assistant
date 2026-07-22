@@ -7,6 +7,8 @@ from typing import Protocol
 
 @dataclass(frozen=True)
 class SubAgentRequest:
+    """表示 处理 sub agent request 的后端数据结构或服务对象。"""
+
     step_index: int
     role: str
     objective: str
@@ -17,6 +19,8 @@ class SubAgentRequest:
 
 @dataclass(frozen=True)
 class SubAgentResult:
+    """表示 处理 sub agent result 的后端数据结构或服务对象。"""
+
     step_index: int
     role: str
     content: str
@@ -24,10 +28,20 @@ class SubAgentResult:
 
 
 class SubAgentRunner(Protocol):
-    async def run(self, request: SubAgentRequest) -> SubAgentResult: ...
+    """表示 处理 sub agent runner 的后端数据结构或服务对象。"""
+
+    async def run(self, request: SubAgentRequest) -> SubAgentResult:
+        """运行。
+
+        Args:
+            request: request 参数。
+        """
+        ...
 
 
 class SubAgentCoordinator:
+    """表示 处理 sub agent coordinator 的后端数据结构或服务对象。"""
+
     def __init__(
         self,
         *,
@@ -37,6 +51,15 @@ class SubAgentCoordinator:
         timeout_seconds: float = 30.0,
         max_result_chars: int = 10_000,
     ) -> None:
+        """初始化对象实例。
+
+        Args:
+            runner: runner 参数。
+            max_subagents: max_subagents 参数。
+            concurrency: concurrency 参数。
+            timeout_seconds: timeout_seconds 参数。
+            max_result_chars: max_result_chars 参数。
+        """
         self.runner = runner
         self.max_subagents = max(0, min(max_subagents, 3))
         self.concurrency = max(1, min(concurrency, 3))
@@ -50,10 +73,22 @@ class SubAgentCoordinator:
         user_id: str,
         requests: tuple[SubAgentRequest, ...],
     ) -> tuple[SubAgentResult, ...]:
+        """运行。
+
+        Args:
+            task_id: task_id 参数。
+            user_id: user_id 参数。
+            requests: requests 参数。
+        """
         selected = requests[: self.max_subagents]
         semaphore = asyncio.Semaphore(self.concurrency)
 
         async def execute(request: SubAgentRequest) -> SubAgentResult:
+            """执行。
+
+            Args:
+                request: request 参数。
+            """
             scoped = replace(
                 request,
                 task_id=task_id,

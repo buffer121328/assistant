@@ -17,6 +17,13 @@ def list_capabilities(
     kind: Annotated[CapabilityKind | None, Query()] = None,
     enabled: Annotated[bool | None, Query()] = None,
 ) -> CapabilityCatalogResponse:
+    """列出 capabilities。
+
+    Args:
+        request: request 参数。
+        kind: kind 参数。
+        enabled: enabled 参数。
+    """
     registry: CapabilityRegistry = request.app.state.capability_registry
     return CapabilityCatalogResponse(
         revision=registry.revision,

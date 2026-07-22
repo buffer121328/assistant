@@ -18,15 +18,31 @@ logger = logging.getLogger(__name__)
 try:
     from prometheus_client import Counter
 except ModuleNotFoundError:
+
     class _NoopCounter:
+        """表示 处理 noop counter 的后端数据结构或服务对象。"""
+
         def labels(self, **_: object) -> _NoopCounter:
+            """处理 labels。
+
+            Args:
+                _: _ 参数。
+            """
             return self
 
         def inc(self) -> None:
+            """处理 inc。"""
             return None
 
     def Counter(*_: object, **__: object) -> _NoopCounter:
+        """处理 counter。
+
+        Args:
+            _: _ 参数。
+            __: __ 参数。
+        """
         return _NoopCounter()
+
 
 QUALITY_SAMPLED = Counter("agent_quality_sampled_total", "Sampled Agent outputs")
 QUALITY_EVALUATIONS = Counter(
@@ -43,29 +59,37 @@ QUALITY_LOW_SCORE = Counter(
 
 @dataclass(frozen=True)
 class SamplingPolicy:
+    """表示 处理 sampling policy 的后端数据结构或服务对象。"""
+
     rate: float = 0.0
     version: str = "judge-v1"
 
     def __post_init__(self) -> None:
+        """完成数据类初始化后的补充处理。"""
         if not 0.0 <= self.rate <= 1.0:
             raise ValueError("Sampling rate must be between 0 and 1")
         if not self.version.strip() or len(self.version) > 64:
             raise ValueError("Sampling policy version is invalid")
 
     def should_sample(self, task_id: str) -> bool:
+        """处理 should sample。
+
+        Args:
+            task_id: task_id 参数。
+        """
         if self.rate <= 0:
             return False
         if self.rate >= 1:
             return True
-        digest = hashlib.sha256(
-            f"{self.version}:{task_id}".encode("utf-8")
-        ).digest()
+        digest = hashlib.sha256(f"{self.version}:{task_id}".encode("utf-8")).digest()
         bucket = int.from_bytes(digest[:8], "big") / float(2**64)
         return bucket < self.rate
 
 
 @dataclass(frozen=True)
 class JudgeRequest:
+    """表示 处理 judge request 的后端数据结构或服务对象。"""
+
     task_id: str
     user_id: str
     task_type: str
@@ -76,12 +100,15 @@ class JudgeRequest:
 
 @dataclass(frozen=True)
 class JudgeDecision:
+    """表示 处理 judge decision 的后端数据结构或服务对象。"""
+
     relevance: float
     completeness: float
     faithfulness: float
     rationale: str = ""
 
     def __post_init__(self) -> None:
+        """完成数据类初始化后的补充处理。"""
         for value in (self.relevance, self.completeness, self.faithfulness):
             if not 0.0 <= value <= 1.0:
                 raise ValueError("Judge scores must be between 0 and 1")
@@ -90,10 +117,20 @@ class JudgeDecision:
 
 
 class JudgeModel(Protocol):
-    async def evaluate(self, request: JudgeRequest) -> JudgeDecision: ...
+    """表示 处理 judge model 的后端数据结构或服务对象。"""
+
+    async def evaluate(self, request: JudgeRequest) -> JudgeDecision:
+        """处理 evaluate。
+
+        Args:
+            request: request 参数。
+        """
+        ...
 
 
 class QualityEvaluator:
+    """表示 处理 quality evaluator 的后端数据结构或服务对象。"""
+
     def __init__(
         self,
         *,
@@ -104,6 +141,16 @@ class QualityEvaluator:
         max_input_chars: int = 10_000,
         max_output_chars: int = 20_000,
     ) -> None:
+        """初始化对象实例。
+
+        Args:
+            sampling: sampling 参数。
+            judge: judge 参数。
+            observability: observability 参数。
+            threshold: threshold 参数。
+            max_input_chars: max_input_chars 参数。
+            max_output_chars: max_output_chars 参数。
+        """
         if not 0.0 <= threshold <= 1.0:
             raise ValueError("Quality threshold must be between 0 and 1")
         self.sampling = sampling
@@ -119,6 +166,12 @@ class QualityEvaluator:
         session: AsyncSession,
         task: Task,
     ) -> JudgeDecision | None:
+        """处理 evaluate task。
+
+        Args:
+            session: session 参数。
+            task: task 参数。
+        """
         if (
             task.status != "success"
             or task.task_type not in {"agent", "plan", "learn", "daily", "office"}
@@ -223,6 +276,11 @@ class QualityEvaluator:
 
 
 def _parse_stored_decision(value: str) -> JudgeDecision | None:
+    """执行 解析 stored decision 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+    """
     try:
         payload = json.loads(value)
         if not isinstance(payload, dict):

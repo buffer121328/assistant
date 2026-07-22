@@ -8,6 +8,11 @@ from .loader import EvaluationDataError
 
 
 def evaluate_candidate_memory_fixture(path: Path) -> dict[str, Any]:
+    """处理 evaluate candidate memory fixture。
+
+    Args:
+        path: path 参数。
+    """
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
@@ -74,4 +79,10 @@ def evaluate_candidate_memory_fixture(path: Path) -> dict[str, Any]:
 
 
 def _ratio(numerator: int, denominator: int) -> float:
+    """执行 处理 ratio 的内部辅助逻辑。
+
+    Args:
+        numerator: numerator 参数。
+        denominator: denominator 参数。
+    """
     return 0.0 if denominator == 0 else numerator / denominator

@@ -7,6 +7,8 @@ from .loader import validate_safe_text
 
 
 class ExperimentClient(Protocol):
+    """表示 处理 experiment client 的后端数据结构或服务对象。"""
+
     def run_experiment(
         self,
         *,
@@ -16,7 +18,18 @@ class ExperimentClient(Protocol):
         metadata: dict[str, str] | None = None,
         run_name: str | None = None,
         description: str | None = None,
-    ) -> Any: ...
+    ) -> Any:
+        """运行 experiment。
+
+        Args:
+            name: name 参数。
+            data: data 参数。
+            task: task 参数。
+            metadata: metadata 参数。
+            run_name: run_name 参数。
+            description: description 参数。
+        """
+        ...
 
 
 def run_langfuse_experiment(
@@ -65,7 +78,9 @@ def run_langfuse_experiment(
         data=normalized,
         task=task,
         metadata=dict(metadata) if metadata is not None else None,
-        run_name=(run_name.strip() if isinstance(run_name, str) and run_name.strip() else None),
+        run_name=(
+            run_name.strip() if isinstance(run_name, str) and run_name.strip() else None
+        ),
         description=(
             description.strip()
             if isinstance(description, str) and description.strip()
@@ -75,6 +90,13 @@ def run_langfuse_experiment(
 
 
 def _validate_experiment_value(case_id: str, field: str, value: object) -> None:
+    """执行 校验 experiment value 的内部辅助逻辑。
+
+    Args:
+        case_id: case_id 参数。
+        field: field 参数。
+        value: value 参数。
+    """
     if value is None or isinstance(value, bool | int | float):
         return
     if isinstance(value, str):

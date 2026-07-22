@@ -6,7 +6,8 @@ provider credentials.
 
 - CI sets `RUN_SERVICE_INTEGRATION=1` after migrating its isolated services.
 - `uv run python -m scripts.ops.compose_smoke` builds an isolated Compose project,
-  checks migrations, PostgreSQL, Redis and Celery, interrupts Redis and the worker,
+  checks API health and authenticated local configuration, writable runtime storage,
+  migrations, PostgreSQL, Redis and Celery, interrupts Redis and the worker,
   verifies recovery, and removes its volumes on exit.
 - Real-provider smoke checks live under `scripts/ops/` and report unconfigured
   providers as skipped, not passed.

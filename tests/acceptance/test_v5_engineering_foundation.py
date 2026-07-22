@@ -56,12 +56,11 @@ def test_compose_and_ci_define_engineering_boundaries() -> None:
         "LOCAL_API_TOKEN",
         "ARTIFACTS_ROOT",
         "KNOWLEDGE_ROOT",
-        "BROWSER_STATE_ROOT",
         "MEM0_CONFIG_PATH",
         "QUALITY_JUDGE_SAMPLE_RATE",
     ):
         assert name in compose
-    for volume in ("artifacts-data", "knowledge-data", "browser-data"):
+    for volume in ("artifacts-data", "knowledge-data"):
         assert volume in compose
     for command in ("pytest", "ruff check", "mypy", "alembic upgrade head"):
         assert command in workflow

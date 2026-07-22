@@ -16,20 +16,42 @@ ALLOWED_ROLES = frozenset({"button", "link", "checkbox", "radio", "menuitem", "t
 
 
 class BrowserSessionStore(Protocol):
-    async def load(self, *, user_id: str, connection_id: str) -> BrowserSession: ...
+    """表示 处理 browser session store 的后端数据结构或服务对象。"""
+
+    async def load(self, *, user_id: str, connection_id: str) -> BrowserSession:
+        """加载。
+
+        Args:
+            user_id: user_id 参数。
+            connection_id: connection_id 参数。
+        """
+        ...
+
     async def save(
         self, *, user_id: str, connection_id: str, storage_state: dict[str, Any]
-    ) -> None: ...
+    ) -> None:
+        """保存。
+
+        Args:
+            user_id: user_id 参数。
+            connection_id: connection_id 参数。
+            storage_state: storage_state 参数。
+        """
+        ...
 
 
 @dataclass(frozen=True)
 class BrowserInteractionResult:
+    """表示 处理 browser interaction result 的后端数据结构或服务对象。"""
+
     title: str
     text: str
     final_url: str
 
 
 class BrowserRuntime(Protocol):
+    """表示 处理 browser runtime 的后端数据结构或服务对象。"""
+
     async def execute(
         self,
         *,
@@ -39,10 +61,23 @@ class BrowserRuntime(Protocol):
         policy: PublicUrlPolicy,
         timeout_seconds: float,
         max_text_chars: int,
-    ) -> tuple[BrowserInteractionResult, dict[str, Any]]: ...
+    ) -> tuple[BrowserInteractionResult, dict[str, Any]]:
+        """执行。
+
+        Args:
+            session: session 参数。
+            url: url 参数。
+            actions: actions 参数。
+            policy: policy 参数。
+            timeout_seconds: timeout_seconds 参数。
+            max_text_chars: max_text_chars 参数。
+        """
+        ...
 
 
 class BrowserInteractor:
+    """表示 处理 browser interactor 的后端数据结构或服务对象。"""
+
     def __init__(
         self,
         *,
@@ -52,6 +87,15 @@ class BrowserInteractor:
         timeout_seconds: float = 20.0,
         max_text_chars: int = 20_000,
     ) -> None:
+        """初始化对象实例。
+
+        Args:
+            sessions: sessions 参数。
+            runtime: runtime 参数。
+            policy: policy 参数。
+            timeout_seconds: timeout_seconds 参数。
+            max_text_chars: max_text_chars 参数。
+        """
         self.sessions = sessions
         self.runtime = runtime or PlaywrightInteractionRuntime()
         self.policy = policy or PublicUrlPolicy()
@@ -67,6 +111,15 @@ class BrowserInteractor:
         actions: list[dict[str, Any]],
         save_state: bool,
     ) -> BrowserInteractionResult:
+        """运行。
+
+        Args:
+            user_id: user_id 参数。
+            connection_id: connection_id 参数。
+            url: url 参数。
+            actions: actions 参数。
+            save_state: save_state 参数。
+        """
         session = await self.sessions.load(user_id=user_id, connection_id=connection_id)
         safe_url = await self.policy.validate(url)
         _validate_domain(safe_url, session.allowed_domains)
@@ -99,6 +152,8 @@ class BrowserInteractor:
 
 
 class PlaywrightInteractionRuntime:
+    """表示 处理 playwright interaction runtime 的后端数据结构或服务对象。"""
+
     async def execute(
         self,
         *,
@@ -109,6 +164,16 @@ class PlaywrightInteractionRuntime:
         timeout_seconds: float,
         max_text_chars: int,
     ) -> tuple[BrowserInteractionResult, dict[str, Any]]:
+        """执行。
+
+        Args:
+            session: session 参数。
+            url: url 参数。
+            actions: actions 参数。
+            policy: policy 参数。
+            timeout_seconds: timeout_seconds 参数。
+            max_text_chars: max_text_chars 参数。
+        """
         from playwright.async_api import StorageState, async_playwright
 
         async with async_playwright() as playwright:
@@ -120,7 +185,13 @@ class PlaywrightInteractionRuntime:
                     service_workers="block",
                 )
                 try:
+
                     async def guard_route(route: Any) -> None:
+                        """处理 guard route。
+
+                        Args:
+                            route: route 参数。
+                        """
                         request_url = str(route.request.url)
                         try:
                             await policy.validate(request_url)
@@ -143,7 +214,9 @@ class PlaywrightInteractionRuntime:
                     return (
                         BrowserInteractionResult(
                             title=await page.title(),
-                            text=(await page.locator("body").inner_text())[:max_text_chars],
+                            text=(await page.locator("body").inner_text())[
+                                :max_text_chars
+                            ],
                             final_url=page.url,
                         ),
                         cast(dict[str, Any], await context.storage_state()),
@@ -155,6 +228,11 @@ class PlaywrightInteractionRuntime:
 
 
 def build_browser_tool_descriptors(*, enabled: bool) -> tuple[ToolDescriptor, ...]:
+    """构建 browser tool descriptors。
+
+    Args:
+        enabled: enabled 参数。
+    """
     return tuple(
         ToolDescriptor(
             name=name,
@@ -169,15 +247,39 @@ def build_browser_tool_descriptors(*, enabled: bool) -> tuple[ToolDescriptor, ..
             tags=("daily", "office"),
         )
         for name, description in (
-            ("browser.interact", "Run approved structured browser actions without saving state"),
-            ("browser.save_state", "Run approved structured browser actions and save encrypted state"),
+            (
+                "browser.interact",
+                "Run approved structured browser actions without saving state",
+            ),
+            (
+                "browser.save_state",
+                "Run approved structured browser actions and save encrypted state",
+            ),
         )
     )
 
 
 def build_browser_tool_specs(interactor: BrowserInteractor) -> tuple[ToolSpec, ...]:
+    """构建 browser tool specs。
+
+    Args:
+        interactor: interactor 参数。
+    """
+
     def spec(name: str, *, save_state: bool) -> ToolSpec:
+        """处理 spec。
+
+        Args:
+            name: name 参数。
+            save_state: save_state 参数。
+        """
+
         async def handler(invocation: ToolInvocation) -> dict[str, str]:
+            """处理 handler。
+
+            Args:
+                invocation: invocation 参数。
+            """
             args = invocation.arguments
             result = await interactor.run(
                 user_id=invocation.user_id,
@@ -204,6 +306,11 @@ def build_browser_tool_specs(interactor: BrowserInteractor) -> tuple[ToolSpec, .
 
 
 def _actions(values: list[dict[str, Any]]) -> tuple[dict[str, str], ...]:
+    """执行 处理 actions 的内部辅助逻辑。
+
+    Args:
+        values: values 参数。
+    """
     if len(values) > MAX_ACTIONS:
         raise BrowserDestinationError("Too many browser actions")
     normalized: list[dict[str, str]] = []
@@ -219,7 +326,9 @@ def _actions(values: list[dict[str, Any]]) -> tuple[dict[str, str], ...]:
         if kind not in allowed_keys or set(value) != allowed_keys[kind]:
             raise BrowserDestinationError("Unsupported browser action")
         item = {key: str(raw) for key, raw in value.items()}
-        if any(not raw or len(raw) > 2_000 for key, raw in item.items() if key != "type"):
+        if any(
+            not raw or len(raw) > 2_000 for key, raw in item.items() if key != "type"
+        ):
             raise BrowserDestinationError("Browser action value is invalid")
         if kind == "click_role" and item["role"] not in ALLOWED_ROLES:
             raise BrowserDestinationError("Browser role is not allowed")
@@ -228,33 +337,61 @@ def _actions(values: list[dict[str, Any]]) -> tuple[dict[str, str], ...]:
 
 
 def _validate_domain(url: str, allowed_domains: tuple[str, ...]) -> None:
+    """执行 校验 domain 的内部辅助逻辑。
+
+    Args:
+        url: url 参数。
+        allowed_domains: allowed_domains 参数。
+    """
     hostname = (urlsplit(url).hostname or "").lower().rstrip(".")
     if hostname not in allowed_domains:
-        raise BrowserDestinationError("Destination domain is outside the connection allowlist")
+        raise BrowserDestinationError(
+            "Destination domain is outside the connection allowlist"
+        )
 
 
-async def _execute_action(page: Any, action: dict[str, str], timeout_seconds: float) -> None:
+async def _execute_action(
+    page: Any, action: dict[str, str], timeout_seconds: float
+) -> None:
+    """执行 执行 action 的内部辅助逻辑。
+
+    Args:
+        page: page 参数。
+        action: action 参数。
+        timeout_seconds: timeout_seconds 参数。
+    """
     timeout = int(timeout_seconds * 1_000)
     kind = action["type"]
     if kind == "navigate":
         await page.goto(action["url"], wait_until="domcontentloaded", timeout=timeout)
     elif kind == "click_role":
-        await page.get_by_role(action["role"], name=action["name"], exact=True).click(timeout=timeout)
+        await page.get_by_role(action["role"], name=action["name"], exact=True).click(
+            timeout=timeout
+        )
     elif kind == "click_text":
         await page.get_by_text(action["text"], exact=True).click(timeout=timeout)
     elif kind == "fill":
-        await page.get_by_label(action["field"], exact=True).fill(action["value"], timeout=timeout)
+        await page.get_by_label(action["field"], exact=True).fill(
+            action["value"], timeout=timeout
+        )
     else:
-        await page.get_by_role("button", name=action["name"], exact=True).click(timeout=timeout)
+        await page.get_by_role("button", name=action["name"], exact=True).click(
+            timeout=timeout
+        )
 
 
 def _schema() -> dict[str, Any]:
+    """执行 处理 schema 的内部辅助逻辑。"""
     return {
         "type": "object",
         "properties": {
             "connection_id": {"type": "string", "minLength": 1, "maxLength": 36},
             "url": {"type": "string", "minLength": 1, "maxLength": 2048},
-            "actions": {"type": "array", "maxItems": MAX_ACTIONS, "items": {"type": "object"}},
+            "actions": {
+                "type": "array",
+                "maxItems": MAX_ACTIONS,
+                "items": {"type": "object"},
+            },
         },
         "required": ["connection_id", "url", "actions"],
         "additionalProperties": False,

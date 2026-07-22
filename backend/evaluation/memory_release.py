@@ -31,6 +31,12 @@ _REQUIRED_MANUAL_EVIDENCE = frozenset(
 def evaluate_memory_release_fixture(
     path: Path, *, manual_evidence_path: Path | None = None
 ) -> dict[str, Any]:
+    """处理 evaluate memory release fixture。
+
+    Args:
+        path: path 参数。
+        manual_evidence_path: manual_evidence_path 参数。
+    """
     payload = _load_fixture(path)
     thresholds = _parse_thresholds(payload.get("thresholds"))
     cases = _parse_cases(payload.get("cases"))
@@ -67,8 +73,7 @@ def evaluate_memory_release_fixture(
         "forbidden_write_count": sum(case["forbidden_write"] for case in cases),
         "p50_latency_ms": latencies[(len(latencies) - 1) // 2],
         "p95_latency_ms": latencies[p95_index],
-        "average_context_tokens": sum(case["context_tokens"] for case in cases)
-        / count,
+        "average_context_tokens": sum(case["context_tokens"] for case in cases) / count,
         "helpful_rate": _ratio(
             sum(case["feedback"] == "helpful" for case in feedback_cases),
             len(feedback_cases),
@@ -96,6 +101,11 @@ def evaluate_memory_release_fixture(
 
 
 def _load_fixture(path: Path) -> Mapping[str, Any]:
+    """执行 加载 fixture 的内部辅助逻辑。
+
+    Args:
+        path: path 参数。
+    """
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
@@ -106,6 +116,11 @@ def _load_fixture(path: Path) -> Mapping[str, Any]:
 
 
 def _parse_thresholds(value: object) -> dict[str, float]:
+    """执行 解析 thresholds 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+    """
     if not isinstance(value, Mapping) or set(value) != set(_REQUIRED_THRESHOLDS):
         raise EvaluationDataError("release fixture thresholds are invalid")
     thresholds: dict[str, float] = {}
@@ -124,6 +139,11 @@ def _parse_thresholds(value: object) -> dict[str, float]:
 
 
 def _parse_cases(value: object) -> list[dict[str, Any]]:
+    """执行 解析 cases 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+    """
     if not isinstance(value, list) or not value:
         raise EvaluationDataError("release fixture cases are invalid")
     parsed: list[dict[str, Any]] = []
@@ -164,13 +184,16 @@ def _parse_cases(value: object) -> list[dict[str, Any]]:
             for key in integers
         ):
             raise EvaluationDataError("release fixture case integer is invalid")
-        if (
-            int(raw["evidence_true_positive"]) > int(raw["evidence_retrieved"])
-            or int(raw["evidence_true_positive"]) > int(raw["evidence_expected"])
-        ):
+        if int(raw["evidence_true_positive"]) > int(raw["evidence_retrieved"]) or int(
+            raw["evidence_true_positive"]
+        ) > int(raw["evidence_expected"]):
             raise EvaluationDataError("release fixture evidence counts are invalid")
         latency = raw.get("latency_ms")
-        if isinstance(latency, bool) or not isinstance(latency, (int, float)) or latency < 0:
+        if (
+            isinstance(latency, bool)
+            or not isinstance(latency, (int, float))
+            or latency < 0
+        ):
             raise EvaluationDataError("release fixture latency is invalid")
         if raw.get("feedback") not in {"helpful", "harmful", "none"}:
             raise EvaluationDataError("release fixture feedback is invalid")
@@ -179,6 +202,11 @@ def _parse_cases(value: object) -> list[dict[str, Any]]:
 
 
 def _manual_evidence(value: object) -> set[str]:
+    """执行 处理 manual evidence 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+    """
     if not isinstance(value, Mapping):
         raise EvaluationDataError("release fixture manual evidence is invalid")
     required = value.get("required")
@@ -197,11 +225,19 @@ def _manual_evidence(value: object) -> set[str]:
 
 
 def _load_manual_evidence_manifest(path: Path) -> set[str]:
+    """执行 加载 manual evidence manifest 的内部辅助逻辑。
+
+    Args:
+        path: path 参数。
+    """
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise EvaluationDataError("unable to load release evidence manifest") from exc
-    if not isinstance(payload, Mapping) or payload.get("format") != "v6-local-trial-evidence-v1":
+    if (
+        not isinstance(payload, Mapping)
+        or payload.get("format") != "v6-local-trial-evidence-v1"
+    ):
         raise EvaluationDataError("release evidence manifest format is invalid")
     evidence = payload.get("evidence")
     if not isinstance(evidence, list):
@@ -239,6 +275,12 @@ def _load_manual_evidence_manifest(path: Path) -> set[str]:
 def _gate_reasons(
     *, metrics: Mapping[str, int | float], thresholds: Mapping[str, float]
 ) -> list[str]:
+    """执行 处理 gate reasons 的内部辅助逻辑。
+
+    Args:
+        metrics: metrics 参数。
+        thresholds: thresholds 参数。
+    """
     checks = (
         (metrics["cross_user_leak_count"] > 0, "cross_user_leak_nonzero"),
         (metrics["forbidden_write_count"] > 0, "forbidden_write_nonzero"),
@@ -281,4 +323,11 @@ def _gate_reasons(
 
 
 def _ratio(numerator: int, denominator: int, *, empty: float = 0.0) -> float:
+    """执行 处理 ratio 的内部辅助逻辑。
+
+    Args:
+        numerator: numerator 参数。
+        denominator: denominator 参数。
+        empty: empty 参数。
+    """
     return empty if denominator == 0 else numerator / denominator

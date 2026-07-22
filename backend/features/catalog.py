@@ -22,6 +22,11 @@ _FEATURES_BY_TASK_TYPE: dict[str, FeatureDefinition] = {
 
 
 def feature_for_command(command: str) -> FeatureDefinition | None:
+    """处理 feature for command。
+
+    Args:
+        command: command 参数。
+    """
     task_type = FEATURE_COMMANDS.get(command)
     if task_type is None:
         return None
@@ -29,8 +34,14 @@ def feature_for_command(command: str) -> FeatureDefinition | None:
 
 
 def feature_for_task_type(task_type: str) -> FeatureDefinition | None:
+    """处理 feature for task type。
+
+    Args:
+        task_type: task_type 参数。
+    """
     return _FEATURES_BY_TASK_TYPE.get(task_type)
 
 
 def planning_task_types() -> frozenset[str]:
+    """处理 planning task types。"""
     return frozenset(_FEATURES_BY_TASK_TYPE)

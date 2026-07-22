@@ -142,6 +142,7 @@ def test_runtime_metadata_uses_new_layout_paths() -> None:
         "backend/infrastructure",
         "backend/integrations",
         "backend/knowledge",
+        "backend/rag",
         "backend/model_gateway",
         "backend/notifications",
         "backend/observability",
@@ -165,3 +166,31 @@ def test_runtime_metadata_uses_new_layout_paths() -> None:
     assert "workers.worker:celery_app" in readme
     assert "script_location = backend/migrations" in alembic
     assert "prepend_sys_path = backend" in alembic
+
+
+def test_builtin_skill_runtime_lookups_use_resource_skillpacks() -> None:
+    runtime = (ROOT / "backend" / "workers" / "runtime.py").read_text(
+        encoding="utf-8"
+    )
+    assert 'BUILTIN_SKILL_ROOT = Path(__file__).resolve().parents[1] / "resources" / "skillpacks"' in runtime
+    assert "builtin_root=BUILTIN_SKILL_ROOT" in runtime
+    assert "build_default_registry(\n            BUILTIN_SKILL_ROOT\n        )" in runtime
+    assert ' / "skills"' not in runtime
+
+
+def test_browser_state_root_is_not_runtime_configuration() -> None:
+    for path in (
+        ROOT / "backend" / "infrastructure" / "config.py",
+        ROOT / ".env.example",
+        ROOT / "docker-compose.yml",
+    ):
+        assert "BROWSER_STATE_ROOT" not in path.read_text(encoding="utf-8")
+
+
+def test_readme_distinguishes_builtin_resources_from_mutable_var_roots() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+
+    assert "backend/resources" in readme
+    assert "var/" in readme
+    assert "内置源资源" in readme
+    assert "可变运行时根目录" in readme

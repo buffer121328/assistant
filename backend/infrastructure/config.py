@@ -1,11 +1,13 @@
 from pathlib import Path
 from typing import Literal
 
-from pydantic import SecretStr
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    """表示 处理 settings 的后端数据结构或服务对象。"""
+
     app_env: str = "local"
     log_level: str = "INFO"
     service_name: str = "assistant-api"
@@ -57,7 +59,6 @@ class Settings(BaseSettings):
     readonly_shell_timeout_seconds: float = 10.0
     readonly_shell_max_output_chars: int = 50_000
     knowledge_root: Path = Path("var/knowledge")
-    browser_state_root: Path = Path("var/browser")
     browser_enabled: bool = False
     browser_timeout_seconds: float = 20.0
     browser_max_text_chars: int = 50_000
@@ -82,8 +83,21 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
+    @field_validator("search_provider_timeout_seconds", mode="before")
+    @classmethod
+    def blank_search_provider_timeout_is_none(cls, value: object) -> object:
+        """处理 blank search provider timeout is none。
+
+        Args:
+            value: value 参数。
+        """
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
     @property
     def effective_sandbox_provider(self) -> Literal["none", "docker"]:
+        """处理 effective sandbox provider。"""
         if self.sandbox_provider != "none":
             return self.sandbox_provider
         if self.sandbox_enabled:
@@ -92,18 +106,22 @@ class Settings(BaseSettings):
 
     @property
     def effective_shell_exec_enabled(self) -> bool:
+        """处理 effective shell exec enabled。"""
         return self.shell_exec_enabled or self.sandbox_enabled
 
     @property
     def effective_sandbox_docker_image(self) -> str:
+        """处理 effective sandbox docker image。"""
         return self.sandbox_docker_image or self.sandbox_image
 
     @property
     def effective_sandbox_docker_allowed_images(self) -> str:
+        """处理 effective sandbox docker allowed images。"""
         return self.sandbox_docker_allowed_images or self.sandbox_allowed_images
 
     @property
     def effective_sandbox_docker_allowed_images_tuple(self) -> tuple[str, ...]:
+        """处理 effective sandbox docker allowed images tuple。"""
         return tuple(
             item.strip()
             for item in self.effective_sandbox_docker_allowed_images.split(",")
@@ -112,4 +130,5 @@ class Settings(BaseSettings):
 
 
 def load_settings() -> Settings:
+    """加载 settings。"""
     return Settings()

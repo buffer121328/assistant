@@ -14,11 +14,15 @@ _AREAS: tuple[WorkspaceArea, ...] = ("input", "work", "output", "audit")
 
 
 class SessionWorkspacePathError(ValueError):
+    """表示 处理 session workspace path error 的后端数据结构或服务对象。"""
+
     pass
 
 
 @dataclass(frozen=True)
 class SessionWorkspace:
+    """表示 处理 session workspace 的后端数据结构或服务对象。"""
+
     session_id: str
     root: Path
     input_dir: Path
@@ -39,10 +43,20 @@ class SessionWorkspaceStore:
     """
 
     def __init__(self, root: Path) -> None:
+        """初始化对象实例。
+
+        Args:
+            root: root 参数。
+        """
         self.root = root.expanduser().resolve()
         self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
 
     def create(self, *, session_id: str) -> SessionWorkspace:
+        """创建。
+
+        Args:
+            session_id: session_id 参数。
+        """
         safe_session_id = self._safe_session_id(session_id)
         session_root = self.root / safe_session_id
         if session_root.is_symlink():
@@ -73,6 +87,12 @@ class SessionWorkspaceStore:
         )
 
     def reserve_input(self, *, session_id: str, filename: str) -> Path:
+        """处理 reserve input。
+
+        Args:
+            session_id: session_id 参数。
+            filename: filename 参数。
+        """
         safe_filename = self._safe_filename(filename)
         workspace = self.create(session_id=session_id)
         target = workspace.input_dir / safe_filename
@@ -87,6 +107,14 @@ class SessionWorkspaceStore:
         area: TaskScopedWorkspaceArea,
         filename: str,
     ) -> Path:
+        """执行 处理 reserve task file 的内部辅助逻辑。
+
+        Args:
+            session_id: session_id 参数。
+            task_id: task_id 参数。
+            area: area 参数。
+            filename: filename 参数。
+        """
         safe_task_id = self._safe_task_id(task_id)
         safe_filename = self._safe_filename(filename)
         workspace = self.create(session_id=session_id)
@@ -106,6 +134,13 @@ class SessionWorkspaceStore:
     def reserve_task_work(
         self, *, session_id: str, task_id: str, filename: str
     ) -> Path:
+        """处理 reserve task work。
+
+        Args:
+            session_id: session_id 参数。
+            task_id: task_id 参数。
+            filename: filename 参数。
+        """
         return self._reserve_task_file(
             session_id=session_id, task_id=task_id, area="work", filename=filename
         )
@@ -113,6 +148,13 @@ class SessionWorkspaceStore:
     def reserve_task_output(
         self, *, session_id: str, task_id: str, filename: str
     ) -> Path:
+        """处理 reserve task output。
+
+        Args:
+            session_id: session_id 参数。
+            task_id: task_id 参数。
+            filename: filename 参数。
+        """
         return self._reserve_task_file(
             session_id=session_id, task_id=task_id, area="output", filename=filename
         )
@@ -120,23 +162,45 @@ class SessionWorkspaceStore:
     def reserve_task_audit(
         self, *, session_id: str, task_id: str, filename: str
     ) -> Path:
+        """处理 reserve task audit。
+
+        Args:
+            session_id: session_id 参数。
+            task_id: task_id 参数。
+            filename: filename 参数。
+        """
         return self._reserve_task_file(
             session_id=session_id, task_id=task_id, area="audit", filename=filename
         )
 
     def _safe_session_id(self, session_id: str) -> str:
+        """执行 处理 safe session id 的内部辅助逻辑。
+
+        Args:
+            session_id: session_id 参数。
+        """
         safe_session_id = session_id.strip()
         if not _SAFE_SESSION_ID.fullmatch(safe_session_id):
             raise SessionWorkspacePathError("Invalid session id")
         return safe_session_id
 
     def _safe_task_id(self, task_id: str) -> str:
+        """执行 处理 safe task id 的内部辅助逻辑。
+
+        Args:
+            task_id: task_id 参数。
+        """
         safe_task_id = task_id.strip()
         if not _SAFE_TASK_ID.fullmatch(safe_task_id):
             raise SessionWorkspacePathError("Invalid task id")
         return safe_task_id
 
     def _safe_filename(self, filename: str) -> str:
+        """执行 处理 safe filename 的内部辅助逻辑。
+
+        Args:
+            filename: filename 参数。
+        """
         safe_filename = filename.strip()
         path = Path(safe_filename)
         if (
@@ -151,6 +215,12 @@ class SessionWorkspaceStore:
     def _task_area_dir(
         self, workspace: SessionWorkspace, area: TaskScopedWorkspaceArea
     ) -> Path:
+        """执行 处理 task area dir 的内部辅助逻辑。
+
+        Args:
+            workspace: workspace 参数。
+            area: area 参数。
+        """
         if area == "work":
             return workspace.work_dir
         if area == "output":
@@ -160,11 +230,23 @@ class SessionWorkspaceStore:
         raise SessionWorkspacePathError("Invalid task workspace area")
 
     def _assert_child(self, path: Path, *, expected_parent: Path) -> None:
+        """执行 处理 assert child 的内部辅助逻辑。
+
+        Args:
+            path: path 参数。
+            expected_parent: expected_parent 参数。
+        """
         resolved = path.resolve(strict=True)
         if resolved.parent != expected_parent.resolve(strict=True):
             raise SessionWorkspacePathError("Workspace path escaped root")
 
     def _assert_target(self, target: Path, *, expected_parent: Path) -> None:
+        """执行 处理 assert target 的内部辅助逻辑。
+
+        Args:
+            target: target 参数。
+            expected_parent: expected_parent 参数。
+        """
         if target.is_symlink():
             raise SessionWorkspacePathError("Workspace target must not be a symlink")
         resolved_parent = target.parent.resolve(strict=True)

@@ -9,6 +9,8 @@ SourceTrust = Literal["trusted_user", "trusted_runtime", "untrusted_external"]
 
 @dataclass(frozen=True)
 class SourceEvent:
+    """表示 处理 source event 的后端数据结构或服务对象。"""
+
     user_id: str
     source_kind: str
     source_id: str
@@ -20,6 +22,8 @@ class SourceEvent:
 
 @dataclass(frozen=True)
 class CandidateDraft:
+    """表示 处理 candidate draft 的后端数据结构或服务对象。"""
+
     memory_type: str
     atomic_content: str
     scope_kind: str
@@ -31,6 +35,7 @@ class CandidateDraft:
     reason_code: str = "model_extracted"
 
     def validate(self) -> CandidateDraft:
+        """校验。"""
         if self.memory_type not in {
             "profile",
             "fact",
@@ -63,11 +68,26 @@ class CandidateDraft:
 
 
 class MemoryCandidateExtractor(Protocol):
-    async def extract(self, event: SourceEvent) -> CandidateDraft | None: ...
+    """表示 处理 memory candidate extractor 的后端数据结构或服务对象。"""
+
+    async def extract(self, event: SourceEvent) -> CandidateDraft | None:
+        """提取。
+
+        Args:
+            event: event 参数。
+        """
+        ...
 
 
 class NoopMemoryCandidateExtractor:
+    """表示 处理 noop memory candidate extractor 的后端数据结构或服务对象。"""
+
     async def extract(self, event: SourceEvent) -> CandidateDraft | None:
+        """提取。
+
+        Args:
+            event: event 参数。
+        """
         del event
         return None
 
@@ -75,6 +95,13 @@ class NoopMemoryCandidateExtractor:
 def candidate_should_activate(
     *, event: SourceEvent, draft: CandidateDraft, allow_runtime_auto_activation: bool
 ) -> bool:
+    """处理 candidate should activate。
+
+    Args:
+        event: event 参数。
+        draft: draft 参数。
+        allow_runtime_auto_activation: allow_runtime_auto_activation 参数。
+    """
     if event.trust == "trusted_user" and event.source_kind in {
         "explicit_command",
         "gui_remember",
@@ -91,6 +118,12 @@ def candidate_should_activate(
 
 
 def enforce_source_trust(event: SourceEvent, draft: CandidateDraft) -> CandidateDraft:
+    """处理 enforce source trust。
+
+    Args:
+        event: event 参数。
+        draft: draft 参数。
+    """
     if event.trust != "untrusted_external":
         return draft
     return CandidateDraft(
@@ -107,6 +140,12 @@ def enforce_source_trust(event: SourceEvent, draft: CandidateDraft) -> Candidate
 
 
 def obvious_preference_conflict(existing: str, candidate: str) -> bool:
+    """处理 obvious preference conflict。
+
+    Args:
+        existing: existing 参数。
+        candidate: candidate 参数。
+    """
     left = _preference_signature(existing)
     right = _preference_signature(candidate)
     return (
@@ -118,6 +157,11 @@ def obvious_preference_conflict(existing: str, candidate: str) -> bool:
 
 
 def _preference_signature(value: str) -> tuple[str, bool] | None:
+    """执行 处理 preference signature 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+    """
     normalized = "".join(value.strip().split())
     for positive, negative in (("喜欢", "不喜欢"), ("使用", "不使用"), ("要", "不要")):
         if normalized.startswith(negative) and len(normalized) > len(negative):
@@ -128,14 +172,34 @@ def _preference_signature(value: str) -> tuple[str, bool] | None:
 
 
 class StructuredCandidateClient(Protocol):
-    async def extract_candidate(self, payload: dict[str, object]) -> object: ...
+    """表示 处理 structured candidate client 的后端数据结构或服务对象。"""
+
+    async def extract_candidate(self, payload: dict[str, object]) -> object:
+        """提取 candidate。
+
+        Args:
+            payload: payload 参数。
+        """
+        ...
 
 
 class FastPoolMemoryCandidateExtractor:
+    """表示 处理 fast pool memory candidate extractor 的后端数据结构或服务对象。"""
+
     def __init__(self, client: StructuredCandidateClient) -> None:
+        """初始化对象实例。
+
+        Args:
+            client: client 参数。
+        """
         self.client = client
 
     async def extract(self, event: SourceEvent) -> CandidateDraft | None:
+        """提取。
+
+        Args:
+            event: event 参数。
+        """
         raw = await self.client.extract_candidate(
             {
                 "pool": "fast",
@@ -188,6 +252,11 @@ class FastPoolMemoryCandidateExtractor:
 
 
 def _required_text(value: object) -> str:
+    """执行 处理 required text 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+    """
     if not isinstance(value, str) or not value.strip():
         raise ValueError("candidate_text_invalid")
     return value.strip()

@@ -15,15 +15,21 @@ SUPPORTED_PLANNING_TASK_TYPES = planning_task_types()
 
 
 class UnsupportedWorkflowTaskTypeError(Exception):
+    """表示 处理 unsupported workflow task type error 的后端数据结构或服务对象。"""
+
     pass
 
 
 class UnsupportedModelClassError(Exception):
+    """表示 处理 unsupported model class error 的后端数据结构或服务对象。"""
+
     pass
 
 
 @dataclass(frozen=True)
 class AgentProfile:
+    """表示 处理 agent profile 的后端数据结构或服务对象。"""
+
     name: str
     executor_kind: ExecutorKind
     workflow_key: str
@@ -44,7 +50,14 @@ class AgentProfile:
 
 
 class DefaultProfileSelector:
+    """表示 处理 default profile selector 的后端数据结构或服务对象。"""
+
     def select(self, task: Any) -> AgentProfile:
+        """选择。
+
+        Args:
+            task: task 参数。
+        """
         task_type = str(task.task_type).strip()
         feature = feature_for_task_type(task_type)
         if feature is None:

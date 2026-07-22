@@ -55,27 +55,41 @@ from domain.task_lifecycle import (
 
 
 class MemoryNotFoundError(TaskServiceError):
+    """表示 处理 memory not found error 的后端数据结构或服务对象。"""
+
     code = "memory_not_found"
     status_code = 404
 
 
 class InvalidMemoryCommandError(TaskServiceError):
+    """表示 处理 invalid memory command error 的后端数据结构或服务对象。"""
+
     code = "invalid_memory_command"
     status_code = 400
 
 
 class ForbiddenMemoryContentError(TaskServiceError):
+    """表示 处理 forbidden memory content error 的后端数据结构或服务对象。"""
+
     code = "forbidden_memory_content"
     status_code = 400
 
 
 class MemoryService:
+    """表示 处理 memory service 的后端数据结构或服务对象。"""
+
     def __init__(
         self,
         session: AsyncSession,
         *,
         semantic_memory: SemanticMemory | None = None,
     ) -> None:
+        """初始化对象实例。
+
+        Args:
+            session: session 参数。
+            semantic_memory: semantic_memory 参数。
+        """
         self.session = session
         self.repository = MemoryRepository(session)
         self.task_repository = TaskRepository(session)
@@ -98,6 +112,23 @@ class MemoryService:
         supersedes_id: str | None = None,
         confirmed_by_user: bool = True,
     ) -> Memory:
+        """创建 memory。
+
+        Args:
+            user_id: user_id 参数。
+            content: content 参数。
+            memory_type: memory_type 参数。
+            source_kind: source_kind 参数。
+            source_trust: source_trust 参数。
+            source_spans_json: source_spans_json 参数。
+            candidate_links_json: candidate_links_json 参数。
+            reason_code: reason_code 参数。
+            source_conversation_id: source_conversation_id 参数。
+            source_message_id: source_message_id 参数。
+            source_task_id: source_task_id 参数。
+            supersedes_id: supersedes_id 参数。
+            confirmed_by_user: confirmed_by_user 参数。
+        """
         normalized_content = normalize_memory_content(content)
         if not normalized_content:
             raise InvalidMemoryCommandError("记忆内容不能为空")
@@ -137,6 +168,11 @@ class MemoryService:
         )
 
     async def list_active_memories(self, user_id: str) -> list[Memory]:
+        """列出 active memories。
+
+        Args:
+            user_id: user_id 参数。
+        """
         return await self.repository.list_active_memories(user_id)
 
     async def list_memories(
@@ -146,11 +182,24 @@ class MemoryService:
         status: str | None = None,
         scope_kind: str | None = None,
     ) -> list[Memory]:
+        """列出 memories。
+
+        Args:
+            user_id: user_id 参数。
+            status: status 参数。
+            scope_kind: scope_kind 参数。
+        """
         return await self.repository.list_memories(
             user_id=user_id, status=status, scope_kind=scope_kind
         )
 
     async def get_memory(self, *, user_id: str, memory_id: str) -> Memory:
+        """获取 memory。
+
+        Args:
+            user_id: user_id 参数。
+            memory_id: memory_id 参数。
+        """
         memory = await self.repository.get_memory_by_user(
             user_id=user_id, memory_id=memory_id
         )
@@ -159,6 +208,12 @@ class MemoryService:
         return memory
 
     async def confirm_memory(self, *, user_id: str, memory_id: str) -> Memory:
+        """处理 confirm memory。
+
+        Args:
+            user_id: user_id 参数。
+            memory_id: memory_id 参数。
+        """
         memory = await self.get_memory(user_id=user_id, memory_id=memory_id)
         if memory.status not in {"candidate", "conflict_pending"}:
             raise InvalidMemoryCommandError("当前记忆状态不可确认")
@@ -183,6 +238,12 @@ class MemoryService:
         return memory
 
     async def reject_memory(self, *, user_id: str, memory_id: str) -> Memory:
+        """拒绝 memory。
+
+        Args:
+            user_id: user_id 参数。
+            memory_id: memory_id 参数。
+        """
         memory = await self.get_memory(user_id=user_id, memory_id=memory_id)
         if memory.status not in {"candidate", "conflict_pending"}:
             raise InvalidMemoryCommandError("当前记忆状态不可拒绝")
@@ -199,6 +260,14 @@ class MemoryService:
         content: str,
         confirm: bool = False,
     ) -> Memory:
+        """处理 correct memory。
+
+        Args:
+            user_id: user_id 参数。
+            memory_id: memory_id 参数。
+            content: content 参数。
+            confirm: confirm 参数。
+        """
         original = await self.get_memory(user_id=user_id, memory_id=memory_id)
         if original.status not in {"active", "candidate", "conflict_pending"}:
             raise InvalidMemoryCommandError("当前记忆状态不可修正")
@@ -218,6 +287,12 @@ class MemoryService:
         return corrected
 
     async def archive_memory(self, *, user_id: str, memory_id: str) -> Memory:
+        """归档 memory。
+
+        Args:
+            user_id: user_id 参数。
+            memory_id: memory_id 参数。
+        """
         memory = await self.get_memory(user_id=user_id, memory_id=memory_id)
         memory.status = "archived"
         memory.is_active = False
@@ -228,6 +303,13 @@ class MemoryService:
     async def set_memory_pinned(
         self, *, user_id: str, memory_id: str, pinned: bool
     ) -> Memory:
+        """处理 set memory pinned。
+
+        Args:
+            user_id: user_id 参数。
+            memory_id: memory_id 参数。
+            pinned: pinned 参数。
+        """
         memory = await self.get_memory(user_id=user_id, memory_id=memory_id)
         memory.is_pinned = pinned
         await self.session.flush()
@@ -241,6 +323,14 @@ class MemoryService:
         scope_kind: str,
         scope_id: str | None = None,
     ) -> Memory:
+        """处理 change memory scope。
+
+        Args:
+            user_id: user_id 参数。
+            memory_id: memory_id 参数。
+            scope_kind: scope_kind 参数。
+            scope_id: scope_id 参数。
+        """
         allowed = {
             "user/global",
             "user/project",
@@ -265,6 +355,16 @@ class MemoryService:
         conversation_id: str | None = None,
         retrieval_trace_id: str | None = None,
     ) -> MemoryFeedback:
+        """处理 add feedback。
+
+        Args:
+            user_id: user_id 参数。
+            memory_id: memory_id 参数。
+            feedback_type: feedback_type 参数。
+            task_id: task_id 参数。
+            conversation_id: conversation_id 参数。
+            retrieval_trace_id: retrieval_trace_id 参数。
+        """
         allowed = {
             "helpful",
             "harmful",
@@ -294,6 +394,15 @@ class MemoryService:
         link_type: str,
         created_by: str = "user",
     ) -> MemoryLink:
+        """处理 add link。
+
+        Args:
+            user_id: user_id 参数。
+            source_memory_id: source_memory_id 参数。
+            target_memory_id: target_memory_id 参数。
+            link_type: link_type 参数。
+            created_by: created_by 参数。
+        """
         allowed_links = {
             "related_to",
             "derived_from",
@@ -315,12 +424,24 @@ class MemoryService:
         )
 
     async def list_links(self, *, user_id: str, memory_id: str) -> list[MemoryLink]:
+        """列出 links。
+
+        Args:
+            user_id: user_id 参数。
+            memory_id: memory_id 参数。
+        """
         await self.get_memory(user_id=user_id, memory_id=memory_id)
         return await self.repository.list_links_for_memory(memory_id=memory_id)
 
     async def list_feedback(
         self, *, user_id: str, memory_id: str
     ) -> list[MemoryFeedback]:
+        """列出 feedback。
+
+        Args:
+            user_id: user_id 参数。
+            memory_id: memory_id 参数。
+        """
         await self.get_memory(user_id=user_id, memory_id=memory_id)
         return await self.repository.list_feedback_for_memory(
             memory_id=memory_id, user_id=user_id
@@ -329,9 +450,21 @@ class MemoryService:
     async def list_index_outbox(
         self, *, user_id: str, status: str | None = None
     ) -> list[MemoryIndexOutbox]:
+        """列出 index outbox。
+
+        Args:
+            user_id: user_id 参数。
+            status: status 参数。
+        """
         return await self.repository.list_index_outbox(user_id=user_id, status=status)
 
     async def forget_memory(self, *, user_id: str, memory_id: str) -> Memory:
+        """处理 forget memory。
+
+        Args:
+            user_id: user_id 参数。
+            memory_id: memory_id 参数。
+        """
         memory = await self.get_memory(user_id=user_id, memory_id=memory_id)
         memory.status = "deleted"
         memory.is_active = False
@@ -345,6 +478,12 @@ class MemoryService:
         return memory
 
     async def delete_memory(self, *, user_id: str, memory_id: str) -> Memory:
+        """删除 memory。
+
+        Args:
+            user_id: user_id 参数。
+            memory_id: memory_id 参数。
+        """
         memory = await self.repository.get_active_memory_by_user(
             memory_id=memory_id,
             user_id=user_id,
@@ -359,6 +498,11 @@ class MemoryService:
         return memory
 
     async def execute_task(self, task_id: str) -> Task:
+        """执行 task。
+
+        Args:
+            task_id: task_id 参数。
+        """
         task = await _load_pending_task(
             self.session,
             task_id,
@@ -374,6 +518,11 @@ class MemoryService:
         return await _succeed_task(self.session, task, result_text)
 
     async def _execute_memory_command(self, task: Task) -> str:
+        """执行 执行 memory command 的内部辅助逻辑。
+
+        Args:
+            task: task 参数。
+        """
         rest = _command_rest(task.input_text, "/memory")
         aliases = {
             "list": "查看",
@@ -584,6 +733,12 @@ class MemoryService:
         )
 
     async def _semantic_add(self, *, task: Task, memory: Memory) -> bool:
+        """执行 处理 semantic add 的内部辅助逻辑。
+
+        Args:
+            task: task 参数。
+            memory: memory 参数。
+        """
         if not self.semantic_memory.enabled:
             return False
         try:
@@ -597,6 +752,12 @@ class MemoryService:
             return False
 
     async def _semantic_delete(self, *, user_id: str, memory_id: str) -> bool:
+        """执行 处理 semantic delete 的内部辅助逻辑。
+
+        Args:
+            user_id: user_id 参数。
+            memory_id: memory_id 参数。
+        """
         if not self.semantic_memory.enabled:
             return False
         try:
@@ -609,11 +770,23 @@ class MemoryService:
 
 
 class StatusService:
+    """表示 处理 status service 的后端数据结构或服务对象。"""
+
     def __init__(self, session: AsyncSession) -> None:
+        """初始化对象实例。
+
+        Args:
+            session: session 参数。
+        """
         self.session = session
         self.task_repository = TaskRepository(session)
 
     async def execute_task(self, task_id: str) -> Task:
+        """执行 task。
+
+        Args:
+            task_id: task_id 参数。
+        """
         task = await _load_pending_task(
             self.session,
             task_id,
@@ -634,6 +807,11 @@ class StatusService:
         return await _succeed_task(self.session, task, result_text)
 
     async def _resolve_target(self, task: Task) -> Task | None:
+        """执行 解析 target 的内部辅助逻辑。
+
+        Args:
+            task: task 参数。
+        """
         rest = _command_rest(task.input_text, "/status")
         if not rest:
             return await self.task_repository.get_latest_non_status_task(
@@ -651,6 +829,11 @@ class StatusService:
         return target
 
     def _format_status_summary(self, task: Task) -> str:
+        """执行 处理 format status summary 的内部辅助逻辑。
+
+        Args:
+            task: task 参数。
+        """
         lines = [
             "任务状态：",
             f"任务ID: {task.id}",
@@ -668,6 +851,8 @@ class StatusService:
 
 
 class LangBotMessageClientProtocol(Protocol):
+    """表示 处理 lang bot message client protocol 的后端数据结构或服务对象。"""
+
     async def send_message(
         self,
         *,
@@ -677,16 +862,29 @@ class LangBotMessageClientProtocol(Protocol):
         text: str,
         idempotency_key: str | None = None,
     ) -> Any:
+        """处理 send message。
+
+        Args:
+            adapter: adapter 参数。
+            conversation_id: conversation_id 参数。
+            conversation_type: conversation_type 参数。
+            text: text 参数。
+            idempotency_key: idempotency_key 参数。
+        """
         pass
 
 
 @dataclass(frozen=True)
 class DispatchResult:
+    """表示 分发 result 的后端数据结构或服务对象。"""
+
     status: str
     message: str
 
 
 class ResultDispatcher:
+    """表示 处理 result dispatcher 的后端数据结构或服务对象。"""
+
     def __init__(
         self,
         session: AsyncSession,
@@ -694,6 +892,13 @@ class ResultDispatcher:
         langbot_client: LangBotMessageClientProtocol | None = None,
         sensitive_values: Iterable[str | None] = (),
     ) -> None:
+        """初始化对象实例。
+
+        Args:
+            session: session 参数。
+            langbot_client: langbot_client 参数。
+            sensitive_values: sensitive_values 参数。
+        """
         self.session = session
         self.langbot_client = langbot_client
         self.sensitive_values = tuple(sensitive_values)
@@ -702,6 +907,11 @@ class ResultDispatcher:
         self.tool_log_repository = ToolLogRepository(session)
 
     async def dispatch_task(self, task_id: str) -> DispatchResult:
+        """分发 task。
+
+        Args:
+            task_id: task_id 参数。
+        """
         task = await self.task_repository.get_task(task_id)
         if task is None:
             raise TaskNotFoundError(f"Task not found: {task_id}")
@@ -774,6 +984,11 @@ class ResultDispatcher:
         return DispatchResult(status="succeeded", message="任务结果已推送")
 
     def _build_message(self, task: Task) -> str:
+        """执行 构建 message 的内部辅助逻辑。
+
+        Args:
+            task: task 参数。
+        """
         if task.status == TaskStatus.SUCCESS.value:
             title = "任务已完成"
             summary = task.result_text or "任务已完成。"
@@ -807,6 +1022,13 @@ class ResultDispatcher:
         target: dict[str, str],
         outbound_text: str,
     ) -> Any:
+        """执行 处理 send message 的内部辅助逻辑。
+
+        Args:
+            task: task 参数。
+            target: target 参数。
+            outbound_text: outbound_text 参数。
+        """
         if task.platform == "langbot":
             if self.langbot_client is None:
                 raise RuntimeError("LangBot client is not configured")
@@ -830,6 +1052,16 @@ class ResultDispatcher:
         output_text: str | None,
         error_message: str | None,
     ) -> None:
+        """执行 记录 dispatch 的内部辅助逻辑。
+
+        Args:
+            task: task 参数。
+            tool_name: tool_name 参数。
+            target_payload: target_payload 参数。
+            status: status 参数。
+            output_text: output_text 参数。
+            error_message: error_message 参数。
+        """
         await self.tool_log_repository.create_tool_log(
             ToolLogCreate(
                 task_id=task.id,
@@ -869,6 +1101,11 @@ class ResultDispatcher:
 
 
 def _dispatch_tool_name(task: Task) -> str:
+    """执行 分发 tool name 的内部辅助逻辑。
+
+    Args:
+        task: task 参数。
+    """
     if task.platform == "langbot" and task.status == TaskStatus.WAITING_APPROVAL.value:
         return "langbot.approval_dispatch"
     if task.platform == "langbot":
@@ -877,6 +1114,11 @@ def _dispatch_tool_name(task: Task) -> str:
 
 
 def _missing_target_message(platform: str) -> str:
+    """执行 处理 missing target message 的内部辅助逻辑。
+
+    Args:
+        platform: platform 参数。
+    """
     return {
         "langbot": "缺少 LangBot 推送目标",
     }.get(platform, "缺少推送目标")
@@ -887,6 +1129,12 @@ def _resolve_dispatch_target(
     task: Task,
     dispatch_record: ProcessedMessage | None,
 ) -> dict[str, str] | None:
+    """执行 解析 dispatch target 的内部辅助逻辑。
+
+    Args:
+        task: task 参数。
+        dispatch_record: dispatch_record 参数。
+    """
     if dispatch_record is None:
         return None
 
@@ -925,6 +1173,13 @@ async def _load_pending_task(
     *,
     expected_task_type: str,
 ) -> Task:
+    """执行 加载 pending task 的内部辅助逻辑。
+
+    Args:
+        session: session 参数。
+        task_id: task_id 参数。
+        expected_task_type: expected_task_type 参数。
+    """
     task = await session.get(Task, task_id)
     if task is None:
         raise TaskNotFoundError(f"Task not found: {task_id}")
@@ -940,6 +1195,12 @@ async def _load_pending_task(
 
 
 async def _mark_running(session: AsyncSession, task: Task) -> None:
+    """执行 标记 running 的内部辅助逻辑。
+
+    Args:
+        session: session 参数。
+        task: task 参数。
+    """
     task.status = TaskStatus.RUNNING.value
     task.result_text = None
     task.error_message = None
@@ -947,6 +1208,13 @@ async def _mark_running(session: AsyncSession, task: Task) -> None:
 
 
 async def _succeed_task(session: AsyncSession, task: Task, result_text: str) -> Task:
+    """执行 处理 succeed task 的内部辅助逻辑。
+
+    Args:
+        session: session 参数。
+        task: task 参数。
+        result_text: result_text 参数。
+    """
     task.status = TaskStatus.SUCCESS.value
     task.result_text = result_text
     task.error_message = None
@@ -956,6 +1224,13 @@ async def _succeed_task(session: AsyncSession, task: Task, result_text: str) -> 
 
 
 async def _fail_task(session: AsyncSession, task: Task, error_message: str) -> Task:
+    """执行 处理 fail task 的内部辅助逻辑。
+
+    Args:
+        session: session 参数。
+        task: task 参数。
+        error_message: error_message 参数。
+    """
     task.status = TaskStatus.FAILED.value
     task.result_text = None
     task.error_message = error_message
@@ -965,6 +1240,12 @@ async def _fail_task(session: AsyncSession, task: Task, error_message: str) -> T
 
 
 def _command_rest(input_text: str, command: str) -> str:
+    """执行 处理 command rest 的内部辅助逻辑。
+
+    Args:
+        input_text: input_text 参数。
+        command: command 参数。
+    """
     text = input_text.strip()
     if not text.startswith(command):
         raise InvalidCommandTaskError(f"Invalid command: {command}")
@@ -972,6 +1253,11 @@ def _command_rest(input_text: str, command: str) -> str:
 
 
 def _phase_label(status: str) -> str:
+    """执行 处理 phase label 的内部辅助逻辑。
+
+    Args:
+        status: status 参数。
+    """
     return {
         TaskStatus.PENDING.value: "等待执行",
         TaskStatus.RUNNING.value: "执行中",
@@ -988,6 +1274,13 @@ def _safe_summary(
     extra_sensitive_values: Iterable[str | None] = (),
     limit: int = 1000,
 ) -> str:
+    """执行 处理 safe summary 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+        extra_sensitive_values: extra_sensitive_values 参数。
+        limit: limit 参数。
+    """
     text = sanitize_text(value, extra_sensitive_values=extra_sensitive_values).strip()
     if "traceback" in text.lower():
         text = "内部错误已脱敏"
@@ -1001,6 +1294,12 @@ def _safe_json(
     *,
     extra_sensitive_values: Iterable[str | None] = (),
 ) -> str:
+    """执行 处理 safe json 的内部辅助逻辑。
+
+    Args:
+        payload: payload 参数。
+        extra_sensitive_values: extra_sensitive_values 参数。
+    """
     return _safe_summary(
         json.dumps(
             payload,

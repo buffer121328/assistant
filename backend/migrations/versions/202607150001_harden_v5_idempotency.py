@@ -29,6 +29,7 @@ FROM knowledge_documents
 
 
 def upgrade() -> None:
+    """执行数据库迁移升级步骤。"""
     op.execute(
         f"""
         WITH ranked AS ({_RANKED_DOCUMENTS}),
@@ -71,6 +72,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """执行数据库迁移回滚步骤。"""
     op.drop_constraint(
         "uq_knowledge_documents_user_checksum_parser",
         "knowledge_documents",

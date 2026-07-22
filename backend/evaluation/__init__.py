@@ -19,6 +19,8 @@ from .models import (
 )
 from .runner import evaluate_dataset
 from .memory_release import evaluate_memory_release_fixture
+from .governance import evaluate_governance_fixture
+from .rag_retrieval import evaluate_rag_retrieval_fixture
 
 
 __all__ = [
@@ -34,6 +36,8 @@ __all__ = [
     "TaskType",
     "evaluate_dataset",
     "evaluate_memory_release_fixture",
+    "evaluate_governance_fixture",
+    "evaluate_rag_retrieval_fixture",
     "run_core_command_langfuse_experiment",
     "load_baseline",
     "load_candidate_outputs",

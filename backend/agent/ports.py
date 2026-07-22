@@ -11,6 +11,8 @@ UserRecordT = TypeVar("UserRecordT", covariant=True)
 
 @dataclass(frozen=True)
 class HarnessTaskRecord:
+    """表示 处理 harness task record 的后端数据结构或服务对象。"""
+
     id: str
     user_id: str
     task_type: str
@@ -23,6 +25,8 @@ class HarnessTaskRecord:
 
 
 class TaskLifecyclePort(Protocol[TaskRecordT]):
+    """表示 处理 task lifecycle port 的后端数据结构或服务对象。"""
+
     async def load_pending(self, task_id: str) -> TaskRecordT:
         """Load a pending task or raise a domain-specific error."""
 
@@ -49,11 +53,15 @@ class TaskLifecyclePort(Protocol[TaskRecordT]):
 
 
 class UserLookupPort(Protocol[UserRecordT]):
+    """表示 处理 user lookup port 的后端数据结构或服务对象。"""
+
     async def load_user(self, user_id: str) -> UserRecordT:
         """Load an agent-visible user record."""
 
 
 class ExecutionTracePort(Protocol):
+    """表示 处理 execution trace port 的后端数据结构或服务对象。"""
+
     async def record_trace(
         self,
         *,
@@ -68,6 +76,8 @@ class ExecutionTracePort(Protocol):
 
 
 class LocalTaskServicePort(Protocol[TaskRecordT]):
+    """表示 处理 local task service port 的后端数据结构或服务对象。"""
+
     async def execute_memory_task(self, task_id: str) -> TaskRecordT:
         """Execute a deterministic memory command task."""
 
@@ -77,6 +87,8 @@ class LocalTaskServicePort(Protocol[TaskRecordT]):
 
 @dataclass(frozen=True)
 class ConversationContextPack:
+    """表示 处理 conversation context pack 的后端数据结构或服务对象。"""
+
     history: tuple[tuple[str, str], ...] = ()
     summary: str = ""
     memory_blocks: tuple[str, ...] = ()
@@ -85,6 +97,8 @@ class ConversationContextPack:
 
 
 class ConversationContextPort(Protocol):
+    """表示 处理 conversation context port 的后端数据结构或服务对象。"""
+
     async def load_context(
         self,
         *,
@@ -98,10 +112,14 @@ class ConversationContextPort(Protocol):
 
 
 class MemoryContextPort(Protocol):
+    """表示 处理 memory context port 的后端数据结构或服务对象。"""
+
     async def load_context(self, *, user_id: str, query: str, limit: int) -> str:
         """Return memory context text for an agent run."""
 
 
 class StatusContextPort(Protocol):
+    """表示 处理 status context port 的后端数据结构或服务对象。"""
+
     async def build_status(self, *, user_id: str) -> str:
         """Return user-visible local status context for planning."""

@@ -4,19 +4,22 @@ from collections.abc import Awaitable, Callable, Iterable
 from datetime import UTC, datetime, timedelta
 import json
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from model_gateway import sanitize_text
 
 from infrastructure.config import Settings
-from domain.models import Task, TaskStatus, ToolLog
+from domain.models import Approval, ApprovalStatus, Task, TaskEvent, TaskStatus, ToolLog
 from infrastructure.repositories import ToolLogRepository
+from domain.task_events import TaskEventRepository
 from workers.worker import enqueue_task_execution
 
 
 RUNNING_TIMEOUT_TOOL_NAME = "scheduler.running_timeout"
 PENDING_COMPENSATION_TOOL_NAME = "scheduler.pending_compensation"
+RECOVERY_DEAD_LETTER_EVENT = "task.recovery.dead_letter"
+RECOVERY_WAITING_APPROVAL_EVENT = "task.recovery.waiting_approval"
 
 DispatchTask = Callable[[str], Awaitable[None]]
 
@@ -28,6 +31,14 @@ async def fail_timed_out_running_tasks(
     now: datetime | None = None,
     sensitive_values: Iterable[str | None] = (),
 ) -> list[str]:
+    """处理 fail timed out running tasks。
+
+    Args:
+        session: session 参数。
+        timeout_seconds: timeout_seconds 参数。
+        now: now 参数。
+        sensitive_values: sensitive_values 参数。
+    """
     evaluated_at = now or datetime.now(UTC)
     cutoff = evaluated_at - timedelta(seconds=timeout_seconds)
     tasks = await session.scalars(
@@ -72,10 +83,105 @@ async def fail_timed_out_running_tasks(
                 error_message=None,
             )
         )
+        await TaskEventRepository(session).append(
+            task_id=task.id,
+            user_id=task.user_id,
+            event_type=RECOVERY_DEAD_LETTER_EVENT,
+            payload={
+                "recovery_status": "dead_letter",
+                "retryable": False,
+                "reason": "running_timeout",
+                "timeout_seconds": timeout_seconds,
+                "evaluated_at": evaluated_at.isoformat(),
+                "tool_name": RUNNING_TIMEOUT_TOOL_NAME,
+            },
+        )
         task_ids.append(task.id)
 
     await session.commit()
     return task_ids
+
+
+async def diagnose_waiting_approval_tasks(
+    *,
+    session: AsyncSession,
+    now: datetime | None = None,
+    sensitive_values: Iterable[str | None] = (),
+) -> list[str]:
+    """处理 diagnose waiting approval tasks。
+
+    Args:
+        session: session 参数。
+        now: now 参数。
+        sensitive_values: sensitive_values 参数。
+    """
+    evaluated_at = now or datetime.now(UTC)
+    tasks = await session.scalars(
+        select(Task)
+        .where(Task.status == TaskStatus.WAITING_APPROVAL.value)
+        .order_by(Task.updated_at.asc(), Task.id.asc())
+    )
+    diagnosed: list[str] = []
+    for task in tasks:
+        existing = await session.scalar(
+            select(TaskEvent.id)
+            .where(
+                TaskEvent.task_id == task.id,
+                TaskEvent.event_type == RECOVERY_WAITING_APPROVAL_EVENT,
+            )
+            .limit(1)
+        )
+        if existing is not None:
+            continue
+        pending_count = int(
+            await session.scalar(
+                select(func.count())
+                .select_from(Approval)
+                .where(
+                    Approval.task_id == task.id,
+                    Approval.status == ApprovalStatus.PENDING.value,
+                )
+            )
+            or 0
+        )
+        if pending_count <= 0:
+            continue
+        await TaskEventRepository(session).append(
+            task_id=task.id,
+            user_id=task.user_id,
+            event_type=RECOVERY_WAITING_APPROVAL_EVENT,
+            payload={
+                "recovery_status": "waiting_approval",
+                "retryable": True,
+                "reason": "approval_pending",
+                "pending_approval_count": pending_count,
+                "evaluated_at": evaluated_at.isoformat(),
+            },
+        )
+        session.add(
+            ToolLog(
+                task_id=task.id,
+                tool_name="scheduler.waiting_approval_recovery",
+                status="succeeded",
+                input_text=_safe_json(
+                    {
+                        "evaluated_at": evaluated_at.isoformat(),
+                        "task_status": task.status,
+                    },
+                    sensitive_values=sensitive_values,
+                ),
+                output_text=_safe_json(
+                    {
+                        "recovery_status": "waiting_approval",
+                        "pending_approval_count": pending_count,
+                    },
+                    sensitive_values=sensitive_values,
+                ),
+            )
+        )
+        diagnosed.append(task.id)
+    await session.commit()
+    return diagnosed
 
 
 async def compensate_overdue_pending_tasks(
@@ -86,6 +192,15 @@ async def compensate_overdue_pending_tasks(
     now: datetime | None = None,
     sensitive_values: Iterable[str | None] = (),
 ) -> list[str]:
+    """处理 compensate overdue pending tasks。
+
+    Args:
+        session: session 参数。
+        delay_seconds: delay_seconds 参数。
+        dispatch_task: dispatch_task 参数。
+        now: now 参数。
+        sensitive_values: sensitive_values 参数。
+    """
     evaluated_at = now or datetime.now(UTC)
     cutoff = evaluated_at - timedelta(seconds=delay_seconds)
     tasks = await session.scalars(
@@ -165,7 +280,21 @@ async def run_phase09_monitoring(
     dispatch_task: DispatchTask | None = None,
     now: datetime | None = None,
 ) -> dict[str, list[str]]:
+    """运行 phase09 monitoring。
+
+    Args:
+        sessionmaker: sessionmaker 参数。
+        settings: settings 参数。
+        dispatch_task: dispatch_task 参数。
+        now: now 参数。
+    """
+
     async def default_dispatch(task_id: str) -> None:
+        """处理 default dispatch。
+
+        Args:
+            task_id: task_id 参数。
+        """
         enqueue_task_execution(task_id, runtime_settings=settings)
 
     dispatch = dispatch_task or default_dispatch
@@ -180,6 +309,13 @@ async def run_phase09_monitoring(
         timed_out = await fail_timed_out_running_tasks(
             session=session,
             timeout_seconds=settings.running_task_timeout_seconds,
+            now=now,
+            sensitive_values=sensitive_values,
+        )
+
+    async with sessionmaker() as session:
+        await diagnose_waiting_approval_tasks(
+            session=session,
             now=now,
             sensitive_values=sensitive_values,
         )
@@ -204,6 +340,12 @@ def _safe_text(
     *,
     sensitive_values: Iterable[str | None] = (),
 ) -> str:
+    """执行 处理 safe text 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+        sensitive_values: sensitive_values 参数。
+    """
     return sanitize_text(value, extra_sensitive_values=sensitive_values)
 
 
@@ -212,6 +354,12 @@ def _safe_json(
     *,
     sensitive_values: Iterable[str | None] = (),
 ) -> str:
+    """执行 处理 safe json 的内部辅助逻辑。
+
+    Args:
+        payload: payload 参数。
+        sensitive_values: sensitive_values 参数。
+    """
     return _safe_text(
         json.dumps(
             payload,

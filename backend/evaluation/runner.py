@@ -17,6 +17,13 @@ def evaluate_dataset(
     baseline_path: Path,
     candidate_path: Path | None = None,
 ) -> EvaluationReport:
+    """处理 evaluate dataset。
+
+    Args:
+        dataset_path: dataset_path 参数。
+        baseline_path: baseline_path 参数。
+        candidate_path: candidate_path 参数。
+    """
     cases = load_cases(dataset_path)
     baseline = load_baseline(baseline_path)
     candidate_outputs = (
@@ -38,11 +45,7 @@ def evaluate_dataset(
         rubric_score = metric.measure(actual_output)
         score = rubric_score.score
         baseline_score = baseline.scores.get(case.id)
-        delta = (
-            round(score - baseline_score, 6)
-            if baseline_score is not None
-            else None
-        )
+        delta = round(score - baseline_score, 6) if baseline_score is not None else None
         if baseline_score is None or score < baseline_score:
             regressions.append(case.id)
 

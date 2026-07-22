@@ -29,6 +29,13 @@ async def handle_model_chat(
     session: AsyncSession,
     settings: Settings,
 ) -> ModelChatResponse:
+    """处理 model chat。
+
+    Args:
+        payload: payload 参数。
+        session: session 参数。
+        settings: settings 参数。
+    """
     gateway_request = GatewayRequest(
         user_id=payload.user_id,
         task_id=payload.task_id,
@@ -96,6 +103,11 @@ async def handle_model_chat(
 
 
 def _deepseek_config(settings: Settings) -> DeepSeekConfig:
+    """执行 处理 deepseek config 的内部辅助逻辑。
+
+    Args:
+        settings: settings 参数。
+    """
     return DeepSeekConfig(
         api_key=settings.deepseek_api_key,
         base_url=settings.deepseek_base_url,
@@ -107,6 +119,11 @@ def _deepseek_config(settings: Settings) -> DeepSeekConfig:
 
 
 def _response(result: GatewayResult) -> ModelChatResponse:
+    """执行 处理 response 的内部辅助逻辑。
+
+    Args:
+        result: result 参数。
+    """
     return ModelChatResponse(
         provider=result.provider,
         model=result.model,
@@ -124,6 +141,12 @@ def _app_error(
     error: ModelGatewayError,
     sensitive_values: Iterable[str | None],
 ) -> AppError:
+    """执行 处理 app error 的内部辅助逻辑。
+
+    Args:
+        error: error 参数。
+        sensitive_values: sensitive_values 参数。
+    """
     return AppError(
         code=error.code,
         message=sanitize_text(error.message, extra_sensitive_values=sensitive_values),
@@ -132,4 +155,9 @@ def _app_error(
 
 
 def _sensitive_values(settings: Settings) -> tuple[str | None, ...]:
+    """执行 处理 sensitive values 的内部辅助逻辑。
+
+    Args:
+        settings: settings 参数。
+    """
     return (settings.deepseek_api_key,)

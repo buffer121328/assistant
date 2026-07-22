@@ -15,14 +15,23 @@ SUPPORTED_MEDIA_TYPES = {
 
 
 class ExtractionError(RuntimeError):
+    """表示 处理 extraction error 的后端数据结构或服务对象。"""
+
     pass
 
 
 class OptionalOfficeDependencyError(ExtractionError):
+    """表示 处理 optional office dependency error 的后端数据结构或服务对象。"""
+
     pass
 
 
 def extract_text(path: Path) -> str:
+    """提取 text。
+
+    Args:
+        path: path 参数。
+    """
     suffix = path.suffix.lower()
     try:
         if suffix in {".txt", ".md"}:
@@ -31,16 +40,24 @@ def extract_text(path: Path) -> str:
             try:
                 from pypdf import PdfReader
             except ImportError as exc:
-                raise OptionalOfficeDependencyError("knowledge_optional_office_missing") from exc
+                raise OptionalOfficeDependencyError(
+                    "knowledge_optional_office_missing"
+                ) from exc
 
-            text = "\n".join(page.extract_text() or "" for page in PdfReader(str(path)).pages)
+            text = "\n".join(
+                page.extract_text() or "" for page in PdfReader(str(path)).pages
+            )
         elif suffix == ".docx":
             try:
                 from docx import Document
             except ImportError as exc:
-                raise OptionalOfficeDependencyError("knowledge_optional_office_missing") from exc
+                raise OptionalOfficeDependencyError(
+                    "knowledge_optional_office_missing"
+                ) from exc
 
-            text = "\n".join(paragraph.text for paragraph in Document(str(path)).paragraphs)
+            text = "\n".join(
+                paragraph.text for paragraph in Document(str(path)).paragraphs
+            )
         elif suffix == ".xlsx":
             text = _xlsx_text(path)
         elif suffix == ".pptx":
@@ -58,10 +75,17 @@ def extract_text(path: Path) -> str:
 
 
 def _xlsx_text(path: Path) -> str:
+    """执行 处理 xlsx text 的内部辅助逻辑。
+
+    Args:
+        path: path 参数。
+    """
     try:
         from openpyxl import load_workbook  # type: ignore[import-untyped]
     except ImportError as exc:
-        raise OptionalOfficeDependencyError("knowledge_optional_office_missing") from exc
+        raise OptionalOfficeDependencyError(
+            "knowledge_optional_office_missing"
+        ) from exc
 
     workbook = load_workbook(path, read_only=True, data_only=True)
     try:
@@ -78,10 +102,17 @@ def _xlsx_text(path: Path) -> str:
 
 
 def _pptx_text(path: Path) -> str:
+    """执行 处理 pptx text 的内部辅助逻辑。
+
+    Args:
+        path: path 参数。
+    """
     try:
         from pptx import Presentation
     except ImportError as exc:
-        raise OptionalOfficeDependencyError("knowledge_optional_office_missing") from exc
+        raise OptionalOfficeDependencyError(
+            "knowledge_optional_office_missing"
+        ) from exc
 
     lines: list[str] = []
     for slide in Presentation(str(path)).slides:

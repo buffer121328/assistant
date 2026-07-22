@@ -28,6 +28,11 @@ router = APIRouter()
 
 
 def _memory_payload(memory: Memory) -> dict[str, object]:
+    """执行 处理 memory payload 的内部辅助逻辑。
+
+    Args:
+        memory: memory 参数。
+    """
     content = memory.content
     if memory.sensitivity == "forbidden":
         content = "[FORBIDDEN]"
@@ -67,6 +72,12 @@ async def memory_overview(
     user_id: Annotated[str, Query(min_length=1)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> dict[str, object]:
+    """处理 memory overview。
+
+    Args:
+        user_id: user_id 参数。
+        session: session 参数。
+    """
     if await session.get(User, user_id) is None:
         raise AppError("user_not_found", "User not found.", 404)
     rows = list(
@@ -94,6 +105,12 @@ async def create_memory_api(
     payload: dict[str, object],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> dict[str, object]:
+    """创建 memory api。
+
+    Args:
+        payload: payload 参数。
+        session: session 参数。
+    """
     user_id = str(payload.get("user_id") or "")
     if await session.get(User, user_id) is None:
         raise AppError("user_not_found", "User not found.", 404)
@@ -133,6 +150,18 @@ async def list_memories_api(
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> dict[str, object]:
+    """列出 memories api。
+
+    Args:
+        user_id: user_id 参数。
+        session: session 参数。
+        status: status 参数。
+        memory_type: memory_type 参数。
+        scope_kind: scope_kind 参数。
+        sensitivity: sensitivity 参数。
+        limit: limit 参数。
+        offset: offset 参数。
+    """
     statement = select(Memory).where(
         Memory.user_id == user_id,
         Memory.sensitivity != "forbidden",
@@ -165,6 +194,13 @@ async def memory_detail_api(
     user_id: Annotated[str, Query(min_length=1)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> dict[str, object]:
+    """处理 memory detail api。
+
+    Args:
+        memory_id: memory_id 参数。
+        user_id: user_id 参数。
+        session: session 参数。
+    """
     memory = await session.scalar(
         select(Memory).where(Memory.id == memory_id, Memory.user_id == user_id)
     )
@@ -178,9 +214,9 @@ async def memory_detail_api(
             )
         )
     )
-    linked_memory_ids = {
-        item.source_memory_id for item in links
-    } | {item.target_memory_id for item in links}
+    linked_memory_ids = {item.source_memory_id for item in links} | {
+        item.target_memory_id for item in links
+    }
     owned_linked_memory_ids = set(
         await session.scalars(
             select(Memory.id).where(
@@ -257,6 +293,14 @@ async def memory_action_api(
     payload: dict[str, object],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> dict[str, object]:
+    """处理 memory action api。
+
+    Args:
+        memory_id: memory_id 参数。
+        action: action 参数。
+        payload: payload 参数。
+        session: session 参数。
+    """
     user_id = str(payload.get("user_id") or "")
     service = MemoryService(session)
     try:
@@ -335,6 +379,12 @@ async def list_memory_policies_api(
     user_id: Annotated[str, Query(min_length=1)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> dict[str, object]:
+    """列出 memory policies api。
+
+    Args:
+        user_id: user_id 参数。
+        session: session 参数。
+    """
     items = list(
         await session.scalars(
             select(MemoryPolicy)
@@ -362,6 +412,13 @@ async def update_memory_policy_api(
     payload: dict[str, object],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> dict[str, object]:
+    """更新 memory policy api。
+
+    Args:
+        policy_key: policy_key 参数。
+        payload: payload 参数。
+        session: session 参数。
+    """
     user_id = str(payload.get("user_id") or "")
     if await session.get(User, user_id) is None:
         raise AppError("user_not_found", "User not found.", 404)
@@ -403,6 +460,13 @@ async def list_memory_consolidation_digests(
     session: Annotated[AsyncSession, Depends(get_session)],
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> dict[str, object]:
+    """列出 memory consolidation digests。
+
+    Args:
+        user_id: user_id 参数。
+        session: session 参数。
+        limit: limit 参数。
+    """
     if await session.get(User, user_id) is None:
         raise AppError("user_not_found", "User not found.", 404)
     items = list(
@@ -434,6 +498,13 @@ async def get_task_memory_retrieval(
     user_id: Annotated[str, Query(min_length=1)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> dict[str, object]:
+    """获取 task memory retrieval。
+
+    Args:
+        task_id: task_id 参数。
+        user_id: user_id 参数。
+        session: session 参数。
+    """
     task = await session.scalar(
         select(Task).where(Task.id == task_id, Task.user_id == user_id)
     )
@@ -478,5 +549,3 @@ async def get_task_memory_retrieval(
             for item in items
         ],
     }
-
-

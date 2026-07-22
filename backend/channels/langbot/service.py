@@ -31,6 +31,8 @@ REASON_UNBOUND_USER = "unbound_user"
 
 @dataclass(frozen=True)
 class NormalizedLangBotMessage:
+    """表示 处理 normalized lang bot message 的后端数据结构或服务对象。"""
+
     platform: str
     adapter: str
     sender_id: str
@@ -40,6 +42,7 @@ class NormalizedLangBotMessage:
     message_id: str
 
     def as_response(self) -> dict[str, str]:
+        """处理 as response。"""
         return {
             "platform": self.platform,
             "adapter": self.adapter,
@@ -52,6 +55,12 @@ class NormalizedLangBotMessage:
 
 
 def verify_langbot_secret(*, headers: Any, settings: Settings) -> None:
+    """处理 verify langbot secret。
+
+    Args:
+        headers: headers 参数。
+        settings: settings 参数。
+    """
     secret = headers.get("x-langbot-secret")
     if secret is None:
         secret = headers.get("X-LangBot-Secret")
@@ -64,7 +73,14 @@ def verify_langbot_secret(*, headers: Any, settings: Settings) -> None:
 
 
 class LangBotResultClient:
+    """表示 处理 lang bot result client 的后端数据结构或服务对象。"""
+
     def __init__(self, settings: Settings) -> None:
+        """初始化对象实例。
+
+        Args:
+            settings: settings 参数。
+        """
         self.settings = settings
 
     async def send_message(
@@ -76,6 +92,15 @@ class LangBotResultClient:
         text: str,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
+        """处理 send message。
+
+        Args:
+            adapter: adapter 参数。
+            conversation_id: conversation_id 参数。
+            conversation_type: conversation_type 参数。
+            text: text 参数。
+            idempotency_key: idempotency_key 参数。
+        """
         payload = {
             "adapter": adapter,
             "conversation_id": conversation_id,
@@ -126,6 +151,15 @@ async def handle_langbot_webhook(
     settings: Settings,
     task_handoff: Callable[[str], bool] | None = None,
 ) -> dict[str, object]:
+    """处理 langbot webhook。
+
+    Args:
+        payload: payload 参数。
+        headers: headers 参数。
+        session: session 参数。
+        settings: settings 参数。
+        task_handoff: task_handoff 参数。
+    """
     verify_langbot_secret(headers=headers, settings=settings)
     message = normalize_message(payload)
     normalized_text = message.text.strip()
@@ -202,6 +236,11 @@ async def handle_langbot_webhook(
 
 
 def normalize_message(payload: LangBotWebhookRequest) -> NormalizedLangBotMessage:
+    """规范化 message。
+
+    Args:
+        payload: payload 参数。
+    """
     return NormalizedLangBotMessage(
         platform=PLATFORM,
         adapter=payload.adapter,
@@ -214,6 +253,12 @@ def normalize_message(payload: LangBotWebhookRequest) -> NormalizedLangBotMessag
 
 
 def platform_sender_key(*, adapter: str, sender_id: str) -> str:
+    """处理 platform sender key。
+
+    Args:
+        adapter: adapter 参数。
+        sender_id: sender_id 参数。
+    """
     return f"{adapter}:{sender_id}"
 
 
@@ -225,6 +270,15 @@ async def record_no_task_ack(
     reason: str,
     intent_outcome: str | None,
 ) -> dict[str, object]:
+    """记录 no task ack。
+
+    Args:
+        session: session 参数。
+        repository: repository 参数。
+        message: message 参数。
+        reason: reason 参数。
+        intent_outcome: intent_outcome 参数。
+    """
     try:
         await repository.create_processed_message(
             ProcessedMessageCreate(
@@ -260,6 +314,19 @@ async def create_task_ack(
     intent_outcome: str | None,
     task_handoff: Callable[[str], bool] | None = None,
 ) -> dict[str, object]:
+    """创建 task ack。
+
+    Args:
+        session: session 参数。
+        repository: repository 参数。
+        settings: settings 参数。
+        user_id: user_id 参数。
+        task_type: task_type 参数。
+        conversation_id: conversation_id 参数。
+        message: message 参数。
+        intent_outcome: intent_outcome 参数。
+        task_handoff: task_handoff 参数。
+    """
     try:
         processed_message = await repository.create_processed_message(
             ProcessedMessageCreate(
@@ -315,6 +382,13 @@ def ack(
     message: NormalizedLangBotMessage | None = None,
     task: Task | None = None,
 ) -> dict[str, object]:
+    """确认。
+
+    Args:
+        reason: reason 参数。
+        message: message 参数。
+        task: task 参数。
+    """
     response: dict[str, object] = {"ok": True, "reason": reason}
     if message is not None:
         response["message"] = message.as_response()
@@ -326,6 +400,11 @@ def ack(
 
 
 def _response_target(message: NormalizedLangBotMessage) -> str:
+    """执行 处理 response target 的内部辅助逻辑。
+
+    Args:
+        message: message 参数。
+    """
     return json.dumps(
         {
             "adapter": message.adapter,
@@ -339,6 +418,12 @@ def _response_target(message: NormalizedLangBotMessage) -> str:
 
 
 def enqueue_task_execution(task_id: str, *, settings: Settings | None = None) -> bool:
+    """处理 enqueue task execution。
+
+    Args:
+        task_id: task_id 参数。
+        settings: settings 参数。
+    """
     from workers.worker import enqueue_task_execution as enqueue
 
     return enqueue(task_id, runtime_settings=settings)

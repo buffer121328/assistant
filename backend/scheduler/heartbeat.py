@@ -30,6 +30,14 @@ async def run_v2_maintenance(
     dispatch_task: DispatchTask | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
+    """运行 v2 maintenance。
+
+    Args:
+        sessionmaker: sessionmaker 参数。
+        settings: settings 参数。
+        dispatch_task: dispatch_task 参数。
+        now: now 参数。
+    """
     result: dict[str, Any] = await run_phase09_monitoring(
         sessionmaker=sessionmaker,
         settings=settings,
@@ -58,13 +66,14 @@ async def run_v2_maintenance(
     async with sessionmaker() as session:
         schedule_runs = await AgentScheduleService(session).materialize_due(now=now)
 
-    queued_schedule_run_ids, failed_schedule_run_ids = (
-        await _dispatch_materialized_schedule_runs(
-            sessionmaker=sessionmaker,
-            settings=settings,
-            schedule_runs=schedule_runs,
-            dispatch_task=dispatch_task,
-        )
+    (
+        queued_schedule_run_ids,
+        failed_schedule_run_ids,
+    ) = await _dispatch_materialized_schedule_runs(
+        sessionmaker=sessionmaker,
+        settings=settings,
+        schedule_runs=schedule_runs,
+        dispatch_task=dispatch_task,
     )
 
     async with sessionmaker() as session:
@@ -99,6 +108,14 @@ async def _dispatch_materialized_schedule_runs(
     schedule_runs: list[AgentScheduleRun],
     dispatch_task: DispatchTask | None,
 ) -> tuple[list[str], list[str]]:
+    """执行 分发 materialized schedule runs 的内部辅助逻辑。
+
+    Args:
+        sessionmaker: sessionmaker 参数。
+        settings: settings 参数。
+        schedule_runs: schedule_runs 参数。
+        dispatch_task: dispatch_task 参数。
+    """
     queued_run_ids: list[str] = []
     failed_run_ids: list[str] = []
 
@@ -145,9 +162,7 @@ async def _dispatch_materialized_schedule_runs(
                         tool_name="schedule.dispatch",
                         status="succeeded" if queued else "failed",
                         output_text=(
-                            '{"queued": true}'
-                            if queued
-                            else '{"queued": false}'
+                            '{"queued": true}' if queued else '{"queued": false}'
                         ),
                         error_message=None if queued else "Task queue unavailable.",
                     )

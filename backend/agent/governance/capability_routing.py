@@ -29,10 +29,21 @@ from infrastructure.repositories import ModelLogCreate, ModelLogRepository
 
 
 class RoutingModelAdapter(Protocol):
-    async def chat(self, request: GatewayRequest, model_class: str) -> GatewayResult: ...
+    """表示 处理 routing model adapter 的后端数据结构或服务对象。"""
+
+    async def chat(self, request: GatewayRequest, model_class: str) -> GatewayResult:
+        """处理 chat。
+
+        Args:
+            request: request 参数。
+            model_class: model_class 参数。
+        """
+        ...
 
 
 class CapabilityRoutingService:
+    """表示 处理 capability routing service 的后端数据结构或服务对象。"""
+
     def __init__(
         self,
         *,
@@ -42,6 +53,15 @@ class CapabilityRoutingService:
         adapter: RoutingModelAdapter | None = None,
         agent_run_id: str | None = None,
     ) -> None:
+        """初始化对象实例。
+
+        Args:
+            session: session 参数。
+            settings: settings 参数。
+            registry: registry 参数。
+            adapter: adapter 参数。
+            agent_run_id: agent_run_id 参数。
+        """
         self.session = session
         self.settings = settings
         self.registry = registry
@@ -51,6 +71,11 @@ class CapabilityRoutingService:
         self.sensitive_values = _sensitive_values(settings)
 
     async def route_task(self, task: Task) -> Task:
+        """路由 task。
+
+        Args:
+            task: task 参数。
+        """
         if task.task_type != "agent":
             return task
 
@@ -123,6 +148,14 @@ class CapabilityRoutingService:
         request_summary: str,
         error: Exception,
     ) -> None:
+        """执行 记录 failure 的内部辅助逻辑。
+
+        Args:
+            task: task 参数。
+            model_class: model_class 参数。
+            request_summary: request_summary 参数。
+            error: error 参数。
+        """
         await self.repository.create_model_log(
             ModelLogCreate(
                 task_id=task.id,
@@ -140,6 +173,11 @@ class CapabilityRoutingService:
 
 
 def _deepseek_config(settings: Settings) -> DeepSeekConfig:
+    """执行 处理 deepseek config 的内部辅助逻辑。
+
+    Args:
+        settings: settings 参数。
+    """
     return DeepSeekConfig(
         api_key=settings.deepseek_api_key,
         base_url=settings.deepseek_base_url,
@@ -151,6 +189,11 @@ def _deepseek_config(settings: Settings) -> DeepSeekConfig:
 
 
 def _sensitive_values(settings: Settings) -> tuple[str | None, ...]:
+    """执行 处理 sensitive values 的内部辅助逻辑。
+
+    Args:
+        settings: settings 参数。
+    """
     return (
         settings.langbot_webhook_secret,
         settings.langbot_api_base_url,

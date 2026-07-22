@@ -21,6 +21,20 @@ async def load_memory_context(
     scope_kind: str = "user/global",
     scope_id: str | None = None,
 ) -> RetrievalResult:
+    """加载 memory context。
+
+    Args:
+        session: session 参数。
+        user_id: user_id 参数。
+        now: now 参数。
+        query: query 参数。
+        semantic_memory: semantic_memory 参数。
+        semantic_limit: semantic_limit 参数。
+        task_id: task_id 参数。
+        conversation_id: conversation_id 参数。
+        scope_kind: scope_kind 参数。
+        scope_id: scope_id 参数。
+    """
     from domain.memory_release import load_active_retrieval_weights
 
     weights = await load_active_retrieval_weights(
@@ -53,6 +67,16 @@ async def load_memory_summary(
     semantic_memory: SemanticMemory | None = None,
     semantic_limit: int = 5,
 ) -> str:
+    """加载 memory summary。
+
+    Args:
+        session: session 参数。
+        user_id: user_id 参数。
+        now: now 参数。
+        query: query 参数。
+        semantic_memory: semantic_memory 参数。
+        semantic_limit: semantic_limit 参数。
+    """
     result = await load_memory_context(
         session=session,
         user_id=user_id,

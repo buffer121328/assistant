@@ -20,16 +20,28 @@ ScoreType = Literal["NUMERIC", "CATEGORICAL", "BOOLEAN"]
 
 
 class Observation(Protocol):
+    """表示 处理 observation 的后端数据结构或服务对象。"""
+
     def update(
         self,
         *,
         output: object | None = None,
         error: object | None = None,
         metadata: Mapping[str, object] | None = None,
-    ) -> None: ...
+    ) -> None:
+        """更新。
+
+        Args:
+            output: output 参数。
+            error: error 参数。
+            metadata: metadata 参数。
+        """
+        ...
 
 
 class Observability(Protocol):
+    """表示 处理 observability 的后端数据结构或服务对象。"""
+
     def observe(
         self,
         name: str,
@@ -38,7 +50,17 @@ class Observability(Protocol):
         input: object | None = None,
         metadata: Mapping[str, object] | None = None,
         model: str | None = None,
-    ) -> AbstractContextManager[Observation]: ...
+    ) -> AbstractContextManager[Observation]:
+        """处理 observe。
+
+        Args:
+            name: name 参数。
+            as_type: as_type 参数。
+            input: input 参数。
+            metadata: metadata 参数。
+            model: model 参数。
+        """
+        ...
 
     def score(
         self,
@@ -49,15 +71,32 @@ class Observability(Protocol):
         observation_id: str | None = None,
         data_type: ScoreType | None = None,
         metadata: Mapping[str, object] | None = None,
-    ) -> None: ...
+    ) -> None:
+        """处理 score。
 
-    def flush(self) -> None: ...
+        Args:
+            name: name 参数。
+            value: value 参数。
+            trace_id: trace_id 参数。
+            observation_id: observation_id 参数。
+            data_type: data_type 参数。
+            metadata: metadata 参数。
+        """
+        ...
 
-    def shutdown(self) -> None: ...
+    def flush(self) -> None:
+        """刷新。"""
+        ...
+
+    def shutdown(self) -> None:
+        """关闭。"""
+        ...
 
 
 @dataclass(frozen=True)
 class NoopObservation:
+    """表示 处理 noop observation 的后端数据结构或服务对象。"""
+
     def update(
         self,
         *,
@@ -65,10 +104,19 @@ class NoopObservation:
         error: object | None = None,
         metadata: Mapping[str, object] | None = None,
     ) -> None:
+        """更新。
+
+        Args:
+            output: output 参数。
+            error: error 参数。
+            metadata: metadata 参数。
+        """
         del output, error, metadata
 
 
 class NoopObservability:
+    """表示 处理 noop observability 的后端数据结构或服务对象。"""
+
     @contextmanager
     def observe(
         self,
@@ -79,6 +127,15 @@ class NoopObservability:
         metadata: Mapping[str, object] | None = None,
         model: str | None = None,
     ) -> Iterator[Observation]:
+        """处理 observe。
+
+        Args:
+            name: name 参数。
+            as_type: as_type 参数。
+            input: input 参数。
+            metadata: metadata 参数。
+            model: model 参数。
+        """
         del name, as_type, input, metadata, model
         yield NoopObservation()
 
@@ -92,12 +149,24 @@ class NoopObservability:
         data_type: ScoreType | None = None,
         metadata: Mapping[str, object] | None = None,
     ) -> None:
+        """处理 score。
+
+        Args:
+            name: name 参数。
+            value: value 参数。
+            trace_id: trace_id 参数。
+            observation_id: observation_id 参数。
+            data_type: data_type 参数。
+            metadata: metadata 参数。
+        """
         del name, value, trace_id, observation_id, data_type, metadata
 
     def flush(self) -> None:
+        """刷新。"""
         return None
 
     def shutdown(self) -> None:
+        """关闭。"""
         return None
 
 
@@ -110,6 +179,16 @@ def sanitize_telemetry_value(
     max_items: int = 20,
     max_string_length: int = 1000,
 ) -> Any:
+    """处理 sanitize telemetry value。
+
+    Args:
+        value: value 参数。
+        sensitive_values: sensitive_values 参数。
+        depth: depth 参数。
+        max_depth: max_depth 参数。
+        max_items: max_items 参数。
+        max_string_length: max_string_length 参数。
+    """
     if depth >= max_depth:
         return "[truncated]"
     if value is None or isinstance(value, bool | int | float):

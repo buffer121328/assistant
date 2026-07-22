@@ -10,6 +10,7 @@ dependencies = [
     "celery[redis]>=5.6.3,<6.0.0",
     "fastapi>=0.137.2,<0.138.0",
     "httpx>=0.28.1,<0.29.0",
+    "jsonschema>=4.26.0",
     "langgraph>=1.2.9",
     "langgraph-checkpoint-postgres>=3.0.0,<4.0.0",
     "mem0ai>=2.0.12",
@@ -58,6 +59,7 @@ packages = [
     "backend/infrastructure",
     "backend/integrations",
     "backend/knowledge",
+    "backend/rag",
     "backend/model_gateway",
     "backend/notifications",
     "backend/observability",
@@ -94,6 +96,7 @@ source = [
     "backend/infrastructure",
     "backend/integrations",
     "backend/knowledge",
+    "backend/rag",
     "backend/model_gateway",
     "backend/notifications",
     "backend/observability",
@@ -105,7 +108,7 @@ fail_under = 80
 show_missing = true
 
 [tool.mypy]
-files = ["backend/app", "backend/channels", "backend/domain", "backend/agent", "backend/capabilities", "backend/evaluation", "backend/infrastructure", "backend/integrations", "backend/knowledge", "backend/model_gateway", "backend/notifications", "backend/observability", "backend/workers", "scripts", "tests"]
+files = ["backend/app", "backend/channels", "backend/domain", "backend/agent", "backend/capabilities", "backend/evaluation", "backend/infrastructure", "backend/integrations", "backend/knowledge", "backend/rag", "backend/model_gateway", "backend/notifications", "backend/observability", "backend/workers", "scripts", "tests"]
 mypy_path = "backend"
 explicit_package_bases = true
 ignore_missing_imports = true

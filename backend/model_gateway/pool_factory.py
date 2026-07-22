@@ -9,6 +9,11 @@ from infrastructure.config import Settings
 
 
 def build_pooled_model_gateway(settings: Settings) -> PooledModelGateway:
+    """构建 pooled model gateway。
+
+    Args:
+        settings: settings 参数。
+    """
     nodes = list(_legacy_nodes(settings))
     nodes.extend(_configured_nodes(settings.model_gateway_nodes_json))
     adapters = {
@@ -22,6 +27,11 @@ def build_pooled_model_gateway(settings: Settings) -> PooledModelGateway:
 
 
 def _legacy_nodes(settings: Settings) -> tuple[ModelNode, ...]:
+    """执行 处理 legacy nodes 的内部辅助逻辑。
+
+    Args:
+        settings: settings 参数。
+    """
     return (
         ModelNode(
             node_id="deepseek-flash",
@@ -44,17 +54,36 @@ def _legacy_nodes(settings: Settings) -> tuple[ModelNode, ...]:
             cost_advantage=0.7,
         ),
         ModelNode(
-            "local-small-placeholder", "fast", "local", "", "", "", 1, 1.0,
+            "local-small-placeholder",
+            "fast",
+            "local",
+            "",
+            "",
+            "",
+            1,
+            1.0,
             enabled=False,
         ),
         ModelNode(
-            "qwen-private-placeholder", "private", "qwen", "", "", "", 1, 0.5,
+            "qwen-private-placeholder",
+            "private",
+            "qwen",
+            "",
+            "",
+            "",
+            1,
+            0.5,
             enabled=False,
         ),
     )
 
 
 def _configured_nodes(raw: str) -> tuple[ModelNode, ...]:
+    """执行 处理 configured nodes 的内部辅助逻辑。
+
+    Args:
+        raw: raw 参数。
+    """
     if not raw.strip():
         return ()
     value = json.loads(raw)
@@ -69,6 +98,11 @@ def _configured_nodes(raw: str) -> tuple[ModelNode, ...]:
 
 
 def _node(item: dict[str, Any]) -> ModelNode:
+    """执行 处理 node 的内部辅助逻辑。
+
+    Args:
+        item: item 参数。
+    """
     return ModelNode(
         node_id=str(item.get("id", "")).strip(),
         pool=str(item.get("pool", "")).strip().lower(),

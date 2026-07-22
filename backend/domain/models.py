@@ -19,18 +19,24 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 def utc_now() -> datetime:
+    """处理 utc now。"""
     return datetime.now(UTC)
 
 
 def new_id() -> str:
+    """处理 new id。"""
     return str(uuid4())
 
 
 class Base(DeclarativeBase):
+    """表示 处理 base 的后端数据结构或服务对象。"""
+
     pass
 
 
 class TaskStatus(str, Enum):
+    """表示 处理 task status 的后端数据结构或服务对象。"""
+
     PENDING = "pending"
     RUNNING = "running"
     SUCCESS = "success"
@@ -40,12 +46,16 @@ class TaskStatus(str, Enum):
 
 
 class ApprovalStatus(str, Enum):
+    """表示 处理 approval status 的后端数据结构或服务对象。"""
+
     PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
 
 
 class ApprovalType(str, Enum):
+    """表示 处理 approval type 的后端数据结构或服务对象。"""
+
     TOOL = "tool"
     PLAN = "plan"
     REVIEW = "review"
@@ -53,6 +63,8 @@ class ApprovalType(str, Enum):
 
 
 class TimestampMixin:
+    """表示 处理 timestamp mixin 的后端数据结构或服务对象。"""
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=utc_now,
@@ -67,6 +79,8 @@ class TimestampMixin:
 
 
 class User(TimestampMixin, Base):
+    """表示 处理 user 的后端数据结构或服务对象。"""
+
     __tablename__ = "users"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -74,6 +88,8 @@ class User(TimestampMixin, Base):
 
 
 class Conversation(TimestampMixin, Base):
+    """表示 处理 conversation 的后端数据结构或服务对象。"""
+
     __tablename__ = "conversations"
     __table_args__ = (
         UniqueConstraint(
@@ -94,6 +110,8 @@ class Conversation(TimestampMixin, Base):
 
 
 class ConversationSummary(TimestampMixin, Base):
+    """表示 处理 conversation summary 的后端数据结构或服务对象。"""
+
     __tablename__ = "conversation_summaries"
     __table_args__ = (
         UniqueConstraint(
@@ -124,6 +142,8 @@ class ConversationSummary(TimestampMixin, Base):
 
 
 class MemoryBlock(TimestampMixin, Base):
+    """表示 处理 memory block 的后端数据结构或服务对象。"""
+
     __tablename__ = "memory_blocks"
     __table_args__ = (
         UniqueConstraint(
@@ -153,6 +173,8 @@ class MemoryBlock(TimestampMixin, Base):
 
 
 class PlatformAccount(TimestampMixin, Base):
+    """表示 处理 platform account 的后端数据结构或服务对象。"""
+
     __tablename__ = "platform_accounts"
     __table_args__ = (
         UniqueConstraint(
@@ -169,6 +191,8 @@ class PlatformAccount(TimestampMixin, Base):
 
 
 class AccountConnection(TimestampMixin, Base):
+    """表示 处理 account connection 的后端数据结构或服务对象。"""
+
     __tablename__ = "account_connections"
     __table_args__ = (
         Index("ix_account_connections_user_provider", "user_id", "provider"),
@@ -186,6 +210,8 @@ class AccountConnection(TimestampMixin, Base):
 
 
 class ConnectionAuditLog(Base):
+    """表示 处理 connection audit log 的后端数据结构或服务对象。"""
+
     __tablename__ = "connection_audit_logs"
     __table_args__ = (
         Index("ix_connection_audit_user_created", "user_id", "created_at"),
@@ -205,6 +231,8 @@ class ConnectionAuditLog(Base):
 
 
 class KnowledgeDocument(TimestampMixin, Base):
+    """表示 处理 knowledge document 的后端数据结构或服务对象。"""
+
     __tablename__ = "knowledge_documents"
     __table_args__ = (
         UniqueConstraint(
@@ -232,6 +260,8 @@ class KnowledgeDocument(TimestampMixin, Base):
 
 
 class KnowledgeChunk(Base):
+    """表示 处理 knowledge chunk 的后端数据结构或服务对象。"""
+
     __tablename__ = "knowledge_chunks"
     __table_args__ = (
         UniqueConstraint(
@@ -251,6 +281,8 @@ class KnowledgeChunk(Base):
 
 
 class ImportAudit(Base):
+    """表示 处理 import audit 的后端数据结构或服务对象。"""
+
     __tablename__ = "import_audits"
     __table_args__ = (Index("ix_import_audits_user_created", "user_id", "created_at"),)
 
@@ -268,6 +300,8 @@ class ImportAudit(Base):
 
 
 class Reminder(TimestampMixin, Base):
+    """表示 处理 reminder 的后端数据结构或服务对象。"""
+
     __tablename__ = "reminders"
     __table_args__ = (
         Index("ix_reminders_user_due_status", "user_id", "due_at", "status"),
@@ -284,6 +318,8 @@ class Reminder(TimestampMixin, Base):
 
 
 class NotificationOutbox(TimestampMixin, Base):
+    """表示 处理 notification outbox 的后端数据结构或服务对象。"""
+
     __tablename__ = "notification_outbox"
     __table_args__ = (
         UniqueConstraint("idempotency_key", name="uq_notification_outbox_idempotency"),
@@ -306,6 +342,8 @@ class NotificationOutbox(TimestampMixin, Base):
 
 
 class DeliveryAttempt(Base):
+    """表示 处理 delivery attempt 的后端数据结构或服务对象。"""
+
     __tablename__ = "delivery_attempts"
     __table_args__ = (
         Index("ix_delivery_attempts_outbox_created", "outbox_id", "created_at"),
@@ -323,6 +361,8 @@ class DeliveryAttempt(Base):
 
 
 class Task(TimestampMixin, Base):
+    """表示 处理 task 的后端数据结构或服务对象。"""
+
     __tablename__ = "tasks"
     __table_args__ = (Index("ix_tasks_user_created_at", "user_id", "created_at"),)
 
@@ -346,6 +386,8 @@ class Task(TimestampMixin, Base):
 
 
 class AgentRun(Base):
+    """表示 处理 agent run 的后端数据结构或服务对象。"""
+
     __tablename__ = "agent_runs"
     __table_args__ = (
         UniqueConstraint("task_id", "attempt_no", name="uq_agent_runs_task_attempt"),
@@ -371,6 +413,8 @@ class AgentRun(Base):
 
 
 class TaskEvent(Base):
+    """表示 处理 task event 的后端数据结构或服务对象。"""
+
     __tablename__ = "task_events"
     __table_args__ = (
         UniqueConstraint("task_id", "sequence", name="uq_task_events_task_sequence"),
@@ -389,6 +433,8 @@ class TaskEvent(Base):
 
 
 class ConversationMessage(Base):
+    """表示 处理 conversation message 的后端数据结构或服务对象。"""
+
     __tablename__ = "conversation_messages"
     __table_args__ = (
         Index(
@@ -411,6 +457,8 @@ class ConversationMessage(Base):
 
 
 class ProcessedMessage(TimestampMixin, Base):
+    """表示 处理 processed message 的后端数据结构或服务对象。"""
+
     __tablename__ = "processed_messages"
     __table_args__ = (
         UniqueConstraint(
@@ -448,6 +496,8 @@ class ProcessedMessage(TimestampMixin, Base):
 
 
 class Memory(TimestampMixin, Base):
+    """表示 处理 memory 的后端数据结构或服务对象。"""
+
     __tablename__ = "memories"
     __table_args__ = (
         UniqueConstraint(
@@ -553,6 +603,8 @@ class Memory(TimestampMixin, Base):
 
 
 class MemoryLink(Base):
+    """表示 处理 memory link 的后端数据结构或服务对象。"""
+
     __tablename__ = "memory_links"
     __table_args__ = (
         UniqueConstraint(
@@ -579,6 +631,8 @@ class MemoryLink(Base):
 
 
 class MemoryFeedback(Base):
+    """表示 处理 memory feedback 的后端数据结构或服务对象。"""
+
     __tablename__ = "memory_feedback"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     memory_id: Mapped[str] = mapped_column(ForeignKey("memories.id"), nullable=False)
@@ -593,6 +647,8 @@ class MemoryFeedback(Base):
 
 
 class MemoryIndexOutbox(TimestampMixin, Base):
+    """表示 处理 memory index outbox 的后端数据结构或服务对象。"""
+
     __tablename__ = "memory_index_outbox"
     __table_args__ = (
         UniqueConstraint(
@@ -610,6 +666,8 @@ class MemoryIndexOutbox(TimestampMixin, Base):
 
 
 class MemoryRetrievalTrace(Base):
+    """表示 处理 memory retrieval trace 的后端数据结构或服务对象。"""
+
     __tablename__ = "memory_retrieval_traces"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
@@ -628,6 +686,8 @@ class MemoryRetrievalTrace(Base):
 
 
 class MemoryRetrievalTraceItem(Base):
+    """表示 处理 memory retrieval trace item 的后端数据结构或服务对象。"""
+
     __tablename__ = "memory_retrieval_trace_items"
     __table_args__ = (
         UniqueConstraint(
@@ -647,6 +707,8 @@ class MemoryRetrievalTraceItem(Base):
 
 
 class MemoryConsolidationDigest(Base):
+    """表示 处理 memory consolidation digest 的后端数据结构或服务对象。"""
+
     __tablename__ = "memory_consolidation_digests"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
@@ -664,6 +726,8 @@ class MemoryConsolidationDigest(Base):
 
 
 class MemoryConsolidationRun(Base):
+    """表示 处理 memory consolidation run 的后端数据结构或服务对象。"""
+
     __tablename__ = "memory_consolidation_runs"
     __table_args__ = (
         UniqueConstraint(
@@ -700,6 +764,8 @@ class MemoryConsolidationRun(Base):
 
 
 class MemoryConsolidationDecision(Base):
+    """表示 处理 memory consolidation decision 的后端数据结构或服务对象。"""
+
     __tablename__ = "memory_consolidation_decisions"
     __table_args__ = (
         UniqueConstraint(
@@ -727,6 +793,8 @@ class MemoryConsolidationDecision(Base):
 
 
 class MemoryPolicy(TimestampMixin, Base):
+    """表示 处理 memory policy 的后端数据结构或服务对象。"""
+
     __tablename__ = "memory_policies"
     __table_args__ = (
         UniqueConstraint(
@@ -749,6 +817,8 @@ class MemoryPolicy(TimestampMixin, Base):
 
 
 class AgentSchedule(TimestampMixin, Base):
+    """表示 处理 agent schedule 的后端数据结构或服务对象。"""
+
     __tablename__ = "agent_schedules"
     __table_args__ = (
         Index("ix_agent_schedules_user_next_run", "user_id", "next_run_at"),
@@ -763,25 +833,37 @@ class AgentSchedule(TimestampMixin, Base):
     timezone: Mapped[str] = mapped_column(String(64), default="UTC", nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     payload_json: Mapped[str] = mapped_column(Text, nullable=False)
-    catch_up_policy: Mapped[str] = mapped_column(String(16), default="skip", nullable=False)
+    catch_up_policy: Mapped[str] = mapped_column(
+        String(16), default="skip", nullable=False
+    )
     next_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class AgentScheduleRun(Base):
+    """表示 处理 agent schedule run 的后端数据结构或服务对象。"""
+
     __tablename__ = "agent_schedule_runs"
     __table_args__ = (
-        UniqueConstraint("schedule_id", "scheduled_for", name="uq_agent_schedule_runs_slot"),
+        UniqueConstraint(
+            "schedule_id", "scheduled_for", name="uq_agent_schedule_runs_slot"
+        ),
         Index("ix_agent_schedule_runs_schedule_created", "schedule_id", "created_at"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    schedule_id: Mapped[str] = mapped_column(ForeignKey("agent_schedules.id"), nullable=False)
+    schedule_id: Mapped[str] = mapped_column(
+        ForeignKey("agent_schedules.id"), nullable=False
+    )
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
-    scheduled_for: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    scheduled_for: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
     task_id: Mapped[str | None] = mapped_column(ForeignKey("tasks.id"), nullable=True)
-    status: Mapped[str] = mapped_column(String(32), default="materialized", nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(32), default="materialized", nullable=False
+    )
     message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
@@ -789,6 +871,8 @@ class AgentScheduleRun(Base):
 
 
 class ModelLog(Base):
+    """表示 处理 model log 的后端数据结构或服务对象。"""
+
     __tablename__ = "model_logs"
     __table_args__ = (Index("ix_model_logs_agent_run_id", "agent_run_id"),)
 
@@ -810,6 +894,8 @@ class ModelLog(Base):
 
 
 class ToolLog(Base):
+    """表示 处理 tool log 的后端数据结构或服务对象。"""
+
     __tablename__ = "tool_logs"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -827,6 +913,8 @@ class ToolLog(Base):
 
 
 class SkillAuditLog(TimestampMixin, Base):
+    """表示 处理 skill audit log 的后端数据结构或服务对象。"""
+
     __tablename__ = "skill_audit_logs"
     __table_args__ = (
         Index("ix_skill_audit_logs_actor_created_at", "actor_user_id", "created_at"),
@@ -842,6 +930,8 @@ class SkillAuditLog(TimestampMixin, Base):
 
 
 class EvolutionChange(TimestampMixin, Base):
+    """表示 处理 evolution change 的后端数据结构或服务对象。"""
+
     __tablename__ = "evolution_changes"
     __table_args__ = (Index("ix_evolution_changes_user_status", "user_id", "status"),)
 
@@ -863,6 +953,8 @@ class EvolutionChange(TimestampMixin, Base):
 
 
 class EvolutionVersion(Base):
+    """表示 处理 evolution version 的后端数据结构或服务对象。"""
+
     __tablename__ = "evolution_versions"
     __table_args__ = (
         Index("ix_evolution_versions_change_created", "change_id", "created_at"),
@@ -888,6 +980,8 @@ class EvolutionVersion(Base):
 
 
 class Approval(TimestampMixin, Base):
+    """表示 处理 approval 的后端数据结构或服务对象。"""
+
     __tablename__ = "approvals"
     __table_args__ = (
         Index("ix_approvals_task_status", "task_id", "status"),
@@ -928,6 +1022,8 @@ class Approval(TimestampMixin, Base):
 
 
 class MemoryReleaseReport(Base):
+    """表示 处理 memory release report 的后端数据结构或服务对象。"""
+
     __tablename__ = "memory_release_reports"
     __table_args__ = (
         Index("ix_memory_release_reports_user_scope", "user_id", "scope_key"),
@@ -950,6 +1046,8 @@ class MemoryReleaseReport(Base):
 
 
 class MemoryRetrievalPolicyVersion(Base):
+    """表示 处理 memory retrieval policy version 的后端数据结构或服务对象。"""
+
     __tablename__ = "memory_retrieval_policy_versions"
     __table_args__ = (
         UniqueConstraint(
@@ -992,6 +1090,8 @@ class MemoryRetrievalPolicyVersion(Base):
 
 
 class MemoryEffectiveness(TimestampMixin, Base):
+    """表示 处理 memory effectiveness 的后端数据结构或服务对象。"""
+
     __tablename__ = "memory_effectiveness"
     __table_args__ = (
         UniqueConstraint("user_id", "memory_id", name="uq_memory_effectiveness_owner"),
@@ -1007,6 +1107,8 @@ class MemoryEffectiveness(TimestampMixin, Base):
 
 
 class MemoryEffectivenessEvent(Base):
+    """表示 处理 memory effectiveness event 的后端数据结构或服务对象。"""
+
     __tablename__ = "memory_effectiveness_events"
     __table_args__ = (
         UniqueConstraint(

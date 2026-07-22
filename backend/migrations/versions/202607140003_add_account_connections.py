@@ -16,6 +16,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    """执行数据库迁移升级步骤。"""
     op.create_table(
         "account_connections",
         sa.Column("id", sa.String(36), nullable=False),
@@ -32,7 +33,11 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_account_connections_user_provider", "account_connections", ["user_id", "provider"])
+    op.create_index(
+        "ix_account_connections_user_provider",
+        "account_connections",
+        ["user_id", "provider"],
+    )
     op.create_table(
         "connection_audit_logs",
         sa.Column("id", sa.String(36), nullable=False),
@@ -46,11 +51,20 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_connection_audit_user_created", "connection_audit_logs", ["user_id", "created_at"])
+    op.create_index(
+        "ix_connection_audit_user_created",
+        "connection_audit_logs",
+        ["user_id", "created_at"],
+    )
 
 
 def downgrade() -> None:
-    op.drop_index("ix_connection_audit_user_created", table_name="connection_audit_logs")
+    """执行数据库迁移回滚步骤。"""
+    op.drop_index(
+        "ix_connection_audit_user_created", table_name="connection_audit_logs"
+    )
     op.drop_table("connection_audit_logs")
-    op.drop_index("ix_account_connections_user_provider", table_name="account_connections")
+    op.drop_index(
+        "ix_account_connections_user_provider", table_name="account_connections"
+    )
     op.drop_table("account_connections")

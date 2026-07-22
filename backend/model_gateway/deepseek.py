@@ -22,6 +22,8 @@ from .core import (
 
 @dataclass(frozen=True)
 class DeepSeekConfig:
+    """表示 处理 deep seek config 的后端数据结构或服务对象。"""
+
     api_key: str
     base_url: str
     light_model: str
@@ -31,10 +33,23 @@ class DeepSeekConfig:
 
 
 class DeepSeekAdapter:
+    """表示 处理 deep seek adapter 的后端数据结构或服务对象。"""
+
     def __init__(self, config: DeepSeekConfig) -> None:
+        """初始化对象实例。
+
+        Args:
+            config: config 参数。
+        """
         self.config = config
 
     async def chat(self, request: GatewayRequest, model_class: str) -> GatewayResult:
+        """处理 chat。
+
+        Args:
+            request: request 参数。
+            model_class: model_class 参数。
+        """
         model = self._model_for_class(model_class)
         payload = {
             "model": model,
@@ -83,9 +98,15 @@ class DeepSeekAdapter:
         raise self._provider_error("Provider request did not return a response")
 
     def _chat_completions_url(self) -> str:
+        """执行 处理 chat completions url 的内部辅助逻辑。"""
         return f"{self.config.base_url.rstrip('/')}/chat/completions"
 
     def _model_for_class(self, model_class: str) -> str:
+        """执行 处理 model for class 的内部辅助逻辑。
+
+        Args:
+            model_class: model_class 参数。
+        """
         if model_class == MODEL_CLASS_LIGHT:
             return self.config.light_model
         if model_class == MODEL_CLASS_STANDARD:
@@ -102,6 +123,13 @@ class DeepSeekAdapter:
         model: str,
         start: float,
     ) -> GatewayResult:
+        """执行 处理 map success 的内部辅助逻辑。
+
+        Args:
+            response: response 参数。
+            model: model 参数。
+            start: start 参数。
+        """
         try:
             payload = response.json()
             content = _extract_content(payload)
@@ -118,6 +146,11 @@ class DeepSeekAdapter:
         )
 
     def _timeout_error(self, _error: Exception) -> ModelGatewayError:
+        """执行 处理 timeout error 的内部辅助逻辑。
+
+        Args:
+            _error: _error 参数。
+        """
         return ModelGatewayError(
             code=MODEL_GATEWAY_TIMEOUT,
             message="Model provider timed out",
@@ -125,6 +158,11 @@ class DeepSeekAdapter:
         )
 
     def _provider_error(self, detail: str) -> ModelGatewayError:
+        """执行 处理 provider error 的内部辅助逻辑。
+
+        Args:
+            detail: detail 参数。
+        """
         sanitized = sanitize_text(
             detail,
             extra_sensitive_values=[self.config.api_key],
@@ -137,6 +175,11 @@ class DeepSeekAdapter:
 
 
 def _extract_content(payload: dict[str, Any]) -> str:
+    """执行 提取 content 的内部辅助逻辑。
+
+    Args:
+        payload: payload 参数。
+    """
     choices = payload["choices"]
     if not isinstance(choices, list) or not choices:
         raise ValueError("missing choices")
@@ -148,6 +191,11 @@ def _extract_content(payload: dict[str, Any]) -> str:
 
 
 def _extract_usage(payload: dict[str, Any]) -> GatewayUsage:
+    """执行 提取 usage 的内部辅助逻辑。
+
+    Args:
+        payload: payload 参数。
+    """
     usage = payload.get("usage", {})
     if not isinstance(usage, dict):
         usage = {}
@@ -162,6 +210,13 @@ def _usage_value(
     provider_key: str,
     fallback_key: str,
 ) -> int:
+    """执行 处理 usage value 的内部辅助逻辑。
+
+    Args:
+        usage: usage 参数。
+        provider_key: provider_key 参数。
+        fallback_key: fallback_key 参数。
+    """
     value = usage.get(provider_key, usage.get(fallback_key, 0))
     if isinstance(value, int) and value >= 0:
         return value
@@ -169,4 +224,9 @@ def _usage_value(
 
 
 def _is_retryable_status(status_code: int) -> bool:
+    """执行 处理 is retryable status 的内部辅助逻辑。
+
+    Args:
+        status_code: status_code 参数。
+    """
     return status_code in {408, 429} or status_code >= 500

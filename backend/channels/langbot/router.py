@@ -18,6 +18,13 @@ async def receive_langbot_webhook(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> dict[str, object]:
+    """处理 receive langbot webhook。
+
+    Args:
+        payload: payload 参数。
+        request: request 参数。
+        session: session 参数。
+    """
     return await handle_langbot_webhook(
         payload=payload,
         headers=request.headers,

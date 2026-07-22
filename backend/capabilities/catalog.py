@@ -13,9 +13,7 @@ if TYPE_CHECKING:
 
 
 _SAFE_SKILL_NAME = re.compile(r"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$")
-_SAFE_CAPABILITY_ID = re.compile(
-    r"^[a-z][a-z0-9]*(?:[.-][a-z0-9][a-z0-9-]*)+$"
-)
+_SAFE_CAPABILITY_ID = re.compile(r"^[a-z][a-z0-9]*(?:[.-][a-z0-9][a-z0-9-]*)+$")
 _MAX_SKILL_METADATA_BYTES = 16 * 1024
 _FRONTMATTER_RE = re.compile(
     r"\A---[ \t]*(?:\r?\n)(.*?)(?:\r?\n)---[ \t]*(?:\r?\n|\Z)",
@@ -24,10 +22,12 @@ _FRONTMATTER_RE = re.compile(
 _FRONTMATTER_KEY = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*$")
 
 CapabilityLoader = Callable[[], object]
-CapabilityRiskLevel = Literal["L1", "L2", "L3"]
+CapabilityRiskLevel = Literal["L0", "L1", "L2", "L3", "L4"]
 
 
 class CapabilityKind(str, Enum):
+    """表示 处理 capability kind 的后端数据结构或服务对象。"""
+
     CODE = "code"
     AGENT_PROFILE = "agent_profile"
     SKILL = "skill"
@@ -35,31 +35,45 @@ class CapabilityKind(str, Enum):
 
 
 class CapabilityRegistryError(Exception):
+    """表示 处理 capability registry error 的后端数据结构或服务对象。"""
+
     pass
 
 
 class DuplicateCapabilityError(CapabilityRegistryError):
+    """表示 处理 duplicate capability error 的后端数据结构或服务对象。"""
+
     pass
 
 
 class CapabilityNotFoundError(CapabilityRegistryError):
+    """表示 处理 capability not found error 的后端数据结构或服务对象。"""
+
     pass
 
 
 class CapabilityDisabledError(CapabilityRegistryError):
+    """表示 处理 capability disabled error 的后端数据结构或服务对象。"""
+
     pass
 
 
 class CapabilityLoaderMissingError(CapabilityRegistryError):
+    """表示 处理 capability loader missing error 的后端数据结构或服务对象。"""
+
     pass
 
 
 class CapabilityLoadError(CapabilityRegistryError):
+    """表示 处理 capability load error 的后端数据结构或服务对象。"""
+
     pass
 
 
 @dataclass(frozen=True)
 class CapabilityMetadata:
+    """表示 处理 capability metadata 的后端数据结构或服务对象。"""
+
     id: str
     kind: CapabilityKind
     display_name: str
@@ -70,6 +84,7 @@ class CapabilityMetadata:
     requires_approval: bool
 
     def __post_init__(self) -> None:
+        """完成数据类初始化后的补充处理。"""
         if not _SAFE_CAPABILITY_ID.fullmatch(self.id):
             raise ValueError(f"Invalid capability id: {self.id}")
         if not self.display_name.strip():
@@ -81,7 +96,10 @@ class CapabilityMetadata:
 
 
 class CapabilityRegistry:
+    """表示 处理 capability registry 的后端数据结构或服务对象。"""
+
     def __init__(self) -> None:
+        """初始化对象实例。"""
         self._metadata: dict[str, CapabilityMetadata] = {}
         self._loaders: dict[str, CapabilityLoader] = {}
         self._resolved: dict[str, object] = {}
@@ -90,10 +108,12 @@ class CapabilityRegistry:
 
     @property
     def revision(self) -> int:
+        """处理 revision。"""
         return self._revision
 
     @property
     def tool_snapshot_revision(self) -> int:
+        """处理 tool snapshot revision。"""
         return self._tool_snapshot_revision
 
     def register(
@@ -102,6 +122,12 @@ class CapabilityRegistry:
         *,
         loader: CapabilityLoader | None = None,
     ) -> None:
+        """处理 register。
+
+        Args:
+            metadata: metadata 参数。
+            loader: loader 参数。
+        """
         if metadata.id in self._metadata:
             raise DuplicateCapabilityError(
                 f"Capability is already registered: {metadata.id}"
@@ -118,6 +144,12 @@ class CapabilityRegistry:
         kind: CapabilityKind | None = None,
         enabled: bool | None = None,
     ) -> tuple[CapabilityMetadata, ...]:
+        """列出。
+
+        Args:
+            kind: kind 参数。
+            enabled: enabled 参数。
+        """
         return tuple(
             metadata
             for metadata in sorted(self._metadata.values(), key=lambda item: item.id)
@@ -126,6 +158,11 @@ class CapabilityRegistry:
         )
 
     def get(self, capability_id: str) -> CapabilityMetadata:
+        """获取。
+
+        Args:
+            capability_id: capability_id 参数。
+        """
         try:
             return self._metadata[capability_id]
         except KeyError as exc:
@@ -134,11 +171,14 @@ class CapabilityRegistry:
             ) from exc
 
     def resolve(self, capability_id: str) -> object:
+        """解析。
+
+        Args:
+            capability_id: capability_id 参数。
+        """
         metadata = self.get(capability_id)
         if not metadata.enabled:
-            raise CapabilityDisabledError(
-                f"Capability is disabled: {capability_id}"
-            )
+            raise CapabilityDisabledError(f"Capability is disabled: {capability_id}")
         if capability_id in self._resolved:
             return self._resolved[capability_id]
         try:
@@ -157,6 +197,11 @@ class CapabilityRegistry:
         return instance
 
     def replace_tool_projection(self, snapshot: ToolCatalogSnapshot) -> None:
+        """处理 replace tool projection。
+
+        Args:
+            snapshot: snapshot 参数。
+        """
         next_metadata = {
             capability_id: metadata
             for capability_id, metadata in self._metadata.items()
@@ -191,6 +236,11 @@ class CapabilityRegistry:
 
 
 def discover_skill_metadata(skills_root: Path) -> tuple[CapabilityMetadata, ...]:
+    """处理 discover skill metadata。
+
+    Args:
+        skills_root: skills_root 参数。
+    """
     try:
         root = skills_root.resolve(strict=True)
     except (FileNotFoundError, OSError):
@@ -246,6 +296,14 @@ def build_default_registry(
     managed_store: ManagedSkillStore | None = None,
     tool_snapshot: ToolCatalogSnapshot | None = None,
 ) -> CapabilityRegistry:
+    """构建 default registry。
+
+    Args:
+        skills_root: skills_root 参数。
+        loaders: loaders 参数。
+        managed_store: managed_store 参数。
+        tool_snapshot: tool_snapshot 参数。
+    """
     registry = CapabilityRegistry()
     loader_map = loaders or {}
     builtin_skills = discover_skill_metadata(skills_root)
@@ -255,6 +313,11 @@ def build_default_registry(
             skill_name = metadata.id.removeprefix("skill.")
 
             def load_builtin(name: str = skill_name) -> object:
+                """加载 builtin。
+
+                Args:
+                    name: name 参数。
+                """
                 return _load_builtin_skill(skills_root, name)
 
             loader = load_builtin
@@ -270,6 +333,11 @@ def build_default_registry(
             if loader is None:
 
                 def load_managed(name: str = record.name) -> object:
+                    """加载 managed。
+
+                    Args:
+                        name: name 参数。
+                    """
                     return managed_store.load(name)
 
                 loader = load_managed
@@ -293,12 +361,23 @@ def build_default_registry(
 
 
 def _load_builtin_skill(skills_root: Path, name: str) -> object:
+    """执行 加载 builtin skill 的内部辅助逻辑。
+
+    Args:
+        skills_root: skills_root 参数。
+        name: name 参数。
+    """
     from agent.skill_management import SkillsLoader
 
     return SkillsLoader(skills_root).load((name,))[0]
 
 
 def _parse_skill_metadata(content: str) -> tuple[str, str] | None:
+    """执行 解析 skill metadata 的内部辅助逻辑。
+
+    Args:
+        content: content 参数。
+    """
     frontmatter, body = _split_frontmatter(content)
     display_name = _frontmatter_text(frontmatter, "name") or _frontmatter_text(
         frontmatter, "display_name"
@@ -335,6 +414,11 @@ def _parse_skill_metadata(content: str) -> tuple[str, str] | None:
 
 
 def _split_frontmatter(content: str) -> tuple[dict[str, object], str]:
+    """执行 处理 split frontmatter 的内部辅助逻辑。
+
+    Args:
+        content: content 参数。
+    """
     match = _FRONTMATTER_RE.match(content)
     if match is None:
         return {}, content
@@ -342,6 +426,11 @@ def _split_frontmatter(content: str) -> tuple[dict[str, object], str]:
 
 
 def _parse_frontmatter_block(block: str) -> dict[str, object]:
+    """执行 解析 frontmatter block 的内部辅助逻辑。
+
+    Args:
+        block: block 参数。
+    """
     try:
         import yaml
 
@@ -354,6 +443,11 @@ def _parse_frontmatter_block(block: str) -> dict[str, object]:
 
 
 def _parse_flat_frontmatter(block: str) -> dict[str, str]:
+    """执行 解析 flat frontmatter 的内部辅助逻辑。
+
+    Args:
+        block: block 参数。
+    """
     parsed: dict[str, str] = {}
     for raw_line in block.splitlines():
         line = raw_line.strip()
@@ -363,16 +457,23 @@ def _parse_flat_frontmatter(block: str) -> dict[str, str]:
         key = key.strip()
         if not _FRONTMATTER_KEY.fullmatch(key):
             continue
-        parsed[key] = value.strip().strip('"\'')
+        parsed[key] = value.strip().strip("\"'")
     return parsed
 
 
 def _frontmatter_text(frontmatter: dict[str, object], key: str) -> str:
+    """执行 处理 frontmatter text 的内部辅助逻辑。
+
+    Args:
+        frontmatter: frontmatter 参数。
+        key: key 参数。
+    """
     value = frontmatter.get(key)
     return value.strip() if isinstance(value, str) else ""
 
 
 def _builtin_metadata() -> tuple[CapabilityMetadata, ...]:
+    """执行 处理 builtin metadata 的内部辅助逻辑。"""
     definitions: tuple[
         tuple[
             str,

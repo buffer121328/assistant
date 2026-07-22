@@ -18,6 +18,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def timestamp_columns() -> list[sa.Column]:
+    """处理 timestamp columns。"""
     return [
         sa.Column(
             "created_at",
@@ -35,6 +36,7 @@ def timestamp_columns() -> list[sa.Column]:
 
 
 def upgrade() -> None:
+    """执行数据库迁移升级步骤。"""
     op.create_table(
         "users",
         sa.Column("id", sa.String(length=36), primary_key=True),
@@ -126,6 +128,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """执行数据库迁移回滚步骤。"""
     op.drop_table("approvals")
     op.drop_table("tool_logs")
     op.drop_table("model_logs")

@@ -20,6 +20,17 @@ async def record_execution_trace(
     output_text: str | None,
     error_message: str | None,
 ) -> None:
+    """记录 execution trace。
+
+    Args:
+        session: session 参数。
+        task_id: task_id 参数。
+        tool_name: tool_name 参数。
+        status: status 参数。
+        input_text: input_text 参数。
+        output_text: output_text 参数。
+        error_message: error_message 参数。
+    """
     from domain.models import ToolLog
 
     session.add(
@@ -41,6 +52,13 @@ async def execute_memory_task(
     task_id: str,
     semantic_memory: SemanticMemory | None,
 ) -> Any:
+    """执行 memory task。
+
+    Args:
+        session: session 参数。
+        task_id: task_id 参数。
+        semantic_memory: semantic_memory 参数。
+    """
     from domain.services import MemoryService
 
     return await MemoryService(
@@ -50,6 +68,12 @@ async def execute_memory_task(
 
 
 async def execute_status_task(session: AsyncSession, *, task_id: str) -> Any:
+    """执行 status task。
+
+    Args:
+        session: session 参数。
+        task_id: task_id 参数。
+    """
     from domain.services import StatusService
 
     return await StatusService(session).execute_task(task_id)
@@ -60,6 +84,12 @@ def task_lifecycle(
     *,
     success_hook: Callable[[Any], Awaitable[None]] | None,
 ) -> Any:
+    """处理 task lifecycle。
+
+    Args:
+        session: session 参数。
+        success_hook: success_hook 参数。
+    """
     from domain.services import TaskService
 
     return TaskService(session, success_hook=success_hook)
@@ -73,6 +103,15 @@ async def load_pending_task(
     not_pending_error: type[Exception],
     not_found_error: type[Exception],
 ) -> Any:
+    """加载 pending task。
+
+    Args:
+        session: session 参数。
+        task_id: task_id 参数。
+        pending_status: pending_status 参数。
+        not_pending_error: not_pending_error 参数。
+        not_found_error: not_found_error 参数。
+    """
     from domain.models import Task
 
     task = await session.get(Task, task_id)
@@ -89,6 +128,13 @@ async def load_user(
     user_id: str,
     not_found_error: type[Exception],
 ) -> Any:
+    """加载 user。
+
+    Args:
+        session: session 参数。
+        user_id: user_id 参数。
+        not_found_error: not_found_error 参数。
+    """
     from domain.models import User
 
     user = await session.get(User, user_id)
@@ -106,6 +152,16 @@ async def load_conversation_context(
     current_input: str,
     long_term_memory: str,
 ) -> ConversationContextPack:
+    """加载 conversation context。
+
+    Args:
+        session: session 参数。
+        conversation_id: conversation_id 参数。
+        user_id: user_id 参数。
+        task_id: task_id 参数。
+        current_input: current_input 参数。
+        long_term_memory: long_term_memory 参数。
+    """
     from domain.conversation_memory import ConversationMemoryService
     from domain.conversations import ConversationService
     from agent.memory.working_set import ConversationMessageRef, build_context_pack

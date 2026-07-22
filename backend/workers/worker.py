@@ -33,6 +33,11 @@ celery_app.conf.update(
 
 @celery_app.task(name="workers.execute_task")
 def execute_task(task_id: str) -> str:
+    """执行 task。
+
+    Args:
+        task_id: task_id 参数。
+    """
     runtime_settings = load_settings()
     sessionmaker = create_database_sessionmaker(runtime_settings.database_url)
     asyncio.run(
@@ -47,6 +52,7 @@ def execute_task(task_id: str) -> str:
 
 @celery_app.task(name="workers.run_v2_maintenance")
 def run_v2_maintenance_task() -> dict[str, object]:
+    """运行 v2 maintenance task。"""
     from scheduler.heartbeat import run_v2_maintenance
 
     runtime_settings = load_settings()
@@ -59,7 +65,15 @@ def run_v2_maintenance_task() -> dict[str, object]:
     )
 
 
-def enqueue_task_execution(task_id: str, *, runtime_settings: Settings | None = None) -> bool:
+def enqueue_task_execution(
+    task_id: str, *, runtime_settings: Settings | None = None
+) -> bool:
+    """处理 enqueue task execution。
+
+    Args:
+        task_id: task_id 参数。
+        runtime_settings: runtime_settings 参数。
+    """
     runtime_settings = runtime_settings or load_settings()
     if _is_placeholder_redis_url(runtime_settings.redis_url):
         return False
@@ -70,4 +84,9 @@ def enqueue_task_execution(task_id: str, *, runtime_settings: Settings | None = 
 
 
 def _is_placeholder_redis_url(redis_url: str) -> bool:
+    """执行 处理 is placeholder redis url 的内部辅助逻辑。
+
+    Args:
+        redis_url: redis_url 参数。
+    """
     return not redis_url.strip() or "placeholder" in redis_url

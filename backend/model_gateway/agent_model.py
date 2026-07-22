@@ -5,6 +5,8 @@ from typing import Protocol, TypeVar
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from agent.core.budget import BudgetExceededError, RunBudget
+
 from agent import (
     AgentDecision,
     AgentModelRequest,
@@ -32,10 +34,21 @@ from domain.task_events import TASK_EVENT_CONTENT_DELTA
 
 
 class AgentGatewayAdapter(Protocol):
-    async def chat(self, request: GatewayRequest, model_class: str) -> GatewayResult: ...
+    """表示 处理 agent gateway adapter 的后端数据结构或服务对象。"""
+
+    async def chat(self, request: GatewayRequest, model_class: str) -> GatewayResult:
+        """处理 chat。
+
+        Args:
+            request: request 参数。
+            model_class: model_class 参数。
+        """
+        ...
 
 
 class AgentModelGatewayError(RuntimeError):
+    """表示 处理 agent model gateway error 的后端数据结构或服务对象。"""
+
     pass
 
 
@@ -43,6 +56,8 @@ _ModelOutput = TypeVar("_ModelOutput")
 
 
 class AgentGatewayModel:
+    """表示 处理 agent gateway model 的后端数据结构或服务对象。"""
+
     def __init__(
         self,
         *,
@@ -52,7 +67,19 @@ class AgentGatewayModel:
         agent_run_id: str | None = None,
         observability: Observability | None = None,
         event_sink: Callable[[str, dict[str, object]], Awaitable[None]] | None = None,
+        budget: RunBudget | None = None,
     ) -> None:
+        """初始化对象实例。
+
+        Args:
+            session: session 参数。
+            settings: settings 参数。
+            adapter: adapter 参数。
+            agent_run_id: agent_run_id 参数。
+            observability: observability 参数。
+            event_sink: event_sink 参数。
+            budget: budget 参数。
+        """
         self.session = session
         self.settings = settings
         self.agent_run_id = agent_run_id
@@ -65,8 +92,22 @@ class AgentGatewayModel:
         self.sensitive_values = _sensitive_values(settings)
         self.observability = observability or NoopObservability()
         self.event_sink = event_sink
+        self.budget = budget
+
+    def set_run_budget(self, budget: RunBudget) -> None:
+        """处理 set run budget。
+
+        Args:
+            budget: budget 参数。
+        """
+        self.budget = budget
 
     async def decide(self, request: AgentModelRequest) -> AgentDecision:
+        """处理 decide。
+
+        Args:
+            request: request 参数。
+        """
         return await self._complete(
             request,
             phase="decision",
@@ -74,6 +115,11 @@ class AgentGatewayModel:
         )
 
     async def create_plan(self, request: AgentModelRequest) -> WorkPlan:
+        """创建 plan。
+
+        Args:
+            request: request 参数。
+        """
         return await self._complete(
             request,
             phase="plan",
@@ -81,6 +127,11 @@ class AgentGatewayModel:
         )
 
     async def review(self, request: AgentModelRequest) -> ReviewDecision:
+        """处理 review。
+
+        Args:
+            request: request 参数。
+        """
         return await self._complete(
             request,
             phase="review",
@@ -94,6 +145,13 @@ class AgentGatewayModel:
         phase: str,
         parser: Callable[[str], _ModelOutput],
     ) -> _ModelOutput:
+        """执行 处理 complete 的内部辅助逻辑。
+
+        Args:
+            request: request 参数。
+            phase: phase 参数。
+            parser: parser 参数。
+        """
         gateway_request = GatewayRequest(
             user_id=request.user_id,
             task_id=request.task_id,
@@ -129,6 +187,8 @@ class AgentGatewayModel:
             model=model_class,
         ) as observation:
             try:
+                if self.budget is not None:
+                    self.budget.check_can_continue()
                 if (
                     phase == "decision"
                     and request.stream_answer
@@ -140,6 +200,11 @@ class AgentGatewayModel:
                     assert event_sink is not None
 
                     async def on_delta(chunk: str) -> None:
+                        """处理 on delta。
+
+                        Args:
+                            chunk: chunk 参数。
+                        """
                         answer_delta = decoder.feed(chunk)
                         if answer_delta:
                             await event_sink(
@@ -162,7 +227,20 @@ class AgentGatewayModel:
                 raise error from exc
 
             try:
+                if self.budget is not None:
+                    self.budget.record_model_usage(
+                        input_tokens=result.usage.input_tokens,
+                        output_tokens=result.usage.output_tokens,
+                    )
                 parsed = parser(result.content)
+            except BudgetExceededError as exc:
+                await self._record_failure(
+                    task_id=request.task_id,
+                    model_class=model_class,
+                    request_summary=request_summary,
+                    error=exc,
+                )
+                raise
             except Exception as exc:
                 await self._record_failure(
                     task_id=request.task_id,
@@ -208,6 +286,14 @@ class AgentGatewayModel:
         request_summary: str,
         error: Exception,
     ) -> None:
+        """执行 记录 failure 的内部辅助逻辑。
+
+        Args:
+            task_id: task_id 参数。
+            model_class: model_class 参数。
+            request_summary: request_summary 参数。
+            error: error 参数。
+        """
         await self.repository.create_model_log(
             ModelLogCreate(
                 task_id=task_id,
@@ -225,12 +311,22 @@ class AgentGatewayModel:
 
 
 def _gateway_task_type(task_type: str) -> str:
+    """执行 处理 gateway task type 的内部辅助逻辑。
+
+    Args:
+        task_type: task_type 参数。
+    """
     if task_type == "office":
         return "office_text"
     return task_type
 
 
 def _deepseek_config(settings: Settings) -> DeepSeekConfig:
+    """执行 处理 deepseek config 的内部辅助逻辑。
+
+    Args:
+        settings: settings 参数。
+    """
     return DeepSeekConfig(
         api_key=settings.deepseek_api_key,
         base_url=settings.deepseek_base_url,
@@ -242,6 +338,11 @@ def _deepseek_config(settings: Settings) -> DeepSeekConfig:
 
 
 def _sensitive_values(settings: Settings) -> tuple[str | None, ...]:
+    """执行 处理 sensitive values 的内部辅助逻辑。
+
+    Args:
+        settings: settings 参数。
+    """
     return (
         settings.deepseek_api_key,
         settings.deepseek_base_url,

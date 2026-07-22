@@ -23,12 +23,21 @@ DELIVERY_LEASE = timedelta(minutes=5)
 
 
 class NotificationError(RuntimeError):
+    """表示 处理 notification error 的后端数据结构或服务对象。"""
+
     def __init__(self, code: str) -> None:
+        """初始化对象实例。
+
+        Args:
+            code: code 参数。
+        """
         super().__init__(code)
         self.code = code
 
 
 class LangBotNotificationClient(Protocol):
+    """表示 处理 lang bot notification client 的后端数据结构或服务对象。"""
+
     async def send_message(
         self,
         *,
@@ -37,11 +46,23 @@ class LangBotNotificationClient(Protocol):
         conversation_type: str,
         text: str,
         idempotency_key: str,
-    ) -> Any: ...
+    ) -> Any:
+        """处理 send message。
+
+        Args:
+            adapter: adapter 参数。
+            conversation_id: conversation_id 参数。
+            conversation_type: conversation_type 参数。
+            text: text 参数。
+            idempotency_key: idempotency_key 参数。
+        """
+        ...
 
 
 @dataclass(frozen=True)
 class DesktopNotification:
+    """表示 处理 desktop notification 的后端数据结构或服务对象。"""
+
     outbox_id: str
     reminder_id: str
     title: str
@@ -50,7 +71,14 @@ class DesktopNotification:
 
 
 class ReminderService:
+    """表示 处理 reminder service 的后端数据结构或服务对象。"""
+
     def __init__(self, session: AsyncSession) -> None:
+        """初始化对象实例。
+
+        Args:
+            session: session 参数。
+        """
         self.session = session
 
     async def create(
@@ -62,6 +90,15 @@ class ReminderService:
         due_at: datetime,
         channel: str,
     ) -> Reminder:
+        """创建。
+
+        Args:
+            user_id: user_id 参数。
+            title: title 参数。
+            message: message 参数。
+            due_at: due_at 参数。
+            channel: channel 参数。
+        """
         if await self.session.get(User, user_id) is None:
             raise NotificationError("reminder_user_not_found")
         if channel not in {"desktop", "langbot"}:
@@ -84,6 +121,11 @@ class ReminderService:
         return reminder
 
     async def list(self, *, user_id: str) -> tuple[Reminder, ...]:
+        """列出。
+
+        Args:
+            user_id: user_id 参数。
+        """
         reminders = await self.session.scalars(
             select(Reminder)
             .where(Reminder.user_id == user_id)
@@ -92,6 +134,12 @@ class ReminderService:
         return tuple(reminders)
 
     async def cancel(self, *, user_id: str, reminder_id: str) -> Reminder:
+        """处理 cancel。
+
+        Args:
+            user_id: user_id 参数。
+            reminder_id: reminder_id 参数。
+        """
         reminder = await self.session.scalar(
             select(Reminder).where(
                 Reminder.id == reminder_id, Reminder.user_id == user_id
@@ -116,6 +164,11 @@ class ReminderService:
         return reminder
 
     async def materialize_due(self, *, now: datetime | None = None) -> tuple[str, ...]:
+        """处理 materialize due。
+
+        Args:
+            now: now 参数。
+        """
         evaluated_at = now or datetime.now(UTC)
         reminders = await self.session.scalars(
             select(Reminder)
@@ -150,6 +203,12 @@ class ReminderService:
     async def poll_desktop(
         self, *, user_id: str, now: datetime | None = None
     ) -> tuple[DesktopNotification, ...]:
+        """处理 poll desktop。
+
+        Args:
+            user_id: user_id 参数。
+            now: now 参数。
+        """
         evaluated_at = now or datetime.now(UTC)
         rows = await self.session.execute(
             select(NotificationOutbox, Reminder)
@@ -175,6 +234,12 @@ class ReminderService:
         )
 
     async def acknowledge_desktop(self, *, user_id: str, outbox_id: str) -> None:
+        """处理 acknowledge desktop。
+
+        Args:
+            user_id: user_id 参数。
+            outbox_id: outbox_id 参数。
+        """
         row = await self.session.execute(
             select(NotificationOutbox, Reminder)
             .join(Reminder, Reminder.id == NotificationOutbox.reminder_id)
@@ -193,9 +258,7 @@ class ReminderService:
             outbox.status = "delivered"
             outbox.delivered_at = now
             reminder.status = "completed"
-            self.session.add(
-                DeliveryAttempt(outbox_id=outbox.id, status="delivered")
-            )
+            self.session.add(DeliveryAttempt(outbox_id=outbox.id, status="delivered"))
             await self.session.commit()
 
 
@@ -205,6 +268,13 @@ async def deliver_langbot_due(
     client: LangBotNotificationClient,
     now: datetime | None = None,
 ) -> tuple[str, ...]:
+    """处理 deliver langbot due。
+
+    Args:
+        session: session 参数。
+        client: client 参数。
+        now: now 参数。
+    """
     evaluated_at = now or datetime.now(UTC)
     await session.execute(
         update(NotificationOutbox)
@@ -310,18 +380,32 @@ def _failed_attempt(
     now: datetime,
     error_code: str,
 ) -> None:
+    """执行 处理 failed attempt 的内部辅助逻辑。
+
+    Args:
+        outbox: outbox 参数。
+        session: session 参数。
+        now: now 参数。
+        error_code: error_code 参数。
+    """
     outbox.last_error_code = error_code
     outbox.status = "dead" if outbox.attempt_count >= MAX_DELIVERY_ATTEMPTS else "retry"
     if outbox.status == "retry":
         outbox.available_at = now + timedelta(minutes=outbox.attempt_count)
     session.add(
-        DeliveryAttempt(outbox_id=outbox.id, status=outbox.status, error_code=error_code)
+        DeliveryAttempt(
+            outbox_id=outbox.id, status=outbox.status, error_code=error_code
+        )
     )
 
 
-async def _langbot_target(
-    session: AsyncSession, user_id: str
-) -> dict[str, str] | None:
+async def _langbot_target(session: AsyncSession, user_id: str) -> dict[str, str] | None:
+    """执行 处理 langbot target 的内部辅助逻辑。
+
+    Args:
+        session: session 参数。
+        user_id: user_id 参数。
+    """
     record = await session.scalar(
         select(ProcessedMessage)
         .join(Task, Task.id == ProcessedMessage.task_id)

@@ -9,6 +9,8 @@ RiskLevel = Literal["low", "medium", "high"]
 
 @dataclass(frozen=True)
 class FeatureDefinition:
+    """表示 处理 feature definition 的后端数据结构或服务对象。"""
+
     command: str
     task_type: str
     profile_name: str

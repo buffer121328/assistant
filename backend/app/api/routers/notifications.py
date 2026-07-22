@@ -24,6 +24,11 @@ router = APIRouter()
 
 
 def raise_notification_error(exc: NotificationError) -> None:
+    """处理 raise notification error。
+
+    Args:
+        exc: exc 参数。
+    """
     raise AppError(
         code=exc.code,
         message="Notification operation failed.",
@@ -32,6 +37,11 @@ def raise_notification_error(exc: NotificationError) -> None:
 
 
 def reminder_response(item: object) -> ReminderResponse:
+    """处理 reminder response。
+
+    Args:
+        item: item 参数。
+    """
     return ReminderResponse(
         reminder_id=str(getattr(item, "id")),
         user_id=str(getattr(item, "user_id")),
@@ -53,6 +63,12 @@ async def create_reminder(
     payload: ReminderCreateRequest,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> ReminderResponse:
+    """创建 reminder。
+
+    Args:
+        payload: payload 参数。
+        session: session 参数。
+    """
     try:
         reminder = await ReminderService(session).create(
             user_id=payload.user_id,
@@ -71,6 +87,12 @@ async def list_reminders(
     user_id: Annotated[str, Query(min_length=1)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> ReminderListResponse:
+    """列出 reminders。
+
+    Args:
+        user_id: user_id 参数。
+        session: session 参数。
+    """
     reminders = await ReminderService(session).list(user_id=user_id)
     items: list[ReminderResponse] = []
     for reminder in reminders:
@@ -96,6 +118,13 @@ async def cancel_reminder(
     payload: ReminderActorRequest,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> ReminderResponse:
+    """处理 cancel reminder。
+
+    Args:
+        reminder_id: reminder_id 参数。
+        payload: payload 参数。
+        session: session 参数。
+    """
     try:
         reminder = await ReminderService(session).cancel(
             user_id=payload.user_id, reminder_id=reminder_id
@@ -110,6 +139,12 @@ async def poll_notifications(
     user_id: Annotated[str, Query(min_length=1)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> DesktopNotificationListResponse:
+    """处理 poll notifications。
+
+    Args:
+        user_id: user_id 参数。
+        session: session 参数。
+    """
     items = await ReminderService(session).poll_desktop(user_id=user_id)
     return DesktopNotificationListResponse(
         items=[DesktopNotificationResponse(**item.__dict__) for item in items]
@@ -124,6 +159,13 @@ async def acknowledge_notification(
     payload: ReminderActorRequest,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> Response:
+    """处理 acknowledge notification。
+
+    Args:
+        outbox_id: outbox_id 参数。
+        payload: payload 参数。
+        session: session 参数。
+    """
     try:
         await ReminderService(session).acknowledge_desktop(
             user_id=payload.user_id, outbox_id=outbox_id

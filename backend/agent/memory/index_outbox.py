@@ -12,6 +12,8 @@ from domain.models import Memory, MemoryIndexOutbox, utc_now
 
 @dataclass(frozen=True)
 class MemoryIndexOutboxResult:
+    """表示 处理 memory index outbox result 的后端数据结构或服务对象。"""
+
     recovered_count: int = 0
     processed_count: int = 0
     succeeded_count: int = 0
@@ -21,12 +23,16 @@ class MemoryIndexOutboxResult:
 
 @dataclass(frozen=True)
 class _OperationResult:
+    """表示 处理 operation result 的后端数据结构或服务对象。"""
+
     succeeded: bool
     error_code: str | None = None
     retryable: bool = True
 
 
 class MemoryIndexOutboxConsumer:
+    """表示 处理 memory index outbox consumer 的后端数据结构或服务对象。"""
+
     def __init__(
         self,
         session: AsyncSession,
@@ -36,6 +42,15 @@ class MemoryIndexOutboxConsumer:
         max_attempts: int = 3,
         lease_timeout: timedelta = timedelta(minutes=10),
     ) -> None:
+        """初始化对象实例。
+
+        Args:
+            session: session 参数。
+            semantic_memory: semantic_memory 参数。
+            batch_size: batch_size 参数。
+            max_attempts: max_attempts 参数。
+            lease_timeout: lease_timeout 参数。
+        """
         self.session = session
         self.semantic_memory = semantic_memory
         self.batch_size = max(1, min(batch_size, 100))
@@ -43,13 +58,20 @@ class MemoryIndexOutboxConsumer:
         self.lease_timeout = lease_timeout
 
     async def run_once(self, *, now: datetime | None = None) -> MemoryIndexOutboxResult:
+        """运行 once。
+
+        Args:
+            now: now 参数。
+        """
         current = now or utc_now()
         recovered = await self._recover_stale(current)
         items = list(
             await self.session.scalars(
                 select(MemoryIndexOutbox)
                 .where(MemoryIndexOutbox.status.in_(("pending", "retry")))
-                .order_by(MemoryIndexOutbox.created_at.asc(), MemoryIndexOutbox.id.asc())
+                .order_by(
+                    MemoryIndexOutbox.created_at.asc(), MemoryIndexOutbox.id.asc()
+                )
                 .limit(self.batch_size)
                 .with_for_update(skip_locked=True)
             )
@@ -93,6 +115,12 @@ class MemoryIndexOutboxConsumer:
     async def _remove_duplicate_terminal(
         self, item: MemoryIndexOutbox, target_status: str
     ) -> None:
+        """执行 移除 duplicate terminal 的内部辅助逻辑。
+
+        Args:
+            item: item 参数。
+            target_status: target_status 参数。
+        """
         duplicates = list(
             await self.session.scalars(
                 select(MemoryIndexOutbox).where(
@@ -107,6 +135,11 @@ class MemoryIndexOutboxConsumer:
             await self.session.delete(duplicate)
 
     async def _recover_stale(self, now: datetime) -> int:
+        """执行 处理 recover stale 的内部辅助逻辑。
+
+        Args:
+            now: now 参数。
+        """
         stale = list(
             await self.session.scalars(
                 select(MemoryIndexOutbox).where(
@@ -123,6 +156,11 @@ class MemoryIndexOutboxConsumer:
         return len(stale)
 
     async def _apply(self, item_id: str) -> _OperationResult:
+        """执行 处理 apply 的内部辅助逻辑。
+
+        Args:
+            item_id: item_id 参数。
+        """
         item = await self.session.get(MemoryIndexOutbox, item_id)
         if item is None:
             return _OperationResult(False, "outbox_missing", retryable=False)
@@ -135,10 +173,16 @@ class MemoryIndexOutboxConsumer:
                     user_id=item.user_id,
                     memory_id=item.memory_id,
                 )
-                return _OperationResult(succeeded, None if succeeded else "semantic_delete_failed")
+                return _OperationResult(
+                    succeeded, None if succeeded else "semantic_delete_failed"
+                )
 
             memory = await self.session.get(Memory, item.memory_id)
-            if memory is None or memory.user_id != item.user_id or memory.status != "active":
+            if (
+                memory is None
+                or memory.user_id != item.user_id
+                or memory.status != "active"
+            ):
                 return _OperationResult(False, "memory_not_active", retryable=False)
             if item.operation == "rebuild":
                 deleted = await self.semantic_memory.delete(
@@ -155,6 +199,8 @@ class MemoryIndexOutboxConsumer:
                     content=memory.content,
                 )
                 return _OperationResult(added, None if added else "semantic_add_failed")
-            return _OperationResult(False, "unsupported_index_operation", retryable=False)
+            return _OperationResult(
+                False, "unsupported_index_operation", retryable=False
+            )
         except Exception:
             return _OperationResult(False, "semantic_index_exception")

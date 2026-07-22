@@ -15,11 +15,16 @@ _T = TypeVar("_T")
 
 
 class ArtifactPathError(ValueError):
+    """表示 处理 artifact path error 的后端数据结构或服务对象。"""
+
     pass
 
 
 class OptionalOfficeDependencyError(RuntimeError):
+    """表示 处理 optional office dependency error 的后端数据结构或服务对象。"""
+
     def __init__(self) -> None:
+        """初始化对象实例。"""
         super().__init__(
             "Optional Office dependencies are not installed. "
             "Install with: uv sync --extra office"
@@ -28,17 +33,33 @@ class OptionalOfficeDependencyError(RuntimeError):
 
 @dataclass(frozen=True)
 class Artifact:
+    """表示 处理 artifact 的后端数据结构或服务对象。"""
+
     reference: str
     media_type: str
     size_bytes: int
 
 
 class ArtifactStore:
+    """表示 处理 artifact store 的后端数据结构或服务对象。"""
+
     def __init__(self, root: Path) -> None:
+        """初始化对象实例。
+
+        Args:
+            root: root 参数。
+        """
         self.root = root.expanduser().resolve()
         self.root.mkdir(parents=True, exist_ok=True)
 
     def reserve(self, *, task_id: str, filename: str, suffix: str) -> Path:
+        """处理 reserve。
+
+        Args:
+            task_id: task_id 参数。
+            filename: filename 参数。
+            suffix: suffix 参数。
+        """
         safe_task_id = task_id.strip()
         safe_filename = filename.strip()
         if not _SAFE_TASK_ID.fullmatch(safe_task_id):
@@ -50,7 +71,10 @@ class ArtifactStore:
             or safe_filename in {".", ".."}
         ):
             raise ArtifactPathError("Invalid artifact filename")
-        if not suffix.startswith(".") or Path(safe_filename).suffix.lower() != suffix.lower():
+        if (
+            not suffix.startswith(".")
+            or Path(safe_filename).suffix.lower() != suffix.lower()
+        ):
             raise ArtifactPathError(f"Artifact filename must end with {suffix}")
 
         task_root = self.root / safe_task_id
@@ -67,6 +91,12 @@ class ArtifactStore:
         return target
 
     def atomic_write_bytes(self, target: Path, data: bytes) -> None:
+        """处理 atomic write bytes。
+
+        Args:
+            target: target 参数。
+            data: data 参数。
+        """
         self._assert_target(target)
         descriptor, temporary_name = tempfile.mkstemp(
             dir=target.parent,
@@ -84,6 +114,12 @@ class ArtifactStore:
             temporary.unlink(missing_ok=True)
 
     def atomic_save(self, target: Path, save: Callable[[str], _T]) -> _T:
+        """处理 atomic save。
+
+        Args:
+            target: target 参数。
+            save: save 参数。
+        """
         self._assert_target(target)
         descriptor, temporary_name = tempfile.mkstemp(
             dir=target.parent,
@@ -100,6 +136,12 @@ class ArtifactStore:
             temporary.unlink(missing_ok=True)
 
     def describe(self, target: Path, *, media_type: str) -> Artifact:
+        """处理 describe。
+
+        Args:
+            target: target 参数。
+            media_type: media_type 参数。
+        """
         self._assert_target(target)
         relative = target.relative_to(self.root).as_posix()
         return Artifact(
@@ -109,6 +151,12 @@ class ArtifactStore:
         )
 
     def absolute_path(self, *, task_id: str, reference: str) -> Path:
+        """处理 absolute path。
+
+        Args:
+            task_id: task_id 参数。
+            reference: reference 参数。
+        """
         if not _SAFE_TASK_ID.fullmatch(task_id.strip()):
             raise ArtifactPathError("Invalid task id")
         candidate = self.root / reference
@@ -119,14 +167,31 @@ class ArtifactStore:
         return resolved
 
     def read_bytes(self, *, task_id: str, reference: str) -> bytes:
+        """处理 read bytes。
+
+        Args:
+            task_id: task_id 参数。
+            reference: reference 参数。
+        """
         return self.absolute_path(task_id=task_id, reference=reference).read_bytes()
 
     def read_text(self, *, task_id: str, reference: str) -> str:
+        """处理 read text。
+
+        Args:
+            task_id: task_id 参数。
+            reference: reference 参数。
+        """
         return self.absolute_path(task_id=task_id, reference=reference).read_text(
             encoding="utf-8"
         )
 
     def _assert_target(self, target: Path) -> None:
+        """执行 处理 assert target 的内部辅助逻辑。
+
+        Args:
+            target: target 参数。
+        """
         resolved_parent = target.parent.resolve(strict=True)
         if resolved_parent.parent != self.root or target.name != target.name.strip():
             raise ArtifactPathError("Artifact target escaped task directory")
@@ -135,7 +200,14 @@ class ArtifactStore:
 
 
 class ProductivityTools:
+    """表示 处理 productivity tools 的后端数据结构或服务对象。"""
+
     def __init__(self, store: ArtifactStore) -> None:
+        """初始化对象实例。
+
+        Args:
+            store: store 参数。
+        """
         self.store = store
 
     def create_email_draft(
@@ -147,10 +219,21 @@ class ProductivityTools:
         body: str,
         to: tuple[str, ...] = (),
     ) -> Artifact:
+        """创建 email draft。
+
+        Args:
+            task_id: task_id 参数。
+            filename: filename 参数。
+            subject: subject 参数。
+            body: body 参数。
+            to: to 参数。
+        """
         message = EmailMessage()
         message["Subject"] = _bounded_text(subject, "subject", 300)
         if to:
-            message["To"] = ", ".join(_bounded_text(item, "recipient", 320) for item in to[:20])
+            message["To"] = ", ".join(
+                _bounded_text(item, "recipient", 320) for item in to[:20]
+            )
         message.set_content(_bounded_text(body, "body", 100_000))
         target = self.store.reserve(task_id=task_id, filename=filename, suffix=".eml")
         self.store.atomic_write_bytes(target, message.as_bytes())
@@ -166,6 +249,16 @@ class ProductivityTools:
         end: str,
         description: str = "",
     ) -> Artifact:
+        """创建 calendar event。
+
+        Args:
+            task_id: task_id 参数。
+            filename: filename 参数。
+            title: title 参数。
+            start: start 参数。
+            end: end 参数。
+            description: description 参数。
+        """
         start_at = datetime.fromisoformat(start)
         end_at = datetime.fromisoformat(end)
         if end_at <= start_at:
@@ -197,6 +290,14 @@ class ProductivityTools:
         title: str,
         paragraphs: tuple[str, ...],
     ) -> Artifact:
+        """创建 docx。
+
+        Args:
+            task_id: task_id 参数。
+            filename: filename 参数。
+            title: title 参数。
+            paragraphs: paragraphs 参数。
+        """
         try:
             from docx import Document
         except ImportError as exc:
@@ -221,6 +322,14 @@ class ProductivityTools:
         sheet_name: str,
         rows: tuple[tuple[object, ...], ...],
     ) -> Artifact:
+        """创建 xlsx。
+
+        Args:
+            task_id: task_id 参数。
+            filename: filename 参数。
+            sheet_name: sheet_name 参数。
+            rows: rows 参数。
+        """
         try:
             from openpyxl import Workbook  # type: ignore[import-untyped]
         except ImportError as exc:
@@ -246,6 +355,14 @@ class ProductivityTools:
         title: str,
         slides: tuple[tuple[str, tuple[str, ...]], ...],
     ) -> Artifact:
+        """创建 pptx。
+
+        Args:
+            task_id: task_id 参数。
+            filename: filename 参数。
+            title: title 参数。
+            slides: slides 参数。
+        """
         try:
             from pptx import Presentation
         except ImportError as exc:
@@ -271,6 +388,13 @@ class ProductivityTools:
 
 
 def _bounded_text(value: object, name: str, maximum: int) -> str:
+    """执行 处理 bounded text 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+        name: name 参数。
+        maximum: maximum 参数。
+    """
     if not isinstance(value, str):
         raise ValueError(f"{name} must be text")
     normalized = value.strip()
@@ -280,6 +404,13 @@ def _bounded_text(value: object, name: str, maximum: int) -> str:
 
 
 def _optional_bounded_text(value: object, name: str, maximum: int) -> str:
+    """执行 处理 optional bounded text 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+        name: name 参数。
+        maximum: maximum 参数。
+    """
     if not isinstance(value, str):
         raise ValueError(f"{name} must be text")
     normalized = value.strip()
@@ -289,16 +420,36 @@ def _optional_bounded_text(value: object, name: str, maximum: int) -> str:
 
 
 def _cell_value(value: object) -> str | int | float | bool | None:
+    """执行 处理 cell value 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+    """
     if value is None or isinstance(value, str | int | float | bool):
         return value
     return str(value)[:10_000]
 
 
 def _ics_escape(value: str) -> str:
-    return value.replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
+    """执行 处理 ics escape 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+    """
+    return (
+        value.replace("\\", "\\\\")
+        .replace(";", "\\;")
+        .replace(",", "\\,")
+        .replace("\n", "\\n")
+    )
 
 
 def _ics_datetime(value: datetime) -> str:
+    """执行 处理 ics datetime 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+    """
     if value.tzinfo is not None:
         return value.astimezone().strftime("%Y%m%dT%H%M%SZ")
     return value.strftime("%Y%m%dT%H%M%S")

@@ -2,10 +2,19 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from infrastructure.config import load_settings
+from infrastructure.config import Settings, load_settings
 from app.support.errors import AppError
 from infrastructure.logging import configure_logging
 from app.main import create_app
+
+
+def foundation_settings() -> Settings:
+    return Settings(
+        _env_file=None,
+        service_name="assistant-api",
+        database_url="sqlite+aiosqlite:///unused.db",
+        redis_url="redis://placeholder",
+    )  # type: ignore[call-arg]
 
 
 EXTERNAL_ENV_VARS = (
@@ -24,7 +33,7 @@ def test_app_starts_with_default_local_configuration(monkeypatch) -> None:
     for key in EXTERNAL_ENV_VARS:
         monkeypatch.delenv(key, raising=False)
 
-    app = create_app()
+    app = create_app(foundation_settings())
 
     with TestClient(app) as client:
         response = client.get("/health")
@@ -33,7 +42,7 @@ def test_app_starts_with_default_local_configuration(monkeypatch) -> None:
 
 
 def test_health_endpoint_returns_service_status() -> None:
-    app = create_app()
+    app = create_app(foundation_settings())
 
     with TestClient(app) as client:
         response = client.get("/health")
@@ -102,7 +111,7 @@ def test_structured_logging_does_not_emit_secrets(capsys) -> None:
 
 
 def test_unknown_route_returns_unified_json_error() -> None:
-    app = create_app()
+    app = create_app(foundation_settings())
 
     with TestClient(app) as client:
         response = client.get("/missing")
@@ -117,7 +126,7 @@ def test_unknown_route_returns_unified_json_error() -> None:
 
 
 def test_defined_application_exception_returns_unified_json_error() -> None:
-    app = create_app()
+    app = create_app(foundation_settings())
 
     @app.get("/raise-app-error")
     def raise_app_error() -> None:

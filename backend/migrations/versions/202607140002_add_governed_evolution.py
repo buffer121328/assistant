@@ -18,6 +18,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    """执行数据库迁移升级步骤。"""
     op.create_table(
         "evolution_changes",
         sa.Column("id", sa.String(length=36), nullable=False),
@@ -67,6 +68,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """执行数据库迁移回滚步骤。"""
     op.drop_index(
         "ix_evolution_versions_change_created",
         table_name="evolution_versions",

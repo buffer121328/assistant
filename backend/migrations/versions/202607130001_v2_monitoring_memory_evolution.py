@@ -18,6 +18,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    """执行数据库迁移升级步骤。"""
     op.add_column(
         "memories",
         sa.Column(
@@ -71,6 +72,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """执行数据库迁移回滚步骤。"""
     op.drop_table("scheduled_task_runs")
     op.drop_column("memories", "archived_at")
     op.drop_column("memories", "expires_at")

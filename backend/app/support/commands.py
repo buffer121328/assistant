@@ -10,6 +10,11 @@ COMMAND_TO_TASK_TYPE = {
 
 
 def parse_task_type(text: str) -> str | None:
+    """解析 task type。
+
+    Args:
+        text: text 参数。
+    """
     normalized = text.strip()
     if not normalized:
         return None

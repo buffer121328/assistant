@@ -2,7 +2,17 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, Query, Request, Response, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent.skill_management.store import MAX_ARCHIVE_BYTES
@@ -24,6 +34,11 @@ router = APIRouter()
 
 
 def raise_app_error(exc: TaskServiceError | SkillLifecycleError) -> None:
+    """处理 raise app error。
+
+    Args:
+        exc: exc 参数。
+    """
     raise AppError(
         code=exc.code,
         message="Task operation failed.",
@@ -31,12 +46,17 @@ def raise_app_error(exc: TaskServiceError | SkillLifecycleError) -> None:
     ) from exc
 
 
-def lifecycle_service(
-    request: Request, session: AsyncSession
-) -> SkillLifecycleService:
+def lifecycle_service(request: Request, session: AsyncSession) -> SkillLifecycleService:
+    """处理 lifecycle service。
+
+    Args:
+        request: request 参数。
+        session: session 参数。
+    """
     store = request.app.state.managed_skill_store
 
     def refresh_registry() -> None:
+        """处理 refresh registry。"""
         request.app.state.capability_registry = build_default_registry(
             store.builtin_root,
             managed_store=store,
@@ -54,6 +74,12 @@ async def list_skills(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> SkillListResponse:
+    """列出 skills。
+
+    Args:
+        request: request 参数。
+        session: session 参数。
+    """
     items = lifecycle_service(request, session).list_skills()
     return SkillListResponse(items=[skill_response(item) for item in items])
 
@@ -68,6 +94,13 @@ async def create_skill(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> SkillResponse:
+    """创建 skill。
+
+    Args:
+        payload: payload 参数。
+        request: request 参数。
+        session: session 参数。
+    """
     try:
         item = await lifecycle_service(request, session).create(
             user_id=payload.user_id,
@@ -92,6 +125,14 @@ async def install_skill(
     user_id: Annotated[str, Form(min_length=1)],
     package: Annotated[UploadFile, File()],
 ) -> SkillResponse:
+    """处理 install skill。
+
+    Args:
+        request: request 参数。
+        session: session 参数。
+        user_id: user_id 参数。
+        package: package 参数。
+    """
     try:
         content = await package.read(MAX_ARCHIVE_BYTES + 1)
     finally:
@@ -114,6 +155,15 @@ async def set_skill_enabled(
     name: str,
     enabled: bool,
 ) -> SkillResponse:
+    """处理 set skill enabled。
+
+    Args:
+        request: request 参数。
+        session: session 参数。
+        payload: payload 参数。
+        name: name 参数。
+        enabled: enabled 参数。
+    """
     try:
         item = await lifecycle_service(request, session).set_enabled(
             user_id=payload.user_id,
@@ -132,6 +182,14 @@ async def enable_skill(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> SkillResponse:
+    """处理 enable skill。
+
+    Args:
+        name: name 参数。
+        payload: payload 参数。
+        request: request 参数。
+        session: session 参数。
+    """
     return await set_skill_enabled(
         request=request,
         session=session,
@@ -148,6 +206,14 @@ async def disable_skill(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> SkillResponse:
+    """处理 disable skill。
+
+    Args:
+        name: name 参数。
+        payload: payload 参数。
+        request: request 参数。
+        session: session 参数。
+    """
     return await set_skill_enabled(
         request=request,
         session=session,
@@ -167,6 +233,14 @@ async def uninstall_skill(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> Response:
+    """处理 uninstall skill。
+
+    Args:
+        name: name 参数。
+        user_id: user_id 参数。
+        request: request 参数。
+        session: session 参数。
+    """
     try:
         await lifecycle_service(request, session).uninstall(
             user_id=user_id,
@@ -175,7 +249,3 @@ async def uninstall_skill(
     except (TaskServiceError, SkillLifecycleError) as exc:
         raise_app_error(exc)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-
-

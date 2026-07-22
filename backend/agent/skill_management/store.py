@@ -39,35 +39,49 @@ MAX_SUMMARY_CHARS = 500
 
 
 class ManagedSkillStoreError(ValueError):
+    """表示 处理 managed skill store error 的后端数据结构或服务对象。"""
+
     code = "skill_store_error"
     status_code = 400
 
 
 class InvalidManagedSkillError(ManagedSkillStoreError):
+    """表示 处理 invalid managed skill error 的后端数据结构或服务对象。"""
+
     code = "invalid_skill"
 
 
 class InvalidSkillPackageError(ManagedSkillStoreError):
+    """表示 处理 invalid skill package error 的后端数据结构或服务对象。"""
+
     code = "invalid_skill_package"
 
 
 class ManagedSkillConflictError(ManagedSkillStoreError):
+    """表示 处理 managed skill conflict error 的后端数据结构或服务对象。"""
+
     code = "skill_conflict"
     status_code = 409
 
 
 class ManagedSkillNotFoundError(ManagedSkillStoreError):
+    """表示 处理 managed skill not found error 的后端数据结构或服务对象。"""
+
     code = "skill_not_found"
     status_code = 404
 
 
 class ManagedSkillImmutableError(ManagedSkillStoreError):
+    """表示 处理 managed skill immutable error 的后端数据结构或服务对象。"""
+
     code = "skill_immutable"
     status_code = 409
 
 
 @dataclass(frozen=True)
 class ManagedSkillRecord:
+    """表示 处理 managed skill record 的后端数据结构或服务对象。"""
+
     schema_version: int
     name: str
     display_name: str
@@ -80,6 +94,8 @@ class ManagedSkillRecord:
 
 @dataclass(frozen=True)
 class _SkillManifest:
+    """表示 处理 skill manifest 的后端数据结构或服务对象。"""
+
     schema_version: int
     name: str
     display_name: str
@@ -89,24 +105,40 @@ class _SkillManifest:
 
 
 class ManagedSkillStore:
+    """表示 处理 managed skill store 的后端数据结构或服务对象。"""
+
     def __init__(self, *, builtin_root: Path, managed_root: Path) -> None:
+        """初始化对象实例。
+
+        Args:
+            builtin_root: builtin_root 参数。
+            managed_root: managed_root 参数。
+        """
         self.builtin_root = builtin_root.expanduser().resolve()
         self.managed_root = managed_root.expanduser().resolve()
 
     def list_managed(self) -> tuple[ManagedSkillRecord, ...]:
+        """列出 managed。"""
         if not self.managed_root.exists():
             return ()
         if not self.managed_root.is_dir():
             return ()
 
         records: list[ManagedSkillRecord] = []
-        for directory in sorted(self.managed_root.iterdir(), key=lambda item: item.name):
+        for directory in sorted(
+            self.managed_root.iterdir(), key=lambda item: item.name
+        ):
             record = self._read_record(directory)
             if record is not None:
                 records.append(record)
         return tuple(records)
 
     def get(self, name: str) -> ManagedSkillRecord:
+        """获取。
+
+        Args:
+            name: name 参数。
+        """
         self._validate_name(name)
         record = self._read_record(self.managed_root / name)
         if record is None:
@@ -123,6 +155,14 @@ class ManagedSkillStore:
         summary: str,
         instructions: str,
     ) -> ManagedSkillRecord:
+        """创建。
+
+        Args:
+            name: name 参数。
+            display_name: display_name 参数。
+            summary: summary 参数。
+            instructions: instructions 参数。
+        """
         manifest = self._validated_manifest(
             {
                 "schema_version": 1,
@@ -145,6 +185,11 @@ class ManagedSkillStore:
         return self._publish(manifest, content)
 
     def install(self, package: bytes) -> ManagedSkillRecord:
+        """处理 install。
+
+        Args:
+            package: package 参数。
+        """
         if not package or len(package) > MAX_ARCHIVE_BYTES:
             raise InvalidSkillPackageError("Skill package size is invalid")
         resources: dict[PurePosixPath, bytes] = {}
@@ -200,6 +245,12 @@ class ManagedSkillStore:
         return self._publish(manifest, content.strip() + "\n", resources=resources)
 
     def set_enabled(self, name: str, *, enabled: bool) -> ManagedSkillRecord:
+        """处理 set enabled。
+
+        Args:
+            name: name 参数。
+            enabled: enabled 参数。
+        """
         record = self.get(name)
         manifest = _SkillManifest(
             schema_version=record.schema_version,
@@ -218,6 +269,11 @@ class ManagedSkillStore:
         return replace(record, enabled=enabled)
 
     def uninstall(self, name: str) -> ManagedSkillRecord:
+        """处理 uninstall。
+
+        Args:
+            name: name 参数。
+        """
         record = self.get(name)
         resolved = record.directory.resolve(strict=True)
         if (
@@ -230,6 +286,11 @@ class ManagedSkillStore:
         return record
 
     def load(self, name: str) -> SkillDefinition:
+        """加载。
+
+        Args:
+            name: name 参数。
+        """
         record = self.get(name)
         skill_file = record.directory / "SKILL.md"
         if skill_file.is_symlink() or not skill_file.is_file():
@@ -239,10 +300,10 @@ class ManagedSkillStore:
             if not resolved.is_relative_to(self.managed_root):
                 raise InvalidManagedSkillError("Managed Skill path is unsafe")
             if resolved.stat().st_size > MAX_SKILL_BYTES:
-                raise InvalidManagedSkillError("Managed Skill instructions are oversized")
-            instructions = strip_skill_frontmatter(
-                resolved.read_text(encoding="utf-8")
-            )
+                raise InvalidManagedSkillError(
+                    "Managed Skill instructions are oversized"
+                )
+            instructions = strip_skill_frontmatter(resolved.read_text(encoding="utf-8"))
         except (OSError, UnicodeError) as exc:
             raise InvalidManagedSkillError(
                 "Managed Skill instructions are unavailable"
@@ -263,6 +324,13 @@ class ManagedSkillStore:
         *,
         resources: Mapping[PurePosixPath, bytes] | None = None,
     ) -> ManagedSkillRecord:
+        """执行 发布 的内部辅助逻辑。
+
+        Args:
+            manifest: manifest 参数。
+            content: content 参数。
+            resources: resources 参数。
+        """
         self._assert_available(manifest.name)
         self.managed_root.mkdir(parents=True, exist_ok=True)
         if not self.managed_root.is_dir():
@@ -300,11 +368,21 @@ class ManagedSkillStore:
         return record
 
     def _assert_available(self, name: str) -> None:
+        """执行 处理 assert available 的内部辅助逻辑。
+
+        Args:
+            name: name 参数。
+        """
         self._validate_name(name)
         if self._builtin_exists(name) or (self.managed_root / name).exists():
             raise ManagedSkillConflictError(f"Skill already exists: {name}")
 
     def _builtin_exists(self, name: str) -> bool:
+        """执行 处理 builtin exists 的内部辅助逻辑。
+
+        Args:
+            name: name 参数。
+        """
         if not _SAFE_SKILL_NAME.fullmatch(name):
             return False
         directory = self.builtin_root / name
@@ -321,6 +399,11 @@ class ManagedSkillStore:
             return False
 
     def _read_record(self, directory: Path) -> ManagedSkillRecord | None:
+        """执行 处理 read record 的内部辅助逻辑。
+
+        Args:
+            directory: directory 参数。
+        """
         if (
             directory.is_symlink()
             or not directory.is_dir()
@@ -368,6 +451,13 @@ class ManagedSkillStore:
         stored: bool,
         error_type: type[ManagedSkillStoreError] | None = None,
     ) -> _SkillManifest:
+        """执行 处理 validated manifest 的内部辅助逻辑。
+
+        Args:
+            raw: raw 参数。
+            stored: stored 参数。
+            error_type: error_type 参数。
+        """
         error_type = error_type or (
             InvalidManagedSkillError if stored else InvalidSkillPackageError
         )
@@ -416,6 +506,12 @@ class ManagedSkillStore:
         content: str,
         error_type: type[ManagedSkillStoreError],
     ) -> None:
+        """执行 校验 skill content 的内部辅助逻辑。
+
+        Args:
+            content: content 参数。
+            error_type: error_type 参数。
+        """
         if not content.strip() or len(content.encode("utf-8")) > MAX_SKILL_BYTES:
             raise error_type("Skill instructions are invalid")
 
@@ -425,11 +521,22 @@ class ManagedSkillStore:
         *,
         error_type: type[ManagedSkillStoreError] = InvalidManagedSkillError,
     ) -> None:
+        """执行 校验 name 的内部辅助逻辑。
+
+        Args:
+            name: name 参数。
+            error_type: error_type 参数。
+        """
         if not _SAFE_SKILL_NAME.fullmatch(name):
             raise error_type("Skill name must be safe kebab-case")
 
     @staticmethod
     def _validate_zip_member(info: zipfile.ZipInfo) -> None:
+        """执行 校验 zip member 的内部辅助逻辑。
+
+        Args:
+            info: info 参数。
+        """
         path = PurePosixPath(info.filename)
         mode = (info.external_attr >> 16) & 0o170000
         if (
@@ -442,9 +549,13 @@ class ManagedSkillStore:
         ):
             raise InvalidSkillPackageError("Skill package member is unsafe")
 
-
     @staticmethod
     def _validate_resource_member_path(path: PurePosixPath) -> None:
+        """执行 校验 resource member path 的内部辅助逻辑。
+
+        Args:
+            path: path 参数。
+        """
         if (
             len(path.parts) < 2
             or path.parts[0] not in ALLOWED_SKILL_RESOURCE_DIRS
@@ -456,6 +567,11 @@ class ManagedSkillStore:
 
     @staticmethod
     def _validate_resource_content(content: bytes) -> None:
+        """执行 校验 resource content 的内部辅助逻辑。
+
+        Args:
+            content: content 参数。
+        """
         try:
             content.decode("utf-8")
         except UnicodeError as exc:
@@ -469,6 +585,13 @@ class ManagedSkillStore:
         info: zipfile.ZipInfo,
         limit: int,
     ) -> bytes:
+        """执行 处理 read zip member 的内部辅助逻辑。
+
+        Args:
+            archive: archive 参数。
+            info: info 参数。
+            limit: limit 参数。
+        """
         if info.file_size > limit:
             raise InvalidSkillPackageError("Skill package member is oversized")
         with archive.open(info) as member:
@@ -479,9 +602,17 @@ class ManagedSkillStore:
 
     @staticmethod
     def _serialize_manifest(manifest: _SkillManifest) -> str:
-        return json.dumps(
-            asdict(manifest),
-            ensure_ascii=False,
-            indent=2,
-            sort_keys=True,
-        ) + "\n"
+        """执行 序列化 manifest 的内部辅助逻辑。
+
+        Args:
+            manifest: manifest 参数。
+        """
+        return (
+            json.dumps(
+                asdict(manifest),
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n"
+        )

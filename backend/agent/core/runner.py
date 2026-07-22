@@ -18,8 +18,16 @@ from agent.planning.capabilities import (
     snapshot_from_tool_selection,
 )
 from agent.planning.context import ContextBuilder, TaskContext
-from agent.modeling.executors import AgentExecutorProtocol, AgentRunInput, AgentRunResult
-from agent.planning.planner import DefaultPlanningLayer, ExecutionPlan, PlanningLayerProtocol
+from agent.modeling.executors import (
+    AgentExecutorProtocol,
+    AgentRunInput,
+    AgentRunResult,
+)
+from agent.planning.planner import (
+    DefaultPlanningLayer,
+    ExecutionPlan,
+    PlanningLayerProtocol,
+)
 from agent.ports import (
     ConversationContextPack,
     ConversationContextPort,
@@ -41,10 +49,14 @@ TASK_STATUS_WAITING_APPROVAL = "waiting_approval"
 
 
 class AgentHarnessError(Exception):
+    """表示 处理 agent harness error 的后端数据结构或服务对象。"""
+
     pass
 
 
 class NonPendingTaskExecutionError(AgentHarnessError):
+    """表示 处理 non pending task execution error 的后端数据结构或服务对象。"""
+
     pass
 
 
@@ -53,6 +65,8 @@ LangGraphExecutionResult = AgentRunResult
 
 @dataclass(frozen=True)
 class ExecutionOutcome:
+    """表示 处理 execution outcome 的后端数据结构或服务对象。"""
+
     status: str
     result_text: str | None = None
     error_message: str | None = None
@@ -61,7 +75,14 @@ class ExecutionOutcome:
 
 
 class MinimalLangGraphExecutor:
+    """表示 处理 minimal lang graph executor 的后端数据结构或服务对象。"""
+
     async def execute(self, *, run_input: AgentRunInput) -> AgentRunResult:
+        """执行。
+
+        Args:
+            run_input: run_input 参数。
+        """
         plan = run_input.plan
         context = run_input.context
         tool_calls = ("search.web",) if context.sources else ()
@@ -74,6 +95,8 @@ class MinimalLangGraphExecutor:
 
 
 class ExecutionBoundary:
+    """表示 处理 execution boundary 的后端数据结构或服务对象。"""
+
     def __init__(
         self,
         *,
@@ -82,6 +105,14 @@ class ExecutionBoundary:
         sensitive_values: list[str | None] | tuple[str | None, ...] = (),
         trace: ExecutionTracePort | None = None,
     ) -> None:
+        """初始化对象实例。
+
+        Args:
+            session: session 参数。
+            langgraph_executor: langgraph_executor 参数。
+            sensitive_values: sensitive_values 参数。
+            trace: trace 参数。
+        """
         self.session = session
         self.langgraph_executor = langgraph_executor
         self.sensitive_values = tuple(sensitive_values)
@@ -95,6 +126,14 @@ class ExecutionBoundary:
         plan: ExecutionPlan,
         context: TaskContext,
     ) -> ExecutionOutcome:
+        """执行。
+
+        Args:
+            task: task 参数。
+            user: user 参数。
+            plan: plan 参数。
+            context: context 参数。
+        """
         input_summary = self._safe_json(
             {
                 "plan": asdict(plan),
@@ -185,6 +224,15 @@ class ExecutionBoundary:
         output_text: str | None,
         error_message: str | None,
     ) -> None:
+        """执行 记录 trace 的内部辅助逻辑。
+
+        Args:
+            task_id: task_id 参数。
+            status: status 参数。
+            input_text: input_text 参数。
+            output_text: output_text 参数。
+            error_message: error_message 参数。
+        """
         if self.trace is not None:
             await self.trace.record_trace(
                 task_id=task_id,
@@ -209,9 +257,19 @@ class ExecutionBoundary:
         )
 
     def _safe_error(self, value: object) -> str:
+        """执行 处理 safe error 的内部辅助逻辑。
+
+        Args:
+            value: value 参数。
+        """
         return sanitize_text(value, extra_sensitive_values=self.sensitive_values)
 
     def _safe_json(self, payload: dict[str, Any]) -> str:
+        """执行 处理 safe json 的内部辅助逻辑。
+
+        Args:
+            payload: payload 参数。
+        """
         return sanitize_text(
             json.dumps(
                 payload,
@@ -225,6 +283,8 @@ class ExecutionBoundary:
 
 
 class AgentHarness:
+    """表示 处理 agent harness 的后端数据结构或服务对象。"""
+
     def __init__(
         self,
         *,
@@ -249,6 +309,30 @@ class AgentHarness:
         conversation_context: ConversationContextPort | None = None,
         user_lookup: UserLookupPort[Any] | None = None,
     ) -> None:
+        """初始化对象实例。
+
+        Args:
+            session: session 参数。
+            executor: executor 参数。
+            search_tool: search_tool 参数。
+            planning_layer: planning_layer 参数。
+            profile_selector: profile_selector 参数。
+            skills_loader: skills_loader 参数。
+            capabilities_builder: capabilities_builder 参数。
+            context_builder: context_builder 参数。
+            tool_snapshot: tool_snapshot 参数。
+            tool_candidate_selector: tool_candidate_selector 参数。
+            core_tools: core_tools 参数。
+            tool_count_budget: tool_count_budget 参数。
+            semantic_memory: semantic_memory 参数。
+            semantic_memory_limit: semantic_memory_limit 参数。
+            event_sink: event_sink 参数。
+            memory_candidate_hook: memory_candidate_hook 参数。
+            task_lifecycle: task_lifecycle 参数。
+            local_tasks: local_tasks 参数。
+            conversation_context: conversation_context 参数。
+            user_lookup: user_lookup 参数。
+        """
         self.session = session
         self.executor = executor
         self.search_tool = search_tool
@@ -287,6 +371,11 @@ class AgentHarness:
         self.user_lookup = user_lookup
 
     async def execute_task(self, task_id: str) -> Any:
+        """执行 task。
+
+        Args:
+            task_id: task_id 参数。
+        """
         task = await self._load_pending_task(task_id)
         if task.task_type == "memory":
             if self.local_tasks is not None:
@@ -436,7 +525,9 @@ class AgentHarness:
                 {
                     **action_payload,
                     "status": outcome.status,
-                    "requested_tools": list(outcome.metadata.get("requested_tools", [])),
+                    "requested_tools": list(
+                        outcome.metadata.get("requested_tools", [])
+                    ),
                     "tool_calls": list(outcome.metadata.get("tool_calls", [])),
                     "loop_steps": outcome.metadata.get("loop_steps"),
                     "checkpoint_id": outcome.metadata.get("checkpoint_id"),
@@ -448,6 +539,12 @@ class AgentHarness:
         )
 
     async def _publish_event(self, event_type: str, payload: dict[str, object]) -> None:
+        """执行 发布 event 的内部辅助逻辑。
+
+        Args:
+            event_type: event_type 参数。
+            payload: payload 参数。
+        """
         if self.event_sink is None:
             return
         try:
@@ -456,6 +553,12 @@ class AgentHarness:
             return
 
     def _action_payload(self, *, task: Any, plan: ExecutionPlan) -> dict[str, object]:
+        """执行 处理 action payload 的内部辅助逻辑。
+
+        Args:
+            task: task 参数。
+            plan: plan 参数。
+        """
         return {
             "action_name": LANGGRAPH_EXECUTOR_TOOL_NAME,
             "task_type": str(task.task_type),
@@ -472,6 +575,14 @@ class AgentHarness:
         context: TaskContext,
         plan: ExecutionPlan,
     ) -> ExecutionOutcome:
+        """执行 执行 boundary 的内部辅助逻辑。
+
+        Args:
+            task: task 参数。
+            user: user 参数。
+            context: context 参数。
+            plan: plan 参数。
+        """
         return await self.executor.execute(
             task=task,
             user=user,
@@ -485,6 +596,12 @@ class AgentHarness:
         task_id: str,
         outcome: ExecutionOutcome,
     ) -> Any:
+        """执行 处理 persist outcome 的内部辅助逻辑。
+
+        Args:
+            task_id: task_id 参数。
+            outcome: outcome 参数。
+        """
         task_lifecycle: Any
         if self.task_lifecycle is None:
             from agent.core.compat import task_lifecycle as build_task_lifecycle
@@ -522,7 +639,8 @@ class AgentHarness:
                     "status": TASK_STATUS_WAITING_APPROVAL,
                     "requested_tools": requested_tools,
                     "approval_request_count": len(approval_requests),
-                    "approval_count": len(set(requested_tools)) + len(approval_requests),
+                    "approval_count": len(set(requested_tools))
+                    + len(approval_requests),
                     "summary": message,
                     "message": message,
                 },
@@ -560,6 +678,11 @@ class AgentHarness:
         return stored
 
     async def _load_pending_task(self, task_id: str) -> Any:
+        """执行 加载 pending task 的内部辅助逻辑。
+
+        Args:
+            task_id: task_id 参数。
+        """
         if self.task_lifecycle is not None:
             return await self.task_lifecycle.load_pending(task_id)
         from agent.core.compat import load_pending_task
@@ -573,6 +696,11 @@ class AgentHarness:
         )
 
     async def _load_user(self, user_id: str) -> Any:
+        """执行 加载 user 的内部辅助逻辑。
+
+        Args:
+            user_id: user_id 参数。
+        """
         if self.user_lookup is not None:
             return await self.user_lookup.load_user(user_id)
         from agent.core.compat import load_user
@@ -592,6 +720,15 @@ class AgentHarness:
         current_input: str,
         long_term_memory: str,
     ) -> ConversationContextPack:
+        """执行 处理 conversation context pack 的内部辅助逻辑。
+
+        Args:
+            conversation_id: conversation_id 参数。
+            user_id: user_id 参数。
+            task_id: task_id 参数。
+            current_input: current_input 参数。
+            long_term_memory: long_term_memory 参数。
+        """
         if self.conversation_context is not None:
             return await self.conversation_context.load_context(
                 conversation_id=conversation_id,
@@ -620,6 +757,14 @@ class AgentHarness:
         task_id: str,
         conversation_id: str | None,
     ):
+        """执行 处理 memory context 的内部辅助逻辑。
+
+        Args:
+            user_id: user_id 参数。
+            query: query 参数。
+            task_id: task_id 参数。
+            conversation_id: conversation_id 参数。
+        """
         return await load_memory_context(
             session=self.session,
             user_id=user_id,
@@ -632,10 +777,17 @@ class AgentHarness:
 
 
 def _default_skills_root() -> Path:
+    """执行 处理 default skills root 的内部辅助逻辑。"""
     return Path(__file__).resolve().parents[2] / "resources" / "skillpacks"
 
 
 def _build_langgraph_result(plan: ExecutionPlan, context: TaskContext) -> str:
+    """执行 构建 langgraph result 的内部辅助逻辑。
+
+    Args:
+        plan: plan 参数。
+        context: context 参数。
+    """
     lines = [f"目标: {plan.goal}", "", "执行步骤:"]
     for index, step in enumerate(plan.steps, start=1):
         lines.append(f"{index}. {step}")
@@ -659,6 +811,13 @@ def _tool_policy_outcome(
     *,
     approval_requests: tuple[Any, ...] = (),
 ) -> ExecutionOutcome | None:
+    """执行 处理 tool policy outcome 的内部辅助逻辑。
+
+    Args:
+        plan: plan 参数。
+        requested_tools: requested_tools 参数。
+        approval_requests: approval_requests 参数。
+    """
     requested = tuple(dict.fromkeys(tool for tool in requested_tools if tool))
     unauthorized = [
         tool
@@ -701,6 +860,11 @@ def _tool_policy_outcome(
 
 
 def _safe_event_payload(payload: dict[str, object]) -> dict[str, object]:
+    """执行 处理 safe event payload 的内部辅助逻辑。
+
+    Args:
+        payload: payload 参数。
+    """
     safe = _safe_event_value(payload)
     if isinstance(safe, dict):
         return safe
@@ -708,6 +872,11 @@ def _safe_event_payload(payload: dict[str, object]) -> dict[str, object]:
 
 
 def _safe_event_value(value: Any) -> Any:
+    """执行 处理 safe event value 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+    """
     if isinstance(value, str):
         return sanitize_text(value)[:2000]
     if isinstance(value, dict):
@@ -720,6 +889,12 @@ def _safe_event_value(value: Any) -> Any:
 
 
 def _truncate(value: str, limit: int = 1000) -> str:
+    """执行 处理 truncate 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+        limit: limit 参数。
+    """
     if len(value) <= limit:
         return value
     return f"{value[:limit]}..."

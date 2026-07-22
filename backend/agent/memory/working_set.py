@@ -18,6 +18,8 @@ SectionName = Literal[
 
 @dataclass(frozen=True)
 class ConversationCompactionPolicy:
+    """表示 处理 conversation compaction policy 的后端数据结构或服务对象。"""
+
     enabled: bool = True
     trigger_token_threshold: int = 3_000
     trigger_message_count: int = 48
@@ -26,6 +28,7 @@ class ConversationCompactionPolicy:
     max_source_messages: int = 200
 
     def __post_init__(self) -> None:
+        """完成数据类初始化后的补充处理。"""
         if self.trigger_token_threshold < 1:
             raise ValueError("trigger_token_threshold must be positive")
         if self.trigger_message_count < 1:
@@ -40,6 +43,8 @@ class ConversationCompactionPolicy:
 
 @dataclass(frozen=True)
 class ConversationMessageRef:
+    """表示 处理 conversation message ref 的后端数据结构或服务对象。"""
+
     id: str
     role: str
     content: str
@@ -47,6 +52,8 @@ class ConversationMessageRef:
 
 @dataclass(frozen=True)
 class ContextSectionTrace:
+    """表示 处理 context section trace 的后端数据结构或服务对象。"""
+
     section: SectionName
     estimated_tokens: int
     source_ids: tuple[str, ...] = ()
@@ -56,6 +63,8 @@ class ContextSectionTrace:
 
 @dataclass(frozen=True)
 class ContextPack:
+    """表示 处理 context pack 的后端数据结构或服务对象。"""
+
     memory_blocks: tuple[str, ...]
     conversation_summary: str
     long_term_memory: str
@@ -68,12 +77,23 @@ class ContextPack:
 
 
 def estimate_tokens(text: str) -> int:
+    """处理 estimate tokens。
+
+    Args:
+        text: text 参数。
+    """
     return len(_TOKEN_PATTERN.findall(text))
 
 
 def select_recent_turns(
     messages: tuple[ConversationMessageRef, ...], *, token_budget: int
 ) -> tuple[tuple[ConversationMessageRef, ...], tuple[str, ...], int]:
+    """选择 recent turns。
+
+    Args:
+        messages: messages 参数。
+        token_budget: token_budget 参数。
+    """
     if token_budget < 0:
         raise ValueError("token_budget must be non-negative")
     turns = _group_turns(messages)
@@ -107,6 +127,20 @@ def build_context_pack(
     total_budget: int = 4_000,
     reserved_tokens: int = 256,
 ) -> ContextPack:
+    """构建 context pack。
+
+    Args:
+        memory_blocks: memory_blocks 参数。
+        conversation_summary: conversation_summary 参数。
+        summary_source_ids: summary_source_ids 参数。
+        summary_version: summary_version 参数。
+        long_term_memory: long_term_memory 参数。
+        messages: messages 参数。
+        current_input: current_input 参数。
+        tool_results: tool_results 参数。
+        total_budget: total_budget 参数。
+        reserved_tokens: reserved_tokens 参数。
+    """
     if total_budget <= 0 or reserved_tokens < 0 or reserved_tokens >= total_budget:
         raise ValueError("context budgets must be positive")
     available = total_budget - reserved_tokens
@@ -192,6 +226,11 @@ def build_context_pack(
 def _group_turns(
     messages: tuple[ConversationMessageRef, ...],
 ) -> tuple[tuple[ConversationMessageRef, ...], ...]:
+    """执行 处理 group turns 的内部辅助逻辑。
+
+    Args:
+        messages: messages 参数。
+    """
     turns: list[list[ConversationMessageRef]] = []
     for message in messages:
         if message.role == "user" or not turns:

@@ -24,11 +24,14 @@ LANGBOT_INTENT_OUTCOMES = Literal[
 
 
 class LangBotIntentDecision(BaseModel):
+    """表示 处理 lang bot intent decision 的后端数据结构或服务对象。"""
+
     outcome: LANGBOT_INTENT_OUTCOMES
     reason: str = Field(min_length=1)
 
     @property
     def task_type(self) -> str | None:
+        """处理 task type。"""
         if self.outcome in CORE_INTENT_TASK_TYPES:
             return self.outcome
         return None
@@ -39,6 +42,12 @@ async def classify_langbot_intent(
     *,
     settings: Settings,
 ) -> LangBotIntentDecision:
+    """处理 classify langbot intent。
+
+    Args:
+        text: text 参数。
+        settings: settings 参数。
+    """
     normalized = text.strip()
     if not normalized:
         return LangBotIntentDecision(

@@ -30,20 +30,37 @@ _FORBIDDEN_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
 
 @dataclass(frozen=True)
 class MemorySafetyResult:
+    """表示 处理 memory safety result 的后端数据结构或服务对象。"""
+
     sensitivity: Sensitivity
     reason_code: str | None = None
 
 
 def normalize_memory_content(content: str) -> str:
+    """规范化 memory content。
+
+    Args:
+        content: content 参数。
+    """
     return " ".join(content.strip().split())
 
 
 def memory_content_hash(content: str) -> str:
+    """处理 memory content hash。
+
+    Args:
+        content: content 参数。
+    """
     normalized = normalize_memory_content(content)
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
 def classify_memory_sensitivity(content: str) -> MemorySafetyResult:
+    """处理 classify memory sensitivity。
+
+    Args:
+        content: content 参数。
+    """
     normalized = normalize_memory_content(content)
     for reason_code, pattern in _FORBIDDEN_PATTERNS:
         if pattern.search(normalized):

@@ -11,10 +11,14 @@ MAX_SKILL_RESOURCE_BYTES = 64 * 1024
 
 
 class SkillLoadError(Exception):
+    """表示 处理 skill load error 的后端数据结构或服务对象。"""
+
     pass
 
 
 class SkillResourceError(Exception):
+    """表示 处理 skill resource error 的后端数据结构或服务对象。"""
+
     pass
 
 
@@ -25,6 +29,11 @@ _FRONTMATTER_RE = re.compile(
 
 
 def strip_skill_frontmatter(content: str) -> str:
+    """处理 strip skill frontmatter。
+
+    Args:
+        content: content 参数。
+    """
     match = _FRONTMATTER_RE.match(content)
     if match is None:
         return content.strip()
@@ -33,12 +42,19 @@ def strip_skill_frontmatter(content: str) -> str:
 
 @dataclass(frozen=True)
 class SkillDefinition:
+    """表示 处理 skill definition 的后端数据结构或服务对象。"""
+
     name: str
     instructions: str
     source: str
     resources_root: Path | None = None
 
     def resource(self, rel: str) -> str:
+        """处理 resource。
+
+        Args:
+            rel: rel 参数。
+        """
         if self.resources_root is None:
             raise SkillResourceError("Skill resources are unavailable")
         rel_path = _validated_resource_path(rel)
@@ -65,6 +81,7 @@ class SkillDefinition:
 
     @property
     def summary(self) -> str:
+        """处理 summary。"""
         for line in self.instructions.splitlines():
             normalized = line.strip().lstrip("#").strip()
             if normalized:
@@ -73,10 +90,22 @@ class SkillDefinition:
 
 
 class SkillsLoader:
+    """表示 处理 skills loader 的后端数据结构或服务对象。"""
+
     def __init__(self, skills_root: Path) -> None:
+        """初始化对象实例。
+
+        Args:
+            skills_root: skills_root 参数。
+        """
         self.skills_root = skills_root.resolve()
 
     def load(self, enabled_names: tuple[str, ...]) -> tuple[SkillDefinition, ...]:
+        """加载。
+
+        Args:
+            enabled_names: enabled_names 参数。
+        """
         loaded: list[SkillDefinition] = []
         seen: set[str] = set()
         for name in enabled_names:
@@ -87,6 +116,11 @@ class SkillsLoader:
         return tuple(loaded)
 
     def _load_one(self, name: str) -> SkillDefinition:
+        """执行 加载 one 的内部辅助逻辑。
+
+        Args:
+            name: name 参数。
+        """
         if not _SAFE_SKILL_NAME.fullmatch(name):
             raise SkillLoadError(f"Invalid skill name: {name}")
 
@@ -96,9 +130,7 @@ class SkillsLoader:
         if not skill_path.is_file():
             raise SkillLoadError(f"Enabled skill is missing: {name}")
 
-        instructions = strip_skill_frontmatter(
-            skill_path.read_text(encoding="utf-8")
-        )
+        instructions = strip_skill_frontmatter(skill_path.read_text(encoding="utf-8"))
         if not instructions:
             raise SkillLoadError(f"Enabled skill is empty: {name}")
         return SkillDefinition(
@@ -110,6 +142,11 @@ class SkillsLoader:
 
 
 def _validated_resource_path(rel: str) -> PurePosixPath:
+    """执行 处理 validated resource path 的内部辅助逻辑。
+
+    Args:
+        rel: rel 参数。
+    """
     try:
         rel_path = PurePosixPath(rel)
     except TypeError as exc:
@@ -126,6 +163,12 @@ def _validated_resource_path(rel: str) -> PurePosixPath:
 
 
 def _reject_symlink_path(root: Path, candidate: Path) -> None:
+    """执行 拒绝 symlink path 的内部辅助逻辑。
+
+    Args:
+        root: root 参数。
+        candidate: candidate 参数。
+    """
     current = root
     for part in candidate.relative_to(root).parts:
         current = current / part

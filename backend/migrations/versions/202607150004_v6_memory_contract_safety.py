@@ -17,6 +17,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    """执行数据库迁移升级步骤。"""
     columns: list[sa.Column[Any]] = [
         sa.Column(
             "scope_kind", sa.String(32), server_default="user/global", nullable=False
@@ -153,6 +154,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """执行数据库迁移回滚步骤。"""
     op.drop_table("memory_index_outbox")
     op.drop_table("memory_feedback")
     op.drop_table("memory_links")

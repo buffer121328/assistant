@@ -3,6 +3,7 @@
 Revision ID: 202607150002
 Revises: 202607150001
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -15,6 +16,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    """执行数据库迁移升级步骤。"""
     op.create_table(
         "task_events",
         sa.Column("id", sa.String(36), nullable=False),
@@ -29,9 +31,12 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("task_id", "sequence", name="uq_task_events_task_sequence"),
     )
-    op.create_index("ix_task_events_task_sequence", "task_events", ["task_id", "sequence"])
+    op.create_index(
+        "ix_task_events_task_sequence", "task_events", ["task_id", "sequence"]
+    )
 
 
 def downgrade() -> None:
+    """执行数据库迁移回滚步骤。"""
     op.drop_index("ix_task_events_task_sequence", table_name="task_events")
     op.drop_table("task_events")

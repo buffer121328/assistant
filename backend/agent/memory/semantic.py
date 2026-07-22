@@ -10,14 +10,20 @@ from typing import Any, Protocol
 
 @dataclass(frozen=True)
 class SemanticMemoryResult:
+    """表示 处理 semantic memory result 的后端数据结构或服务对象。"""
+
     memory_id: str
     content: str
     score: float | None = None
 
 
 class SemanticMemory(Protocol):
+    """表示 处理 semantic memory 的后端数据结构或服务对象。"""
+
     @property
-    def enabled(self) -> bool: ...
+    def enabled(self) -> bool:
+        """处理 enabled。"""
+        ...
 
     async def add(
         self,
@@ -26,9 +32,25 @@ class SemanticMemory(Protocol):
         run_id: str,
         memory_id: str,
         content: str,
-    ) -> bool: ...
+    ) -> bool:
+        """处理 add。
 
-    async def delete(self, *, user_id: str, memory_id: str) -> bool: ...
+        Args:
+            user_id: user_id 参数。
+            run_id: run_id 参数。
+            memory_id: memory_id 参数。
+            content: content 参数。
+        """
+        ...
+
+    async def delete(self, *, user_id: str, memory_id: str) -> bool:
+        """删除。
+
+        Args:
+            user_id: user_id 参数。
+            memory_id: memory_id 参数。
+        """
+        ...
 
     async def search(
         self,
@@ -36,42 +58,89 @@ class SemanticMemory(Protocol):
         user_id: str,
         query: str,
         limit: int,
-    ) -> tuple[SemanticMemoryResult, ...]: ...
+    ) -> tuple[SemanticMemoryResult, ...]:
+        """搜索。
+
+        Args:
+            user_id: user_id 参数。
+            query: query 参数。
+            limit: limit 参数。
+        """
+        ...
 
 
 class NoopSemanticMemory:
+    """表示 处理 noop semantic memory 的后端数据结构或服务对象。"""
+
     enabled = False
 
     async def add(
         self, *, user_id: str, run_id: str, memory_id: str, content: str
     ) -> bool:
+        """处理 add。
+
+        Args:
+            user_id: user_id 参数。
+            run_id: run_id 参数。
+            memory_id: memory_id 参数。
+            content: content 参数。
+        """
         del user_id, run_id, memory_id, content
         return False
 
     async def delete(self, *, user_id: str, memory_id: str) -> bool:
+        """删除。
+
+        Args:
+            user_id: user_id 参数。
+            memory_id: memory_id 参数。
+        """
         del user_id, memory_id
         return False
 
     async def search(
         self, *, user_id: str, query: str, limit: int
     ) -> tuple[SemanticMemoryResult, ...]:
+        """搜索。
+
+        Args:
+            user_id: user_id 参数。
+            query: query 参数。
+            limit: limit 参数。
+        """
         del user_id, query, limit
         return ()
 
 
 class Mem0MemoryAdapter:
+    """表示 处理 mem0 memory adapter 的后端数据结构或服务对象。"""
+
     def __init__(self, config_path: Path | None) -> None:
+        """初始化对象实例。
+
+        Args:
+            config_path: config_path 参数。
+        """
         self.config_path = config_path.expanduser().resolve() if config_path else None
         self._client: Any | None = None
         self._load_lock = asyncio.Lock()
 
     @property
     def enabled(self) -> bool:
+        """处理 enabled。"""
         return self.config_path is not None
 
     async def add(
         self, *, user_id: str, run_id: str, memory_id: str, content: str
     ) -> bool:
+        """处理 add。
+
+        Args:
+            user_id: user_id 参数。
+            run_id: run_id 参数。
+            memory_id: memory_id 参数。
+            content: content 参数。
+        """
         try:
             client = await self._client_instance()
             await asyncio.to_thread(
@@ -86,6 +155,12 @@ class Mem0MemoryAdapter:
         return True
 
     async def delete(self, *, user_id: str, memory_id: str) -> bool:
+        """删除。
+
+        Args:
+            user_id: user_id 参数。
+            memory_id: memory_id 参数。
+        """
         try:
             client = await self._client_instance()
             payload = await asyncio.to_thread(client.get_all, user_id=user_id)
@@ -105,6 +180,13 @@ class Mem0MemoryAdapter:
     async def search(
         self, *, user_id: str, query: str, limit: int
     ) -> tuple[SemanticMemoryResult, ...]:
+        """搜索。
+
+        Args:
+            user_id: user_id 参数。
+            query: query 参数。
+            limit: limit 参数。
+        """
         client = await self._client_instance()
         bounded_limit = max(1, min(limit, 20))
         payload = await asyncio.to_thread(
@@ -136,6 +218,7 @@ class Mem0MemoryAdapter:
         return tuple(results)
 
     async def _client_instance(self) -> Any:
+        """执行 处理 client instance 的内部辅助逻辑。"""
         if self.config_path is None:
             raise RuntimeError("Mem0 is not configured")
         if self._client is not None:
@@ -151,6 +234,11 @@ class Mem0MemoryAdapter:
 
 
 def _load_config(path: Path) -> dict[str, Any]:
+    """执行 加载 config 的内部辅助逻辑。
+
+    Args:
+        path: path 参数。
+    """
     if path.suffix.lower() != ".json" or not path.is_file():
         raise ValueError("Mem0 config must be an existing JSON file")
     if path.stat().st_size > 64 * 1024:
@@ -162,6 +250,11 @@ def _load_config(path: Path) -> dict[str, Any]:
 
 
 def _result_items(value: Any) -> list[dict[str, Any]]:
+    """执行 处理 result items 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+    """
     if isinstance(value, dict):
         value = value.get("results", value.get("memories", []))
     if not isinstance(value, list):

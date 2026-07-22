@@ -16,7 +16,14 @@ class CredentialError(RuntimeError):
 
 
 class CredentialCipher:
+    """表示 处理 credential cipher 的后端数据结构或服务对象。"""
+
     def __init__(self, master_key: str) -> None:
+        """初始化对象实例。
+
+        Args:
+            master_key: master_key 参数。
+        """
         normalized = master_key.strip()
         if len(normalized) < MIN_MASTER_KEY_CHARS:
             raise CredentialError("credential_master_key_invalid")
@@ -24,6 +31,11 @@ class CredentialCipher:
         self._fernet = Fernet(derived)
 
     def encrypt(self, values: dict[str, Any]) -> str:
+        """处理 encrypt。
+
+        Args:
+            values: values 参数。
+        """
         try:
             payload = json.dumps(
                 values,
@@ -36,6 +48,11 @@ class CredentialCipher:
         return self._fernet.encrypt(payload).decode()
 
     def decrypt(self, ciphertext: str) -> dict[str, Any]:
+        """处理 decrypt。
+
+        Args:
+            ciphertext: ciphertext 参数。
+        """
         try:
             payload = json.loads(self._fernet.decrypt(ciphertext.encode()))
         except (InvalidToken, ValueError, UnicodeError, json.JSONDecodeError) as exc:

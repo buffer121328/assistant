@@ -8,23 +8,40 @@ from .registry import ToolInvocation, ToolRiskLevel, ToolSpec
 
 
 class MCPClientProtocol(Protocol):
+    """表示 处理 mcpclient protocol 的后端数据结构或服务对象。"""
+
     async def call_tool(
         self,
         name: str,
         arguments: dict[str, Any],
-    ) -> Any: ...
+    ) -> Any:
+        """处理 call tool。
+
+        Args:
+            name: name 参数。
+            arguments: arguments 参数。
+        """
+        ...
 
 
 class MCPDiscoveryClientProtocol(Protocol):
-    async def list_tools(self) -> tuple[MCPToolDescription, ...]: ...
+    """表示 处理 mcpdiscovery client protocol 的后端数据结构或服务对象。"""
+
+    async def list_tools(self) -> tuple[MCPToolDescription, ...]:
+        """列出 tools。"""
+        ...
 
 
 class MCPClientUnavailableError(Exception):
+    """表示 处理 mcpclient unavailable error 的后端数据结构或服务对象。"""
+
     pass
 
 
 @dataclass(frozen=True)
 class MCPToolDescription:
+    """表示 处理 mcptool description 的后端数据结构或服务对象。"""
+
     name: str
     description: str
     input_schema: dict[str, Any] = field(
@@ -41,6 +58,8 @@ class MCPToolDescription:
 
 
 class MCPToolSource:
+    """表示 处理 mcptool source 的后端数据结构或服务对象。"""
+
     source_kind: ToolSourceKind = "mcp"
 
     def __init__(
@@ -49,10 +68,17 @@ class MCPToolSource:
         source_id: str,
         client: MCPDiscoveryClientProtocol | None,
     ) -> None:
+        """初始化对象实例。
+
+        Args:
+            source_id: source_id 参数。
+            client: client 参数。
+        """
         self.source_id = source_id
         self.client = client
 
     async def discover(self) -> tuple[ToolDescriptor, ...]:
+        """处理 discover。"""
         if self.client is None:
             return ()
         descriptions = await self.client.list_tools()
@@ -74,7 +100,14 @@ class MCPToolSource:
 
 
 class MCPToolAdapter:
+    """表示 处理 mcptool adapter 的后端数据结构或服务对象。"""
+
     def __init__(self, client: MCPClientProtocol | None = None) -> None:
+        """初始化对象实例。
+
+        Args:
+            client: client 参数。
+        """
         self.client = client
 
     def to_tool_spec(
@@ -83,7 +116,19 @@ class MCPToolAdapter:
         *,
         enabled: bool = False,
     ) -> ToolSpec:
+        """转换为目标格式 tool spec。
+
+        Args:
+            description: description 参数。
+            enabled: enabled 参数。
+        """
+
         async def call_mcp_tool(invocation: ToolInvocation) -> Any:
+            """处理 call mcp tool。
+
+            Args:
+                invocation: invocation 参数。
+            """
             if self.client is None:
                 raise MCPClientUnavailableError("MCP client is not configured")
             return await self.client.call_tool(

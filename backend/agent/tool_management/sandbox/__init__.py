@@ -14,6 +14,13 @@ def build_sandbox_runner(
     docker_config: DockerSandboxConfig,
     workspace_root: Path,
 ) -> SandboxRunner:
+    """构建 sandbox runner。
+
+    Args:
+        provider: provider 参数。
+        docker_config: docker_config 参数。
+        workspace_root: workspace_root 参数。
+    """
     if provider == "docker":
         return DockerSandboxRunner(config=docker_config, workspace_root=workspace_root)
     return DisabledSandboxRunner()

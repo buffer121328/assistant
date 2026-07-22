@@ -22,6 +22,8 @@ from domain.models import (
 
 @dataclass(frozen=True)
 class SummaryDraft:
+    """表示 处理 summary draft 的后端数据结构或服务对象。"""
+
     current_goal: str = ""
     confirmed_facts: tuple[str, ...] = ()
     pending_items: tuple[str, ...] = ()
@@ -31,6 +33,7 @@ class SummaryDraft:
     discarded_information: tuple[str, ...] = ()
 
     def safe(self) -> SummaryDraft:
+        """处理 safe。"""
         return SummaryDraft(
             current_goal=_safe(self.current_goal),
             confirmed_facts=_safe_items(self.confirmed_facts),
@@ -42,6 +45,7 @@ class SummaryDraft:
         )
 
     def render(self) -> str:
+        """渲染。"""
         sections = (
             ("当前目标", (self.current_goal,) if self.current_goal else ()),
             ("已确认事实", self.confirmed_facts),
@@ -57,19 +61,36 @@ class SummaryDraft:
 
 
 class ConversationSummarizer(Protocol):
+    """表示 处理 conversation summarizer 的后端数据结构或服务对象。"""
+
     async def summarize(
         self,
         *,
         messages: Sequence[ConversationMessage],
         previous: ConversationSummary | None,
-    ) -> SummaryDraft: ...
+    ) -> SummaryDraft:
+        """汇总。
+
+        Args:
+            messages: messages 参数。
+            previous: previous 参数。
+        """
+        ...
 
 
 class HeuristicConversationSummarizer:
+    """表示 处理 heuristic conversation summarizer 的后端数据结构或服务对象。"""
+
     SUMMARY_VERSION = "auto-summary-v1"
     MODEL_VERSION = "heuristic-conversation-summary-v1"
 
     def __init__(self, *, max_items: int = 5, max_item_chars: int = 160) -> None:
+        """初始化对象实例。
+
+        Args:
+            max_items: max_items 参数。
+            max_item_chars: max_item_chars 参数。
+        """
         self.max_items = max(1, max_items)
         self.max_item_chars = max(40, max_item_chars)
 
@@ -79,6 +100,12 @@ class HeuristicConversationSummarizer:
         messages: Sequence[ConversationMessage],
         previous: ConversationSummary | None,
     ) -> SummaryDraft:
+        """汇总。
+
+        Args:
+            messages: messages 参数。
+            previous: previous 参数。
+        """
         previous_draft = _draft_from_summary(previous)
         user_messages = tuple(
             _bounded_item(message.content, self.max_item_chars)
@@ -126,6 +153,8 @@ class HeuristicConversationSummarizer:
 
 
 class ConversationMemoryService:
+    """表示 处理 conversation memory service 的后端数据结构或服务对象。"""
+
     BLOCK_TYPES = {
         "human_profile",
         "communication_style",
@@ -142,12 +171,23 @@ class ConversationMemoryService:
     }
 
     def __init__(self, session: AsyncSession) -> None:
+        """初始化对象实例。
+
+        Args:
+            session: session 参数。
+        """
         self.session = session
         self.conversations = ConversationService(session)
 
     async def get_active_summary(
         self, *, conversation_id: str, user_id: str
     ) -> ConversationSummary | None:
+        """获取 active summary。
+
+        Args:
+            conversation_id: conversation_id 参数。
+            user_id: user_id 参数。
+        """
         await self.conversations.get_owned(
             conversation_id=conversation_id, user_id=user_id
         )
@@ -173,6 +213,17 @@ class ConversationMemoryService:
         model_version: str | None = None,
         exclude_task_id: str | None = None,
     ) -> ConversationSummary | None:
+        """确保 summary current。
+
+        Args:
+            conversation_id: conversation_id 参数。
+            user_id: user_id 参数。
+            summarizer: summarizer 参数。
+            policy: policy 参数。
+            summary_version: summary_version 参数。
+            model_version: model_version 参数。
+            exclude_task_id: exclude_task_id 参数。
+        """
         active = await self.get_active_summary(
             conversation_id=conversation_id, user_id=user_id
         )
@@ -229,6 +280,13 @@ class ConversationMemoryService:
         active: ConversationSummary | None,
         policy: ConversationCompactionPolicy,
     ) -> bool:
+        """执行 处理 summary needs update 的内部辅助逻辑。
+
+        Args:
+            messages: messages 参数。
+            active: active 参数。
+            policy: policy 参数。
+        """
         total_tokens = sum(estimate_tokens(message.content) for message in messages)
         crosses_initial_threshold = (
             total_tokens >= policy.trigger_token_threshold
@@ -261,6 +319,16 @@ class ConversationMemoryService:
         model_version: str,
         exclude_task_id: str | None = None,
     ) -> ConversationSummary | None:
+        """更新 summary。
+
+        Args:
+            conversation_id: conversation_id 参数。
+            user_id: user_id 参数。
+            summarizer: summarizer 参数。
+            summary_version: summary_version 参数。
+            model_version: model_version 参数。
+            exclude_task_id: exclude_task_id 参数。
+        """
         messages = await self.conversations.list_messages(
             conversation_id=conversation_id,
             user_id=user_id,
@@ -313,6 +381,20 @@ class ConversationMemoryService:
         update_policy: str = "user_confirmed",
         allow_read_only_update: bool = False,
     ) -> MemoryBlock:
+        """处理 upsert block。
+
+        Args:
+            user_id: user_id 参数。
+            block_type: block_type 参数。
+            scope_kind: scope_kind 参数。
+            scope_id: scope_id 参数。
+            content: content 参数。
+            character_limit: character_limit 参数。
+            token_limit: token_limit 参数。
+            read_only: read_only 参数。
+            update_policy: update_policy 参数。
+            allow_read_only_update: allow_read_only_update 参数。
+        """
         if block_type not in self.BLOCK_TYPES:
             raise ConversationError("memory_block_type_invalid")
         if scope_kind not in {
@@ -375,6 +457,13 @@ class ConversationMemoryService:
         conversation_id: str | None = None,
         project_id: str | None = None,
     ) -> list[MemoryBlock]:
+        """列出 blocks。
+
+        Args:
+            user_id: user_id 参数。
+            conversation_id: conversation_id 参数。
+            project_id: project_id 参数。
+        """
         now = utc_now()
         scopes = [
             MemoryBlock.scope_kind == "user/global",
@@ -405,16 +494,32 @@ class ConversationMemoryService:
 
 
 def _safe(value: str) -> str:
+    """执行 处理 safe 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+    """
     return " ".join(sanitize_text(value).strip().split())[:20_000]
 
 
 def _safe_items(values: Sequence[str]) -> tuple[str, ...]:
+    """执行 处理 safe items 的内部辅助逻辑。
+
+    Args:
+        values: values 参数。
+    """
     return tuple(item for value in values if (item := _safe(value)))
 
 
 def _messages_after(
     messages: Sequence[ConversationMessage], source_end_message_id: str
 ) -> tuple[ConversationMessage, ...]:
+    """执行 处理 messages after 的内部辅助逻辑。
+
+    Args:
+        messages: messages 参数。
+        source_end_message_id: source_end_message_id 参数。
+    """
     for index, message in enumerate(messages):
         if message.id == source_end_message_id:
             return tuple(messages[index + 1 :])
@@ -422,6 +527,11 @@ def _messages_after(
 
 
 def _draft_from_summary(summary: ConversationSummary | None) -> SummaryDraft:
+    """执行 处理 draft from summary 的内部辅助逻辑。
+
+    Args:
+        summary: summary 参数。
+    """
     if summary is None:
         return SummaryDraft()
     try:
@@ -442,12 +552,23 @@ def _draft_from_summary(summary: ConversationSummary | None) -> SummaryDraft:
 
 
 def _tuple_from_json(value: object) -> tuple[str, ...]:
+    """执行 处理 tuple from json 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+    """
     if not isinstance(value, (list, tuple)):
         return ()
     return tuple(item for item in (_safe(str(item)) for item in value) if item)
 
 
 def _bounded_item(value: str, limit: int) -> str:
+    """执行 处理 bounded item 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+        limit: limit 参数。
+    """
     safe = _safe(value)
     if len(safe) <= limit:
         return safe
@@ -457,6 +578,13 @@ def _bounded_item(value: str, limit: int) -> str:
 def _merge_limited(
     existing: Sequence[str], additions: Sequence[str], *, limit: int
 ) -> tuple[str, ...]:
+    """执行 处理 merge limited 的内部辅助逻辑。
+
+    Args:
+        existing: existing 参数。
+        additions: additions 参数。
+        limit: limit 参数。
+    """
     result: list[str] = []
     seen: set[str] = set()
     for value in tuple(existing) + tuple(additions):

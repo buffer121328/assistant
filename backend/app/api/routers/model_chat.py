@@ -21,6 +21,13 @@ async def chat_with_model(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> ModelChatResponse:
+    """处理 chat with model。
+
+    Args:
+        payload: payload 参数。
+        request: request 参数。
+        session: session 参数。
+    """
     return await handle_model_chat(
         payload=payload,
         session=session,

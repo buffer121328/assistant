@@ -39,12 +39,21 @@ class DatasetSecurityError(EvaluationDataError):
 
 
 def load_cases(path: Path) -> tuple[EvaluationCase, ...]:
+    """加载 cases。
+
+    Args:
+        path: path 参数。
+    """
     payload = _load_mapping(path)
     raw_cases = payload.get("cases")
     if not isinstance(raw_cases, list) or not raw_cases:
-        raise EvaluationDataError("evaluation dataset must contain a non-empty cases list")
+        raise EvaluationDataError(
+            "evaluation dataset must contain a non-empty cases list"
+        )
 
-    cases = tuple(_parse_case(raw_case, index) for index, raw_case in enumerate(raw_cases))
+    cases = tuple(
+        _parse_case(raw_case, index) for index, raw_case in enumerate(raw_cases)
+    )
     case_ids = [case.id for case in cases]
     if len(set(case_ids)) != len(case_ids):
         raise EvaluationDataError("evaluation dataset contains duplicate case ids")
@@ -52,14 +61,23 @@ def load_cases(path: Path) -> tuple[EvaluationCase, ...]:
 
 
 def load_candidate_outputs(path: Path) -> dict[str, str]:
+    """加载 candidate outputs。
+
+    Args:
+        path: path 参数。
+    """
     payload = _load_mapping(path)
     raw_outputs = payload.get("outputs")
     if not isinstance(raw_outputs, Mapping) or not raw_outputs:
-        raise EvaluationDataError("candidate file must contain a non-empty outputs mapping")
+        raise EvaluationDataError(
+            "candidate file must contain a non-empty outputs mapping"
+        )
 
     outputs: dict[str, str] = {}
     for raw_case_id, raw_output in raw_outputs.items():
-        if not isinstance(raw_case_id, str) or not CASE_ID_PATTERN.fullmatch(raw_case_id):
+        if not isinstance(raw_case_id, str) or not CASE_ID_PATTERN.fullmatch(
+            raw_case_id
+        ):
             raise EvaluationDataError("candidate file contains an invalid case id")
         output = _required_string(raw_output, raw_case_id, "actual_output")
         validate_safe_text(raw_case_id, "actual_output", output)
@@ -68,21 +86,36 @@ def load_candidate_outputs(path: Path) -> dict[str, str]:
 
 
 def load_baseline(path: Path) -> EvaluationBaseline:
+    """加载 baseline。
+
+    Args:
+        path: path 参数。
+    """
     payload = _load_mapping(path)
     version = _required_string(payload.get("version"), "baseline", "version")
     raw_scores = payload.get("scores")
     if not isinstance(raw_scores, Mapping) or not raw_scores:
-        raise EvaluationDataError("evaluation baseline must contain a non-empty scores mapping")
+        raise EvaluationDataError(
+            "evaluation baseline must contain a non-empty scores mapping"
+        )
 
     scores: dict[str, float] = {}
     for raw_case_id, raw_score in raw_scores.items():
-        if not isinstance(raw_case_id, str) or not CASE_ID_PATTERN.fullmatch(raw_case_id):
+        if not isinstance(raw_case_id, str) or not CASE_ID_PATTERN.fullmatch(
+            raw_case_id
+        ):
             raise EvaluationDataError("evaluation baseline contains an invalid case id")
         scores[raw_case_id] = _bounded_float(raw_score, raw_case_id, "baseline score")
     return EvaluationBaseline(version=version, scores=scores)
 
 
 def _parse_case(raw_case: object, index: int) -> EvaluationCase:
+    """执行 解析 case 的内部辅助逻辑。
+
+    Args:
+        raw_case: raw_case 参数。
+        index: index 参数。
+    """
     if not isinstance(raw_case, Mapping):
         raise EvaluationDataError(f"evaluation case at index {index} must be an object")
 
@@ -92,7 +125,9 @@ def _parse_case(raw_case: object, index: int) -> EvaluationCase:
 
     task_type_value = _required_string(raw_case.get("task_type"), case_id, "task_type")
     if task_type_value not in SUPPORTED_TASK_TYPES:
-        raise EvaluationDataError(f"evaluation case '{case_id}' has an unsupported task type")
+        raise EvaluationDataError(
+            f"evaluation case '{case_id}' has an unsupported task type"
+        )
 
     input_text = _required_string(raw_case.get("input"), case_id, "input")
     actual_output = _required_string(
@@ -115,7 +150,15 @@ def _parse_case(raw_case: object, index: int) -> EvaluationCase:
     )
 
 
-def _parse_rubric(case_id: str, raw_rubric: Mapping[object, object]) -> EvaluationRubric:
+def _parse_rubric(
+    case_id: str, raw_rubric: Mapping[object, object]
+) -> EvaluationRubric:
+    """执行 解析 rubric 的内部辅助逻辑。
+
+    Args:
+        case_id: case_id 参数。
+        raw_rubric: raw_rubric 参数。
+    """
     required_phrases = _string_tuple(
         raw_rubric.get("required_phrases"), case_id, "required_phrases", required=True
     )
@@ -142,16 +185,30 @@ def _parse_rubric(case_id: str, raw_rubric: Mapping[object, object]) -> Evaluati
 
 
 def _load_mapping(path: Path) -> Mapping[str, Any]:
+    """执行 加载 mapping 的内部辅助逻辑。
+
+    Args:
+        path: path 参数。
+    """
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise EvaluationDataError(f"unable to load evaluation JSON '{path.name}'") from exc
+        raise EvaluationDataError(
+            f"unable to load evaluation JSON '{path.name}'"
+        ) from exc
     if not isinstance(payload, Mapping):
         raise EvaluationDataError(f"evaluation JSON '{path.name}' must be an object")
     return cast(Mapping[str, Any], payload)
 
 
 def _required_string(value: object, case_id: str, field: str) -> str:
+    """执行 处理 required string 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+        case_id: case_id 参数。
+        field: field 参数。
+    """
     if not isinstance(value, str) or not value.strip():
         raise EvaluationDataError(
             f"evaluation case '{case_id}' requires a non-empty {field}"
@@ -166,21 +223,45 @@ def _string_tuple(
     *,
     required: bool,
 ) -> tuple[str, ...]:
+    """执行 处理 string tuple 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+        case_id: case_id 参数。
+        field: field 参数。
+        required: required 参数。
+    """
     if not isinstance(value, list) or (required and not value):
         raise EvaluationDataError(f"evaluation case '{case_id}' has an invalid {field}")
-    parsed = tuple(item.strip() for item in value if isinstance(item, str) and item.strip())
+    parsed = tuple(
+        item.strip() for item in value if isinstance(item, str) and item.strip()
+    )
     if len(parsed) != len(value) or (required and not parsed):
         raise EvaluationDataError(f"evaluation case '{case_id}' has an invalid {field}")
     return parsed
 
 
 def _positive_int(value: object, case_id: str, field: str) -> int:
+    """执行 处理 positive int 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+        case_id: case_id 参数。
+        field: field 参数。
+    """
     if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
         raise EvaluationDataError(f"evaluation case '{case_id}' has an invalid {field}")
     return value
 
 
 def _bounded_float(value: object, case_id: str, field: str) -> float:
+    """执行 处理 bounded float 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+        case_id: case_id 参数。
+        field: field 参数。
+    """
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise EvaluationDataError(f"evaluation case '{case_id}' has an invalid {field}")
     parsed = float(value)
@@ -190,6 +271,13 @@ def _bounded_float(value: object, case_id: str, field: str) -> float:
 
 
 def validate_safe_text(case_id: str, field: str, value: str) -> None:
+    """校验 safe text。
+
+    Args:
+        case_id: case_id 参数。
+        field: field 参数。
+        value: value 参数。
+    """
     if any(pattern.search(value) for pattern in SENSITIVE_PATTERNS):
         raise DatasetSecurityError(
             f"evaluation case '{case_id}' contains prohibited content in {field}"
@@ -214,6 +302,11 @@ def validate_safe_text(case_id: str, field: str, value: str) -> None:
 
 
 def _is_private_hostname(hostname: str) -> bool:
+    """执行 处理 is private hostname 的内部辅助逻辑。
+
+    Args:
+        hostname: hostname 参数。
+    """
     if hostname == "localhost" or hostname.endswith(PRIVATE_HOST_SUFFIXES):
         return True
     try:

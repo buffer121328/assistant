@@ -18,13 +18,21 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column("processed_messages", sa.Column("adapter", sa.String(length=64), nullable=True))
-    op.add_column("processed_messages", sa.Column("sender_id", sa.String(length=255), nullable=True))
+    """执行数据库迁移升级步骤。"""
+    op.add_column(
+        "processed_messages", sa.Column("adapter", sa.String(length=64), nullable=True)
+    )
+    op.add_column(
+        "processed_messages",
+        sa.Column("sender_id", sa.String(length=255), nullable=True),
+    )
     op.add_column(
         "processed_messages",
         sa.Column("conversation_type", sa.String(length=64), nullable=True),
     )
-    op.add_column("processed_messages", sa.Column("message_text", sa.Text(), nullable=True))
+    op.add_column(
+        "processed_messages", sa.Column("message_text", sa.Text(), nullable=True)
+    )
     op.add_column(
         "processed_messages",
         sa.Column("intent_outcome", sa.String(length=64), nullable=True),
@@ -52,11 +60,14 @@ def upgrade() -> None:
     )
     op.add_column(
         "processed_messages",
-        sa.Column("delivery_last_attempt_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "delivery_last_attempt_at", sa.DateTime(timezone=True), nullable=True
+        ),
     )
 
 
 def downgrade() -> None:
+    """执行数据库迁移回滚步骤。"""
     op.drop_column("processed_messages", "delivery_last_attempt_at")
     op.drop_column("processed_messages", "delivery_result_json")
     op.drop_column("processed_messages", "delivery_error_summary")

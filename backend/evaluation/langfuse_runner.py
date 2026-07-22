@@ -17,7 +17,15 @@ from .models import EvaluationBaseline, EvaluationCase, EvaluationRubric
 
 
 class LangfuseExperimentClient(Protocol):
-    def run_experiment(self, **kwargs: Any) -> Any: ...
+    """表示 处理 langfuse experiment client 的后端数据结构或服务对象。"""
+
+    def run_experiment(self, **kwargs: Any) -> Any:
+        """运行 experiment。
+
+        Args:
+            kwargs: kwargs 参数。
+        """
+        ...
 
 
 def run_core_command_langfuse_experiment(
@@ -29,6 +37,16 @@ def run_core_command_langfuse_experiment(
     name: str = "assistant.core_commands",
     metadata: Mapping[str, str] | None = None,
 ) -> Any:
+    """运行 core command langfuse experiment。
+
+    Args:
+        client: client 参数。
+        dataset_path: dataset_path 参数。
+        baseline_path: baseline_path 参数。
+        candidate_path: candidate_path 参数。
+        name: name 参数。
+        metadata: metadata 参数。
+    """
     cases = load_cases(dataset_path)
     baseline = load_baseline(baseline_path)
     candidate_outputs = (
@@ -53,7 +71,9 @@ def run_core_command_langfuse_experiment(
     return run_langfuse_experiment(
         client=client,
         name=name,
-        items=_build_items(cases, baseline=baseline, candidate_outputs=candidate_outputs),
+        items=_build_items(
+            cases, baseline=baseline, candidate_outputs=candidate_outputs
+        ),
         task=_score_case,
         metadata=experiment_metadata,
         run_name=dataset_path.stem,
@@ -67,6 +87,13 @@ def _build_items(
     baseline: EvaluationBaseline,
     candidate_outputs: Mapping[str, str],
 ) -> list[dict[str, Any]]:
+    """执行 构建 items 的内部辅助逻辑。
+
+    Args:
+        cases: cases 参数。
+        baseline: baseline 参数。
+        candidate_outputs: candidate_outputs 参数。
+    """
     items: list[dict[str, Any]] = []
     for case in cases:
         actual_output = candidate_outputs.get(case.id, case.actual_output)
@@ -88,6 +115,11 @@ def _build_items(
 
 
 def _score_case(*, item: dict[str, Any]) -> dict[str, Any]:
+    """执行 处理 score case 的内部辅助逻辑。
+
+    Args:
+        item: item 参数。
+    """
     metadata = item["metadata"]
     rubric = EvaluationRubric(
         required_phrases=tuple(metadata["rubric"]["required_phrases"]),

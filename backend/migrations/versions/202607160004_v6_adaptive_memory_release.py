@@ -17,6 +17,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    """执行数据库迁移升级步骤。"""
     op.create_table(
         "memory_release_reports",
         sa.Column("id", sa.String(36), primary_key=True),
@@ -86,7 +87,9 @@ def upgrade() -> None:
         "memory_effectiveness",
         sa.Column("id", sa.String(36), primary_key=True),
         sa.Column("user_id", sa.String(36), sa.ForeignKey("users.id"), nullable=False),
-        sa.Column("memory_id", sa.String(36), sa.ForeignKey("memories.id"), nullable=False),
+        sa.Column(
+            "memory_id", sa.String(36), sa.ForeignKey("memories.id"), nullable=False
+        ),
         sa.Column("helpful_count", sa.Integer(), server_default="0", nullable=False),
         sa.Column("harmful_count", sa.Integer(), server_default="0", nullable=False),
         sa.Column("success_count", sa.Integer(), server_default="0", nullable=False),
@@ -111,7 +114,9 @@ def upgrade() -> None:
         "memory_effectiveness_events",
         sa.Column("id", sa.String(36), primary_key=True),
         sa.Column("user_id", sa.String(36), sa.ForeignKey("users.id"), nullable=False),
-        sa.Column("memory_id", sa.String(36), sa.ForeignKey("memories.id"), nullable=False),
+        sa.Column(
+            "memory_id", sa.String(36), sa.ForeignKey("memories.id"), nullable=False
+        ),
         sa.Column("evidence_key", sa.String(128), nullable=False),
         sa.Column("feedback_type", sa.String(32), nullable=False),
         sa.Column("outcome", sa.String(32), nullable=False),
@@ -131,6 +136,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """执行数据库迁移回滚步骤。"""
     op.drop_table("memory_effectiveness_events")
     op.drop_table("memory_effectiveness")
     op.drop_index(

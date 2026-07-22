@@ -14,7 +14,11 @@ from agent.modeling.agent_model import (
     parse_review_decision,
     parse_work_plan,
 )
-from agent.planning.capabilities import CapabilitiesBuilder, CapabilitySnapshot, ToolCapability
+from agent.planning.capabilities import (
+    CapabilitiesBuilder,
+    CapabilitySnapshot,
+    ToolCapability,
+)
 from agent.planning.context import ContextBuilder, TaskContext
 from agent.modeling.executors import (
     AgentExecutorProtocol,

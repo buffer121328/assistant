@@ -11,10 +11,9 @@ WORKDIR /app
 
 COPY --from=ghcr.io/astral-sh/uv:0.9.18 /uv /uvx /usr/local/bin/
 COPY pyproject.toml uv.lock .python-version ./
-RUN uv sync --frozen --no-dev
-
 COPY alembic.ini ./
 COPY backend ./backend
+RUN uv sync --frozen --no-dev
 
 RUN groupadd --gid 10001 assistant \
     && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin assistant \

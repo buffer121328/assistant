@@ -16,6 +16,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    """执行数据库迁移升级步骤。"""
     op.add_column("memories", sa.Column("event_time", sa.DateTime(timezone=True)))
     op.add_column("memories", sa.Column("observed_at", sa.DateTime(timezone=True)))
     op.execute("UPDATE memories SET observed_at = created_at WHERE observed_at IS NULL")
@@ -102,6 +103,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """执行数据库迁移回滚步骤。"""
     op.drop_table("memory_consolidation_decisions")
     op.drop_table("memory_consolidation_runs")
     op.drop_table("memory_consolidation_digests")

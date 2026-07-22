@@ -14,6 +14,8 @@ from model_gateway import sanitize_text
 
 
 class SkillAcquisitionDecisionType(str, Enum):
+    """表示 处理 skill acquisition decision type 的后端数据结构或服务对象。"""
+
     ENABLE_EXISTING = "enable_existing"
     INSTALL_MARKETPLACE = "install_marketplace"
     COMPOSE_EXISTING = "compose_existing"
@@ -31,6 +33,8 @@ TRUST_SCORES: dict[str, float] = {
 
 @dataclass(frozen=True)
 class SkillCandidate:
+    """表示 处理 skill candidate 的后端数据结构或服务对象。"""
+
     skill_id: str
     name: str
     display_name: str
@@ -48,6 +52,7 @@ class SkillCandidate:
     score: float = 0.0
 
     def scored(self) -> SkillCandidate:
+        """处理 scored。"""
         permission_penalty = _risk_penalty(self.permission_risk)
         dependency_penalty = _risk_penalty(self.dependency_risk)
         trust = TRUST_SCORES.get(self.trust_level, 0.1)
@@ -63,6 +68,7 @@ class SkillCandidate:
         return SkillCandidate(**{**self.__dict__, "score": round(score, 4)})
 
     def to_dict(self) -> dict[str, object]:
+        """转换为目标格式 dict。"""
         return {
             "skill_id": self.skill_id,
             "name": self.name,
@@ -80,6 +86,8 @@ class SkillCandidate:
 
 @dataclass(frozen=True)
 class SkillAcquisitionDecision:
+    """表示 处理 skill acquisition decision 的后端数据结构或服务对象。"""
+
     decision: SkillAcquisitionDecisionType
     candidates: tuple[SkillCandidate, ...] = ()
     local_skill: SkillInventoryItem | None = None
@@ -89,6 +97,7 @@ class SkillAcquisitionDecision:
     composed_tools: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, object]:
+        """转换为目标格式 dict。"""
         return {
             "decision": self.decision.value,
             "candidates": [candidate.to_dict() for candidate in self.candidates],
@@ -111,12 +120,16 @@ class SkillAcquisitionDecision:
 
 @dataclass(frozen=True)
 class SkillPackageMetadata:
+    """表示 处理 skill package metadata 的后端数据结构或服务对象。"""
+
     candidate: SkillCandidate
     package_size: int
     checksum: str | None = None
 
 
 class SkillMarketplaceProvider(Protocol):
+    """表示 处理 skill marketplace provider 的后端数据结构或服务对象。"""
+
     name: str
     trust_level: str
 
@@ -126,17 +139,45 @@ class SkillMarketplaceProvider(Protocol):
         query: str,
         tags: Sequence[str] = (),
         capability_gap: str = "",
-    ) -> Sequence[SkillCandidate]: ...
+    ) -> Sequence[SkillCandidate]:
+        """搜索。
 
-    async def get(self, *, skill_id: str, version: str | None = None) -> SkillPackageMetadata: ...
+        Args:
+            query: query 参数。
+            tags: tags 参数。
+            capability_gap: capability_gap 参数。
+        """
+        ...
 
-    async def download(self, *, skill_id: str, version: str | None = None) -> bytes: ...
+    async def get(
+        self, *, skill_id: str, version: str | None = None
+    ) -> SkillPackageMetadata:
+        """获取。
+
+        Args:
+            skill_id: skill_id 参数。
+            version: version 参数。
+        """
+        ...
+
+    async def download(self, *, skill_id: str, version: str | None = None) -> bytes:
+        """处理 download。
+
+        Args:
+            skill_id: skill_id 参数。
+            version: version 参数。
+        """
+        ...
 
 
 @dataclass
 class SkillAcquisitionService:
+    """表示 处理 skill acquisition service 的后端数据结构或服务对象。"""
+
     lifecycle: SkillLifecycleService
-    marketplace_providers: Sequence[SkillMarketplaceProvider] = field(default_factory=tuple)
+    marketplace_providers: Sequence[SkillMarketplaceProvider] = field(
+        default_factory=tuple
+    )
     installed_revision: int = 0
 
     async def recommend(
@@ -148,6 +189,15 @@ class SkillAcquisitionService:
         composable_tools: Sequence[str] = (),
         allow_create: bool = True,
     ) -> SkillAcquisitionDecision:
+        """处理 recommend。
+
+        Args:
+            capability_gap: capability_gap 参数。
+            query: query 参数。
+            tags: tags 参数。
+            composable_tools: composable_tools 参数。
+            allow_create: allow_create 参数。
+        """
         search_text = (query or capability_gap).strip()
         local = self._matching_local(search_text)
         enabled = [item for item in local if item.enabled]
@@ -224,6 +274,13 @@ class SkillAcquisitionService:
         tags: Sequence[str] = (),
         capability_gap: str = "",
     ) -> tuple[SkillCandidate, ...]:
+        """搜索 marketplace。
+
+        Args:
+            query: query 参数。
+            tags: tags 参数。
+            capability_gap: capability_gap 参数。
+        """
         results: list[SkillCandidate] = []
         for provider in self.marketplace_providers:
             for candidate in await provider.search(
@@ -233,7 +290,9 @@ class SkillAcquisitionService:
             ):
                 trust_level = candidate.trust_level or provider.trust_level
                 results.append(
-                    SkillCandidate(**{**candidate.__dict__, "trust_level": trust_level}).scored()
+                    SkillCandidate(
+                        **{**candidate.__dict__, "trust_level": trust_level}
+                    ).scored()
                 )
         return tuple(
             sorted(
@@ -250,17 +309,40 @@ class SkillAcquisitionService:
         candidate: SkillCandidate,
         package: bytes,
     ) -> SkillInventoryItem:
+        """处理 install candidate。
+
+        Args:
+            user_id: user_id 参数。
+            candidate: candidate 参数。
+            package: package 参数。
+        """
         item = await self.lifecycle.install(user_id=user_id, package=package)
         self.installed_revision += 1
         return item
 
     async def enable(self, *, user_id: str, name: str) -> SkillInventoryItem:
-        item = await self.lifecycle.set_enabled(user_id=user_id, name=name, enabled=True)
+        """处理 enable。
+
+        Args:
+            user_id: user_id 参数。
+            name: name 参数。
+        """
+        item = await self.lifecycle.set_enabled(
+            user_id=user_id, name=name, enabled=True
+        )
         self.installed_revision += 1
         return item
 
     async def disable(self, *, user_id: str, name: str) -> SkillInventoryItem:
-        item = await self.lifecycle.set_enabled(user_id=user_id, name=name, enabled=False)
+        """处理 disable。
+
+        Args:
+            user_id: user_id 参数。
+            name: name 参数。
+        """
+        item = await self.lifecycle.set_enabled(
+            user_id=user_id, name=name, enabled=False
+        )
         self.installed_revision += 1
         return item
 
@@ -274,6 +356,16 @@ class SkillAcquisitionService:
         instructions: str,
         evidence: str,
     ) -> EvolutionChange:
+        """处理 propose create。
+
+        Args:
+            session: session 参数。
+            task_id: task_id 参数。
+            user_id: user_id 参数。
+            name: name 参数。
+            instructions: instructions 参数。
+            evidence: evidence 参数。
+        """
         safe_name = sanitize_text(name).strip()[:128]
         safe_instructions = sanitize_text(instructions).strip()[:12000]
         safe_evidence = sanitize_text(evidence).strip()[:4000]
@@ -301,34 +393,52 @@ class SkillAcquisitionService:
         return change
 
     def refresh_capabilities(self) -> dict[str, object]:
+        """处理 refresh capabilities。"""
         self.lifecycle.refresh_registry()
         self.installed_revision += 1
         return {"revision": self.installed_revision, "status": "refreshed"}
 
     def _matching_local(self, query: str) -> list[SkillInventoryItem]:
+        """执行 处理 matching local 的内部辅助逻辑。
+
+        Args:
+            query: query 参数。
+        """
         needle = query.casefold().strip()
         if not needle:
             return []
         scored: list[tuple[int, SkillInventoryItem]] = []
         for item in self.lifecycle.list_skills():
-            haystack = " ".join(
-                (item.name, item.display_name, item.summary)
-            ).casefold()
+            haystack = " ".join((item.name, item.display_name, item.summary)).casefold()
             if needle in haystack:
                 scored.append((100, item))
                 continue
-            tokens = [token for token in needle.replace("-", " ").split() if len(token) > 2]
+            tokens = [
+                token for token in needle.replace("-", " ").split() if len(token) > 2
+            ]
             hits = sum(1 for token in tokens if token in haystack)
             if hits:
                 scored.append((hits, item))
-        return [item for _, item in sorted(scored, key=lambda pair: pair[0], reverse=True)]
+        return [
+            item for _, item in sorted(scored, key=lambda pair: pair[0], reverse=True)
+        ]
 
 
 def _risk_penalty(value: str) -> float:
+    """执行 处理 risk penalty 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+    """
     return {"low": 0.0, "medium": 0.4, "high": 0.8}.get(value, 0.6)
 
 
 def _candidate_risk_level(candidate: SkillCandidate) -> str:
+    """执行 处理 candidate risk level 的内部辅助逻辑。
+
+    Args:
+        candidate: candidate 参数。
+    """
     if candidate.permission_risk == "high" or candidate.dependency_risk == "high":
         return "L3"
     if candidate.permission_risk == "medium" or candidate.dependency_risk == "medium":

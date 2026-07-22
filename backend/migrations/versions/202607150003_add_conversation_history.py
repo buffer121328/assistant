@@ -3,6 +3,7 @@
 Revision ID: 202607150003
 Revises: 202607150002
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -15,6 +16,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    """执行数据库迁移升级步骤。"""
     op.create_table(
         "conversations",
         sa.Column("id", sa.String(36), nullable=False),
@@ -27,11 +29,24 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("user_id", "channel", "external_key", name="uq_conversations_user_channel_external"),
+        sa.UniqueConstraint(
+            "user_id",
+            "channel",
+            "external_key",
+            name="uq_conversations_user_channel_external",
+        ),
     )
-    op.create_index("ix_conversations_user_updated", "conversations", ["user_id", "updated_at"])
+    op.create_index(
+        "ix_conversations_user_updated", "conversations", ["user_id", "updated_at"]
+    )
     op.add_column("tasks", sa.Column("conversation_id", sa.String(36)))
-    op.create_foreign_key("fk_tasks_conversation_id", "tasks", "conversations", ["conversation_id"], ["id"])
+    op.create_foreign_key(
+        "fk_tasks_conversation_id",
+        "tasks",
+        "conversations",
+        ["conversation_id"],
+        ["id"],
+    )
     op.create_table(
         "conversation_messages",
         sa.Column("id", sa.String(36), nullable=False),
@@ -44,11 +59,19 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["task_id"], ["tasks.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_conversation_messages_conversation_created", "conversation_messages", ["conversation_id", "created_at"])
+    op.create_index(
+        "ix_conversation_messages_conversation_created",
+        "conversation_messages",
+        ["conversation_id", "created_at"],
+    )
 
 
 def downgrade() -> None:
-    op.drop_index("ix_conversation_messages_conversation_created", table_name="conversation_messages")
+    """执行数据库迁移回滚步骤。"""
+    op.drop_index(
+        "ix_conversation_messages_conversation_created",
+        table_name="conversation_messages",
+    )
     op.drop_table("conversation_messages")
     op.drop_constraint("fk_tasks_conversation_id", "tasks", type_="foreignkey")
     op.drop_column("tasks", "conversation_id")

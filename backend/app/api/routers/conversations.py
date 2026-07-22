@@ -31,6 +31,12 @@ async def create_conversation(
     payload: ConversationCreateRequest,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> ConversationResponse:
+    """创建 conversation。
+
+    Args:
+        payload: payload 参数。
+        session: session 参数。
+    """
     try:
         item = await ConversationService(session).create(
             user_id=payload.user_id, title=payload.title
@@ -47,6 +53,12 @@ async def list_conversations(
     user_id: Annotated[str, Query(min_length=1)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> ConversationListResponse:
+    """列出 conversations。
+
+    Args:
+        user_id: user_id 参数。
+        session: session 参数。
+    """
     try:
         items = await ConversationService(session).list_active(user_id)
     except ConversationError as exc:
@@ -68,6 +80,14 @@ async def list_conversation_messages(
     session: Annotated[AsyncSession, Depends(get_session)],
     limit: Annotated[int, Query(ge=1, le=200)] = 100,
 ) -> ConversationMessageListResponse:
+    """列出 conversation messages。
+
+    Args:
+        conversation_id: conversation_id 参数。
+        user_id: user_id 参数。
+        session: session 参数。
+        limit: limit 参数。
+    """
     try:
         items = await ConversationService(session).list_messages(
             conversation_id=conversation_id, user_id=user_id, limit=limit
@@ -96,6 +116,13 @@ async def archive_conversation(
     payload: ConversationActorRequest,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> ConversationResponse:
+    """归档 conversation。
+
+    Args:
+        conversation_id: conversation_id 参数。
+        payload: payload 参数。
+        session: session 参数。
+    """
     try:
         item = await ConversationService(session).archive(
             conversation_id=conversation_id, user_id=payload.user_id

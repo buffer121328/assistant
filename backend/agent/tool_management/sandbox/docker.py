@@ -14,12 +14,21 @@ _SAFE_TASK_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
 
 
 class DockerSandboxRunner:
+    """表示 处理 docker sandbox runner 的后端数据结构或服务对象。"""
+
     def __init__(self, *, config: DockerSandboxConfig, workspace_root: Path) -> None:
+        """初始化对象实例。
+
+        Args:
+            config: config 参数。
+            workspace_root: workspace_root 参数。
+        """
         self.config = config
         self.workspace_root = workspace_root.expanduser().resolve()
 
     @property
     def available(self) -> bool:
+        """处理 available。"""
         return bool(
             self.config.enabled
             and self.config.image
@@ -28,6 +37,12 @@ class DockerSandboxRunner:
         )
 
     def build_argv(self, *, task_id: str, command: tuple[str, ...]) -> tuple[str, ...]:
+        """构建 argv。
+
+        Args:
+            task_id: task_id 参数。
+            command: command 参数。
+        """
         if not self.config.enabled:
             raise RuntimeError("Docker sandbox is disabled")
         if not self.config.image or self.config.image not in self.config.allowed_images:
@@ -79,6 +94,12 @@ class DockerSandboxRunner:
         )
 
     async def execute(self, *, task_id: str, command: tuple[str, ...]) -> SandboxResult:
+        """执行。
+
+        Args:
+            task_id: task_id 参数。
+            command: command 参数。
+        """
         if not self.available:
             raise RuntimeError("Docker sandbox is unavailable")
         argv = self.build_argv(task_id=task_id, command=command)

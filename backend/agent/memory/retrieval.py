@@ -29,6 +29,8 @@ _TOKEN = re.compile(r"[\u3400-\u9fff]|[a-z0-9_]+", re.I)
 
 @dataclass(frozen=True)
 class RetrievalWeights:
+    """表示 处理 retrieval weights 的后端数据结构或服务对象。"""
+
     semantic: float = 0.30
     keyword: float = 0.15
     importance: float = 0.15
@@ -45,6 +47,7 @@ class RetrievalWeights:
     max_items: int = 8
 
     def __post_init__(self) -> None:
+        """完成数据类初始化后的补充处理。"""
         positive = (
             self.semantic
             + self.keyword
@@ -63,6 +66,8 @@ class RetrievalWeights:
 
 @dataclass(frozen=True)
 class RetrievedMemory:
+    """表示 处理 retrieved memory 的后端数据结构或服务对象。"""
+
     memory_id: str
     content: str
     memory_type: str
@@ -73,6 +78,8 @@ class RetrievedMemory:
 
 @dataclass(frozen=True)
 class RetrievalResult:
+    """表示 处理 retrieval result 的后端数据结构或服务对象。"""
+
     items: tuple[RetrievedMemory, ...]
     trace_id: str
     mode: str
@@ -81,6 +88,11 @@ class RetrievalResult:
 
 
 def classify_time_intent(query: str) -> TimeIntent:
+    """处理 classify time intent。
+
+    Args:
+        query: query 参数。
+    """
     value = query.lower()
     if any(word in value for word in ("当时", "历史", "之前", "过去")):
         return "historical"
@@ -106,6 +118,20 @@ async def retrieve_memories(
     scope_kind: str = "user/global",
     scope_id: str | None = None,
 ) -> RetrievalResult:
+    """处理 retrieve memories。
+
+    Args:
+        session: session 参数。
+        user_id: user_id 参数。
+        query: query 参数。
+        semantic_memory: semantic_memory 参数。
+        weights: weights 参数。
+        now: now 参数。
+        task_id: task_id 参数。
+        conversation_id: conversation_id 参数。
+        scope_kind: scope_kind 参数。
+        scope_id: scope_id 参数。
+    """
     config = weights or RetrievalWeights()
     current = now or utc_now()
     intent = classify_time_intent(query)
@@ -300,6 +326,15 @@ def _filter_reason(
     scope_kind: str,
     scope_id: str | None,
 ) -> str | None:
+    """执行 处理 filter reason 的内部辅助逻辑。
+
+    Args:
+        memory: memory 参数。
+        intent: intent 参数。
+        now: now 参数。
+        scope_kind: scope_kind 参数。
+        scope_id: scope_id 参数。
+    """
     if memory.sensitivity in {"sensitive", "forbidden"}:
         return "sensitivity"
     if memory.status in {
@@ -333,12 +368,28 @@ def _filter_reason(
 
 
 def _tokens(value: str) -> tuple[str, ...]:
+    """执行 处理 tokens 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+    """
     return tuple(item.lower() for item in _TOKEN.findall(value))
 
 
 def _keyword_score(query: set[str], content: set[str]) -> float:
+    """执行 处理 keyword score 的内部辅助逻辑。
+
+    Args:
+        query: query 参数。
+        content: content 参数。
+    """
     return 0.0 if not query or not content else len(query & content) / len(query)
 
 
 def _aware(value: datetime) -> datetime:
+    """执行 处理 aware 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+    """
     return value if value.tzinfo is not None else value.replace(tzinfo=UTC)

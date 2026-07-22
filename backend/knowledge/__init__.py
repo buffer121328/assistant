@@ -4,6 +4,7 @@ from .extractors import PARSER_VERSION, SUPPORTED_MEDIA_TYPES, extract_text
 from .service import (
     MAX_IMPORT_BYTES,
     IngestionResult,
+    KnowledgeDeleteResult,
     KnowledgeDocumentStatus,
     KnowledgeError,
     KnowledgeSearchResult,
@@ -12,6 +13,7 @@ from .service import (
 
 __all__ = [
     "IngestionResult",
+    "KnowledgeDeleteResult",
     "KnowledgeError",
     "KnowledgeDocumentStatus",
     "KnowledgeSearchResult",

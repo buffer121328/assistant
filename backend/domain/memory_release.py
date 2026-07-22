@@ -27,12 +27,16 @@ _ALLOWED_SCOPES = {"user/global", "user/project", "user/conversation", "agent/pr
 
 
 class MemoryReleaseError(TaskServiceError):
+    """表示 处理 memory release error 的后端数据结构或服务对象。"""
+
     code = "memory_release_invalid"
     status_code = 400
 
 
 @dataclass(frozen=True)
 class ShadowComparison:
+    """表示 处理 shadow comparison 的后端数据结构或服务对象。"""
+
     active_version: str
     shadow_version: str
     active_memory_ids: tuple[str, ...]
@@ -41,7 +45,14 @@ class ShadowComparison:
 
 
 class MemoryReleaseService:
+    """表示 处理 memory release service 的后端数据结构或服务对象。"""
+
     def __init__(self, session: AsyncSession) -> None:
+        """初始化对象实例。
+
+        Args:
+            session: session 参数。
+        """
         self.session = session
         self.memories = MemoryService(session)
 
@@ -54,6 +65,15 @@ class MemoryReleaseService:
         feedback_type: str = "none",
         outcome: str = "none",
     ) -> MemoryEffectiveness:
+        """记录 effectiveness。
+
+        Args:
+            user_id: user_id 参数。
+            memory_id: memory_id 参数。
+            evidence_key: evidence_key 参数。
+            feedback_type: feedback_type 参数。
+            outcome: outcome 参数。
+        """
         if feedback_type not in {"helpful", "harmful", "none"}:
             raise MemoryReleaseError("invalid feedback type")
         if outcome not in {"success", "failure", "none"}:
@@ -109,6 +129,15 @@ class MemoryReleaseService:
         scope_kind: str = "user/global",
         scope_id: str | None = None,
     ) -> MemoryRetrievalPolicyVersion:
+        """处理 bootstrap active policy。
+
+        Args:
+            user_id: user_id 参数。
+            version: version 参数。
+            config: config 参数。
+            scope_kind: scope_kind 参数。
+            scope_id: scope_id 参数。
+        """
         await self._require_user(user_id)
         scope_key = _scope_key(scope_kind, scope_id)
         active = await self.get_active_policy(user_id=user_id, scope_key=scope_key)
@@ -137,6 +166,15 @@ class MemoryReleaseService:
         scope_kind: str = "user/global",
         scope_id: str | None = None,
     ) -> MemoryRetrievalPolicyVersion:
+        """创建 shadow policy。
+
+        Args:
+            user_id: user_id 参数。
+            version: version 参数。
+            config: config 参数。
+            scope_kind: scope_kind 参数。
+            scope_id: scope_id 参数。
+        """
         await self._require_user(user_id)
         scope_key = _scope_key(scope_kind, scope_id)
         existing = await self.session.scalar(
@@ -172,6 +210,15 @@ class MemoryReleaseService:
         scope_kind: str = "user/global",
         scope_id: str | None = None,
     ) -> MemoryReleaseReport:
+        """处理 persist release report。
+
+        Args:
+            user_id: user_id 参数。
+            policy_version: policy_version 参数。
+            report: report 参数。
+            scope_kind: scope_kind 参数。
+            scope_id: scope_id 参数。
+        """
         await self._require_user(user_id)
         scope_key = _scope_key(scope_kind, scope_id)
         if report.get("valid") is not True or report.get("version") != "v6-07":
@@ -226,6 +273,14 @@ class MemoryReleaseService:
         report_id: str,
         approved: bool,
     ) -> MemoryRetrievalPolicyVersion:
+        """处理 activate policy。
+
+        Args:
+            user_id: user_id 参数。
+            policy_id: policy_id 参数。
+            report_id: report_id 参数。
+            approved: approved 参数。
+        """
         if not approved:
             raise MemoryReleaseError("policy activation requires approval")
         policy = await self._owned_policy(user_id=user_id, policy_id=policy_id)
@@ -259,6 +314,12 @@ class MemoryReleaseService:
     async def rollback_policy(
         self, *, user_id: str, policy_id: str
     ) -> MemoryRetrievalPolicyVersion:
+        """处理 rollback policy。
+
+        Args:
+            user_id: user_id 参数。
+            policy_id: policy_id 参数。
+        """
         current = await self._owned_policy(user_id=user_id, policy_id=policy_id)
         if current.status != "active" or current.parent_version_id is None:
             raise MemoryReleaseError("active policy has no rollback parent")
@@ -283,9 +344,15 @@ class MemoryReleaseService:
         active_memory_ids: tuple[str, ...],
         shadow_memory_ids: tuple[str, ...],
     ) -> ShadowComparison:
-        shadow = await self._owned_policy(
-            user_id=user_id, policy_id=shadow_policy_id
-        )
+        """处理 compare shadow。
+
+        Args:
+            user_id: user_id 参数。
+            shadow_policy_id: shadow_policy_id 参数。
+            active_memory_ids: active_memory_ids 参数。
+            shadow_memory_ids: shadow_memory_ids 参数。
+        """
+        shadow = await self._owned_policy(user_id=user_id, policy_id=shadow_policy_id)
         if shadow.status != "shadow":
             raise MemoryReleaseError("policy is not shadow")
         active = await self.get_active_policy(
@@ -310,6 +377,12 @@ class MemoryReleaseService:
     async def get_active_policy(
         self, *, user_id: str, scope_key: str
     ) -> MemoryRetrievalPolicyVersion | None:
+        """获取 active policy。
+
+        Args:
+            user_id: user_id 参数。
+            scope_key: scope_key 参数。
+        """
         return await self.session.scalar(
             select(MemoryRetrievalPolicyVersion).where(
                 MemoryRetrievalPolicyVersion.user_id == user_id,
@@ -321,6 +394,12 @@ class MemoryReleaseService:
     async def _owned_policy(
         self, *, user_id: str, policy_id: str
     ) -> MemoryRetrievalPolicyVersion:
+        """执行 处理 owned policy 的内部辅助逻辑。
+
+        Args:
+            user_id: user_id 参数。
+            policy_id: policy_id 参数。
+        """
         item = await self.session.scalar(
             select(MemoryRetrievalPolicyVersion).where(
                 MemoryRetrievalPolicyVersion.id == policy_id,
@@ -332,6 +411,11 @@ class MemoryReleaseService:
         return item
 
     async def _require_user(self, user_id: str) -> None:
+        """执行 处理 require user 的内部辅助逻辑。
+
+        Args:
+            user_id: user_id 参数。
+        """
         if await self.session.get(User, user_id) is None:
             raise UserNotFoundError("用户不存在")
 
@@ -344,6 +428,15 @@ async def load_active_retrieval_weights(
     scope_id: str | None = None,
     max_items_limit: int = 8,
 ) -> RetrievalWeights:
+    """加载 active retrieval weights。
+
+    Args:
+        session: session 参数。
+        user_id: user_id 参数。
+        scope_kind: scope_kind 参数。
+        scope_id: scope_id 参数。
+        max_items_limit: max_items_limit 参数。
+    """
     scope_key = _scope_key(scope_kind, scope_id)
     item = await session.scalar(
         select(MemoryRetrievalPolicyVersion).where(
@@ -365,10 +458,16 @@ async def load_active_retrieval_weights(
 
 
 def default_policy_config() -> dict[str, object]:
+    """处理 default policy config。"""
     return cast(dict[str, object], asdict(RetrievalWeights()))
 
 
 def _canonical_config(config: dict[str, object]) -> str:
+    """执行 处理 canonical config 的内部辅助逻辑。
+
+    Args:
+        config: config 参数。
+    """
     defaults = default_policy_config()
     if set(config) != set(defaults):
         raise MemoryReleaseError("retrieval policy config fields are invalid")
@@ -380,6 +479,12 @@ def _canonical_config(config: dict[str, object]) -> str:
 
 
 def _scope_key(scope_kind: str, scope_id: str | None) -> str:
+    """执行 处理 scope key 的内部辅助逻辑。
+
+    Args:
+        scope_kind: scope_kind 参数。
+        scope_id: scope_id 参数。
+    """
     if scope_kind not in _ALLOWED_SCOPES:
         raise MemoryReleaseError("retrieval policy scope is invalid")
     if scope_kind == "user/global":
@@ -392,18 +497,33 @@ def _scope_key(scope_kind: str, scope_id: str | None) -> str:
 
 
 def _version(value: str) -> str:
+    """执行 处理 version 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+    """
     if not _VERSION.fullmatch(value):
         raise MemoryReleaseError("retrieval policy version is invalid")
     return value
 
 
 def _string_list(value: object) -> list[str]:
+    """执行 处理 string list 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+    """
     if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
         raise MemoryReleaseError("release report list is invalid")
     return list(value)
 
 
 def _metrics(value: object) -> dict[str, int | float]:
+    """执行 处理 metrics 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+    """
     if not isinstance(value, dict):
         raise MemoryReleaseError("release report metrics are invalid")
     parsed: dict[str, int | float] = {}

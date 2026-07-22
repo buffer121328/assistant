@@ -103,11 +103,15 @@ _DANGEROUS_ARGS = frozenset(
 
 
 class WorkspaceContextError(ValueError):
+    """表示 处理 workspace context error 的后端数据结构或服务对象。"""
+
     pass
 
 
 @dataclass(frozen=True)
 class WorkspaceEntry:
+    """表示 处理 workspace entry 的后端数据结构或服务对象。"""
+
     name: str
     path: str
     type: Literal["file", "directory", "other"]
@@ -116,6 +120,8 @@ class WorkspaceEntry:
 
 @dataclass(frozen=True)
 class WorkspaceSearchMatch:
+    """表示 处理 workspace search match 的后端数据结构或服务对象。"""
+
     path: str
     line: int
     snippet: str
@@ -123,6 +129,8 @@ class WorkspaceSearchMatch:
 
 @dataclass(frozen=True)
 class ReadonlyShellResult:
+    """表示 处理 readonly shell result 的后端数据结构或服务对象。"""
+
     stdout: str
     stderr: str
     exit_code: int | None
@@ -131,6 +139,8 @@ class ReadonlyShellResult:
 
 
 class WorkspaceContextStore:
+    """表示 处理 workspace context store 的后端数据结构或服务对象。"""
+
     def __init__(
         self,
         *,
@@ -140,6 +150,15 @@ class WorkspaceContextStore:
         max_results: int = 50,
         sensitive_values: tuple[str | None, ...] = (),
     ) -> None:
+        """初始化对象实例。
+
+        Args:
+            root: root 参数。
+            deny_globs: deny_globs 参数。
+            max_file_bytes: max_file_bytes 参数。
+            max_results: max_results 参数。
+            sensitive_values: sensitive_values 参数。
+        """
         self.root = root.expanduser().resolve(strict=True)
         self.deny_globs = tuple(item.strip() for item in deny_globs if item.strip())
         self.max_file_bytes = max(1_000, min(max_file_bytes, 2_000_000))
@@ -148,9 +167,18 @@ class WorkspaceContextStore:
 
     @property
     def available(self) -> bool:
+        """处理 available。"""
         return self.root.exists() and self.root.is_dir()
 
-    def list_dir(self, *, path: str = ".", max_entries: int | None = None) -> dict[str, Any]:
+    def list_dir(
+        self, *, path: str = ".", max_entries: int | None = None
+    ) -> dict[str, Any]:
+        """列出 dir。
+
+        Args:
+            path: path 参数。
+            max_entries: max_entries 参数。
+        """
         directory = self.resolve_path(path, require_file=False)
         if not directory.is_dir():
             raise WorkspaceContextError("Workspace path is not a directory")
@@ -163,7 +191,13 @@ class WorkspaceContextStore:
                 WorkspaceEntry(
                     name=child.name,
                     path=self.relative_path(child),
-                    type=("directory" if child.is_dir() else "file" if child.is_file() else "other"),
+                    type=(
+                        "directory"
+                        if child.is_dir()
+                        else "file"
+                        if child.is_file()
+                        else "other"
+                    ),
                     size=(child.stat().st_size if child.is_file() else None),
                 )
             )
@@ -176,6 +210,12 @@ class WorkspaceContextStore:
         }
 
     def read_file(self, *, path: str, max_bytes: int | None = None) -> dict[str, Any]:
+        """处理 read file。
+
+        Args:
+            path: path 参数。
+            max_bytes: max_bytes 参数。
+        """
         file_path = self._readable_file(path)
         limit = self._bounded_bytes(max_bytes)
         content = file_path.read_bytes()[:limit]
@@ -188,8 +228,17 @@ class WorkspaceContextStore:
         }
 
     def read_doc(self, *, path: str, max_bytes: int | None = None) -> dict[str, Any]:
+        """处理 read doc。
+
+        Args:
+            path: path 参数。
+            max_bytes: max_bytes 参数。
+        """
         file_path = self._readable_file(path)
-        if file_path.suffix.lower() not in _TEXT_DOC_SUFFIXES and not file_path.name.lower().startswith("readme"):
+        if (
+            file_path.suffix.lower() not in _TEXT_DOC_SUFFIXES
+            and not file_path.name.lower().startswith("readme")
+        ):
             raise WorkspaceContextError("Workspace document type is not supported")
         return self.read_file(path=path, max_bytes=max_bytes)
 
@@ -201,6 +250,14 @@ class WorkspaceContextStore:
         max_results: int | None = None,
         max_file_bytes: int | None = None,
     ) -> dict[str, Any]:
+        """搜索 text。
+
+        Args:
+            query: query 参数。
+            path: path 参数。
+            max_results: max_results 参数。
+            max_file_bytes: max_file_bytes 参数。
+        """
         needle = query.strip()
         if not needle:
             raise WorkspaceContextError("Search query is empty")
@@ -243,6 +300,13 @@ class WorkspaceContextStore:
         path: str = ".",
         max_results: int | None = None,
     ) -> dict[str, Any]:
+        """处理 find files。
+
+        Args:
+            pattern: pattern 参数。
+            path: path 参数。
+            max_results: max_results 参数。
+        """
         safe_pattern = pattern.strip()
         if not safe_pattern or "\x00" in safe_pattern:
             raise WorkspaceContextError("File pattern is empty or invalid")
@@ -253,7 +317,9 @@ class WorkspaceContextStore:
         results: list[WorkspaceEntry] = []
         for child in self._iter_children(base):
             rel = self.relative_path(child)
-            if not fnmatch.fnmatch(rel, safe_pattern) and not fnmatch.fnmatch(child.name, safe_pattern):
+            if not fnmatch.fnmatch(rel, safe_pattern) and not fnmatch.fnmatch(
+                child.name, safe_pattern
+            ):
                 continue
             if self.is_denied(child):
                 continue
@@ -261,7 +327,13 @@ class WorkspaceContextStore:
                 WorkspaceEntry(
                     name=child.name,
                     path=rel,
-                    type=("directory" if child.is_dir() else "file" if child.is_file() else "other"),
+                    type=(
+                        "directory"
+                        if child.is_dir()
+                        else "file"
+                        if child.is_file()
+                        else "other"
+                    ),
                     size=(child.stat().st_size if child.is_file() else None),
                 )
             )
@@ -274,7 +346,15 @@ class WorkspaceContextStore:
             "truncated": len(results) >= limit,
         }
 
-    def resolve_path(self, value: str = ".", *, require_file: bool | None = None) -> Path:
+    def resolve_path(
+        self, value: str = ".", *, require_file: bool | None = None
+    ) -> Path:
+        """解析 path。
+
+        Args:
+            value: value 参数。
+            require_file: require_file 参数。
+        """
         raw = (value or ".").strip()
         if not raw or "\x00" in raw:
             raise WorkspaceContextError("Workspace path is empty or invalid")
@@ -295,6 +375,11 @@ class WorkspaceContextStore:
         return resolved
 
     def relative_path(self, value: Path) -> str:
+        """处理 relative path。
+
+        Args:
+            value: value 参数。
+        """
         try:
             relative = value.resolve(strict=True).relative_to(self.root)
         except ValueError as exc:
@@ -303,6 +388,11 @@ class WorkspaceContextStore:
         return text or "."
 
     def is_denied(self, value: Path) -> bool:
+        """处理 is denied。
+
+        Args:
+            value: value 参数。
+        """
         try:
             rel = value.resolve(strict=False).relative_to(self.root).as_posix()
         except ValueError:
@@ -313,15 +403,31 @@ class WorkspaceContextStore:
         if any(part.startswith(".env") for part in parts):
             return True
         path = PurePosixPath(rel)
-        return any(path.match(pattern) or fnmatch.fnmatch(rel, pattern) for pattern in self.deny_globs)
+        return any(
+            path.match(pattern) or fnmatch.fnmatch(rel, pattern)
+            for pattern in self.deny_globs
+        )
 
     def _readable_file(self, path: str) -> Path:
+        """执行 处理 readable file 的内部辅助逻辑。
+
+        Args:
+            path: path 参数。
+        """
         file_path = self.resolve_path(path, require_file=True)
         if not self._is_supported_text_file(file_path, max_bytes=self.max_file_bytes):
-            raise WorkspaceContextError("Workspace file is not a supported bounded text file")
+            raise WorkspaceContextError(
+                "Workspace file is not a supported bounded text file"
+            )
         return file_path
 
     def _is_supported_text_file(self, file_path: Path, *, max_bytes: int) -> bool:
+        """执行 处理 is supported text file 的内部辅助逻辑。
+
+        Args:
+            file_path: file_path 参数。
+            max_bytes: max_bytes 参数。
+        """
         if self.is_denied(file_path) or not file_path.is_file():
             return False
         if file_path.suffix.lower() in _BINARY_SUFFIXES:
@@ -342,6 +448,11 @@ class WorkspaceContextStore:
         return True
 
     def _iter_files(self, base: Path):
+        """执行 处理 iter files 的内部辅助逻辑。
+
+        Args:
+            base: base 参数。
+        """
         if base.is_file():
             yield base
             return
@@ -350,6 +461,11 @@ class WorkspaceContextStore:
                 yield child
 
     def _iter_children(self, base: Path):
+        """执行 处理 iter children 的内部辅助逻辑。
+
+        Args:
+            base: base 参数。
+        """
         if base.is_file():
             yield base
             return
@@ -359,26 +475,48 @@ class WorkspaceContextStore:
             yield child
 
     def _decode_text(self, content: bytes) -> str:
+        """执行 处理 decode text 的内部辅助逻辑。
+
+        Args:
+            content: content 参数。
+        """
         try:
             return content.decode("utf-8")
         except UnicodeDecodeError as exc:
             raise WorkspaceContextError("Workspace file is not UTF-8 text") from exc
 
     def _bounded_count(self, value: int | None) -> int:
+        """执行 处理 bounded count 的内部辅助逻辑。
+
+        Args:
+            value: value 参数。
+        """
         if value is None:
             return self.max_results
         return max(1, min(int(value), self.max_results, 200))
 
     def _bounded_bytes(self, value: int | None) -> int:
+        """执行 处理 bounded bytes 的内部辅助逻辑。
+
+        Args:
+            value: value 参数。
+        """
         if value is None:
             return self.max_file_bytes
         return max(1_000, min(int(value), self.max_file_bytes, 2_000_000))
 
     def _safe_text(self, value: object) -> str:
+        """执行 处理 safe text 的内部辅助逻辑。
+
+        Args:
+            value: value 参数。
+        """
         return sanitize_text(value, extra_sensitive_values=self.sensitive_values)
 
 
 class ReadonlyShellRunner:
+    """表示 处理 readonly shell runner 的后端数据结构或服务对象。"""
+
     def __init__(
         self,
         *,
@@ -387,6 +525,14 @@ class ReadonlyShellRunner:
         timeout_seconds: float = 10.0,
         max_output_chars: int = 50_000,
     ) -> None:
+        """初始化对象实例。
+
+        Args:
+            store: store 参数。
+            enabled: enabled 参数。
+            timeout_seconds: timeout_seconds 参数。
+            max_output_chars: max_output_chars 参数。
+        """
         self.store = store
         self.enabled = enabled
         self.timeout_seconds = max(1.0, min(timeout_seconds, 60.0))
@@ -394,9 +540,15 @@ class ReadonlyShellRunner:
 
     @property
     def available(self) -> bool:
+        """处理 available。"""
         return self.enabled and self.store.available
 
     def validate(self, command: tuple[str, ...]) -> tuple[str, ...]:
+        """校验。
+
+        Args:
+            command: command 参数。
+        """
         if not self.enabled:
             raise WorkspaceContextError("Readonly shell is disabled")
         if not command or len(command) > 32:
@@ -412,6 +564,11 @@ class ReadonlyShellRunner:
         return normalized
 
     async def execute(self, command: tuple[str, ...]) -> ReadonlyShellResult:
+        """执行。
+
+        Args:
+            command: command 参数。
+        """
         argv = self.validate(command)
         started = time.monotonic()
         process = await asyncio.create_subprocess_exec(
@@ -439,6 +596,11 @@ class ReadonlyShellRunner:
         )
 
     def _validate_arg(self, arg: str) -> None:
+        """执行 校验 arg 的内部辅助逻辑。
+
+        Args:
+            arg: arg 参数。
+        """
         if not arg or "\x00" in arg or len(arg) > 1_000:
             raise WorkspaceContextError("Readonly shell argument is invalid")
         if any(char in arg for char in _SHELL_META_CHARS):
@@ -447,16 +609,33 @@ class ReadonlyShellRunner:
             raise WorkspaceContextError("Readonly shell argument is dangerous")
 
     def _validate_command_flags(self, program: str, args: tuple[str, ...]) -> None:
+        """执行 校验 command flags 的内部辅助逻辑。
+
+        Args:
+            program: program 参数。
+            args: args 参数。
+        """
         for arg in args:
             if arg in _DANGEROUS_ARGS:
                 raise WorkspaceContextError("Readonly shell argument is dangerous")
-            if program in {"grep", "rg"} and (arg.startswith("--include-from") or arg.startswith("--exclude-from")):
-                raise WorkspaceContextError("Readonly shell file-list flags are not allowed")
+            if program in {"grep", "rg"} and (
+                arg.startswith("--include-from") or arg.startswith("--exclude-from")
+            ):
+                raise WorkspaceContextError(
+                    "Readonly shell file-list flags are not allowed"
+                )
             if program in {"head", "tail"} and arg in {"-f", "--follow"}:
                 raise WorkspaceContextError("Readonly shell follow mode is not allowed")
 
     def _validate_path_args(self, program: str, args: tuple[str, ...]) -> None:
         # Validate arguments that are definitely paths or existing workspace entries.
+
+        """执行 校验 path args 的内部辅助逻辑。
+
+        Args:
+            program: program 参数。
+            args: args 参数。
+        """
         if program == "find":
             for arg in args:
                 if arg.startswith("-"):
@@ -472,13 +651,20 @@ class ReadonlyShellRunner:
                 continue
             if program in {"grep", "rg"}:
                 # First non-option grep/rg arg is usually a pattern. Later path-like or existing args are targets.
-                non_options_before = [item for item in args[:index] if not item.startswith("-")]
+                non_options_before = [
+                    item for item in args[:index] if not item.startswith("-")
+                ]
                 if not non_options_before:
                     continue
                 if arg in {".", "./"} or "/" in arg or (self.store.root / arg).exists():
                     self.store.resolve_path(arg, require_file=None)
 
     def _safe_output(self, value: bytes) -> str:
+        """执行 处理 safe output 的内部辅助逻辑。
+
+        Args:
+            value: value 参数。
+        """
         text = value.decode("utf-8", errors="replace")[: self.max_output_chars]
         return sanitize_text(text, extra_sensitive_values=self.store.sensitive_values)
 
@@ -488,14 +674,40 @@ def build_workspace_tool_descriptors(
     enabled: bool,
     readonly_shell_enabled: bool = False,
 ) -> tuple[ToolDescriptor, ...]:
+    """构建 workspace tool descriptors。
+
+    Args:
+        enabled: enabled 参数。
+        readonly_shell_enabled: readonly_shell_enabled 参数。
+    """
     descriptors = tuple(
         _descriptor(name, description, schema, enabled=enabled, risk_level="L1")
         for name, description, schema in (
-            ("workspace.list", "List files and directories in the configured workspace", _list_schema()),
-            ("workspace.read_file", "Read a bounded UTF-8 text file from the configured workspace", _read_file_schema()),
-            ("workspace.search_text", "Search bounded text files in the configured workspace", _search_text_schema()),
-            ("workspace.find_files", "Find files or directories in the configured workspace by glob", _find_files_schema()),
-            ("workspace.read_doc", "Read a bounded README, Markdown, reStructuredText, AsciiDoc, or text document", _read_file_schema()),
+            (
+                "workspace.list",
+                "List files and directories in the configured workspace",
+                _list_schema(),
+            ),
+            (
+                "workspace.read_file",
+                "Read a bounded UTF-8 text file from the configured workspace",
+                _read_file_schema(),
+            ),
+            (
+                "workspace.search_text",
+                "Search bounded text files in the configured workspace",
+                _search_text_schema(),
+            ),
+            (
+                "workspace.find_files",
+                "Find files or directories in the configured workspace by glob",
+                _find_files_schema(),
+            ),
+            (
+                "workspace.read_doc",
+                "Read a bounded README, Markdown, reStructuredText, AsciiDoc, or text document",
+                _read_file_schema(),
+            ),
         )
     )
     return (
@@ -515,7 +727,19 @@ def build_workspace_tool_specs(
     store: WorkspaceContextStore,
     readonly_shell: ReadonlyShellRunner | None = None,
 ) -> tuple[ToolSpec, ...]:
+    """构建 workspace tool specs。
+
+    Args:
+        store: store 参数。
+        readonly_shell: readonly_shell 参数。
+    """
+
     async def list_workspace(invocation: ToolInvocation) -> Any:
+        """列出 workspace。
+
+        Args:
+            invocation: invocation 参数。
+        """
         args = invocation.arguments
         return store.list_dir(
             path=str(args.get("path") or "."),
@@ -523,6 +747,11 @@ def build_workspace_tool_specs(
         )
 
     async def read_file(invocation: ToolInvocation) -> Any:
+        """处理 read file。
+
+        Args:
+            invocation: invocation 参数。
+        """
         args = invocation.arguments
         return store.read_file(
             path=str(args["path"]),
@@ -530,6 +759,11 @@ def build_workspace_tool_specs(
         )
 
     async def search_text(invocation: ToolInvocation) -> Any:
+        """搜索 text。
+
+        Args:
+            invocation: invocation 参数。
+        """
         args = invocation.arguments
         return store.search_text(
             query=str(args["query"]),
@@ -539,6 +773,11 @@ def build_workspace_tool_specs(
         )
 
     async def find_files(invocation: ToolInvocation) -> Any:
+        """处理 find files。
+
+        Args:
+            invocation: invocation 参数。
+        """
         args = invocation.arguments
         return store.find_files(
             pattern=str(args["pattern"]),
@@ -547,6 +786,11 @@ def build_workspace_tool_specs(
         )
 
     async def read_doc(invocation: ToolInvocation) -> Any:
+        """处理 read doc。
+
+        Args:
+            invocation: invocation 参数。
+        """
         args = invocation.arguments
         return store.read_doc(
             path=str(args["path"]),
@@ -554,14 +798,45 @@ def build_workspace_tool_specs(
         )
 
     specs = [
-        _spec("workspace.list", "List files and directories in the configured workspace", list_workspace, _list_schema()),
-        _spec("workspace.read_file", "Read a bounded UTF-8 text file from the configured workspace", read_file, _read_file_schema()),
-        _spec("workspace.search_text", "Search bounded text files in the configured workspace", search_text, _search_text_schema()),
-        _spec("workspace.find_files", "Find files or directories in the configured workspace by glob", find_files, _find_files_schema()),
-        _spec("workspace.read_doc", "Read a bounded workspace document", read_doc, _read_file_schema()),
+        _spec(
+            "workspace.list",
+            "List files and directories in the configured workspace",
+            list_workspace,
+            _list_schema(),
+        ),
+        _spec(
+            "workspace.read_file",
+            "Read a bounded UTF-8 text file from the configured workspace",
+            read_file,
+            _read_file_schema(),
+        ),
+        _spec(
+            "workspace.search_text",
+            "Search bounded text files in the configured workspace",
+            search_text,
+            _search_text_schema(),
+        ),
+        _spec(
+            "workspace.find_files",
+            "Find files or directories in the configured workspace by glob",
+            find_files,
+            _find_files_schema(),
+        ),
+        _spec(
+            "workspace.read_doc",
+            "Read a bounded workspace document",
+            read_doc,
+            _read_file_schema(),
+        ),
     ]
     if readonly_shell is not None and readonly_shell.available:
+
         async def shell_readonly(invocation: ToolInvocation) -> Any:
+            """处理 shell readonly。
+
+            Args:
+                invocation: invocation 参数。
+            """
             command = tuple(str(item) for item in invocation.arguments["command"])
             return asdict(await readonly_shell.execute(command))
 
@@ -585,17 +860,39 @@ def _descriptor(
     enabled: bool,
     risk_level: ToolRiskLevel,
 ) -> ToolDescriptor:
+    """执行 处理 descriptor 的内部辅助逻辑。
+
+    Args:
+        name: name 参数。
+        description: description 参数。
+        schema: schema 参数。
+        enabled: enabled 参数。
+        risk_level: risk_level 参数。
+    """
     return ToolDescriptor(
         name=name,
         description=description,
         input_schema=schema,
         source_id="builtin",
         source_kind="builtin",
-        version=(READONLY_SHELL_VERSION if name == "shell.readonly_exec" else WORKSPACE_TOOL_VERSION),
+        version=(
+            READONLY_SHELL_VERSION
+            if name == "shell.readonly_exec"
+            else WORKSPACE_TOOL_VERSION
+        ),
         enabled=enabled,
         risk_level=risk_level,
         requires_approval=False,
-        tags=("learn", "daily", "office", "plan", "v2.researcher", "v2.daily_reporter", "v2.office_writer", "v2.planner"),
+        tags=(
+            "learn",
+            "daily",
+            "office",
+            "plan",
+            "v2.researcher",
+            "v2.daily_reporter",
+            "v2.office_writer",
+            "v2.planner",
+        ),
         parallel_safe=False,
     )
 
@@ -608,18 +905,37 @@ def _spec(
     *,
     risk_level: ToolRiskLevel = "L1",
 ) -> ToolSpec:
+    """执行 处理 spec 的内部辅助逻辑。
+
+    Args:
+        name: name 参数。
+        description: description 参数。
+        handler: handler 参数。
+        schema: schema 参数。
+        risk_level: risk_level 参数。
+    """
     return ToolSpec(
         name=name,
         description=description,
         risk_level=risk_level,
         handler=handler,
         input_schema=schema,
-        version=(READONLY_SHELL_VERSION if name == "shell.readonly_exec" else WORKSPACE_TOOL_VERSION),
+        version=(
+            READONLY_SHELL_VERSION
+            if name == "shell.readonly_exec"
+            else WORKSPACE_TOOL_VERSION
+        ),
         source_id="builtin",
     )
 
 
 def _object(properties: dict[str, Any], required: tuple[str, ...]) -> dict[str, Any]:
+    """执行 处理 object 的内部辅助逻辑。
+
+    Args:
+        properties: properties 参数。
+        required: required 参数。
+    """
     return {
         "type": "object",
         "properties": properties,
@@ -629,14 +945,30 @@ def _object(properties: dict[str, Any], required: tuple[str, ...]) -> dict[str, 
 
 
 def _text(max_length: int = 2_048, *, allow_empty: bool = False) -> dict[str, Any]:
-    return {"type": "string", "minLength": 0 if allow_empty else 1, "maxLength": max_length}
+    """执行 处理 text 的内部辅助逻辑。
+
+    Args:
+        max_length: max_length 参数。
+        allow_empty: allow_empty 参数。
+    """
+    return {
+        "type": "string",
+        "minLength": 0 if allow_empty else 1,
+        "maxLength": max_length,
+    }
 
 
 def _positive_int(maximum: int) -> dict[str, Any]:
+    """执行 处理 positive int 的内部辅助逻辑。
+
+    Args:
+        maximum: maximum 参数。
+    """
     return {"type": "integer", "minimum": 1, "maximum": maximum}
 
 
 def _list_schema() -> dict[str, Any]:
+    """执行 列出 schema 的内部辅助逻辑。"""
     return _object(
         {"path": _text(1_024, allow_empty=True), "max_entries": _positive_int(200)},
         (),
@@ -644,6 +976,7 @@ def _list_schema() -> dict[str, Any]:
 
 
 def _read_file_schema() -> dict[str, Any]:
+    """执行 处理 read file schema 的内部辅助逻辑。"""
     return _object(
         {"path": _text(1_024), "max_bytes": _positive_int(2_000_000)},
         ("path",),
@@ -651,6 +984,7 @@ def _read_file_schema() -> dict[str, Any]:
 
 
 def _search_text_schema() -> dict[str, Any]:
+    """执行 搜索 text schema 的内部辅助逻辑。"""
     return _object(
         {
             "query": _text(500),
@@ -663,20 +997,40 @@ def _search_text_schema() -> dict[str, Any]:
 
 
 def _find_files_schema() -> dict[str, Any]:
+    """执行 处理 find files schema 的内部辅助逻辑。"""
     return _object(
-        {"pattern": _text(500), "path": _text(1_024, allow_empty=True), "max_results": _positive_int(200)},
+        {
+            "pattern": _text(500),
+            "path": _text(1_024, allow_empty=True),
+            "max_results": _positive_int(200),
+        },
         ("pattern",),
     )
 
 
 def _readonly_shell_schema() -> dict[str, Any]:
+    """执行 处理 readonly shell schema 的内部辅助逻辑。"""
     return _object(
-        {"command": {"type": "array", "items": _text(1_000), "minItems": 1, "maxItems": 32}},
+        {
+            "command": {
+                "type": "array",
+                "items": _text(1_000),
+                "minItems": 1,
+                "maxItems": 32,
+            }
+        },
         ("command",),
     )
 
 
-def parse_deny_globs(value: str | tuple[str, ...] | list[str] | None) -> tuple[str, ...]:
+def parse_deny_globs(
+    value: str | tuple[str, ...] | list[str] | None,
+) -> tuple[str, ...]:
+    """解析 deny globs。
+
+    Args:
+        value: value 参数。
+    """
     if value is None:
         return DEFAULT_DENY_GLOBS
     if isinstance(value, str):
@@ -687,12 +1041,23 @@ def parse_deny_globs(value: str | tuple[str, ...] | list[str] | None) -> tuple[s
 
 
 def _optional_int(value: Any) -> int | None:
+    """执行 处理 optional int 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+    """
     if value is None:
         return None
     return int(value)
 
 
 def _compact(value: str, limit: int) -> str:
+    """执行 处理 compact 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+        limit: limit 参数。
+    """
     text = " ".join(value.strip().split())
     if len(text) <= limit:
         return text

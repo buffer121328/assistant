@@ -9,6 +9,8 @@ from agent.planning.planner import ExecutionPlan
 
 @dataclass(frozen=True)
 class AgentRunInput:
+    """表示 处理 agent run input 的后端数据结构或服务对象。"""
+
     plan: ExecutionPlan
     context: TaskContext
 
@@ -18,6 +20,8 @@ ApprovalTypeName = Literal["tool", "plan", "review", "change"]
 
 @dataclass(frozen=True)
 class HumanApprovalRequest:
+    """表示 处理 human approval request 的后端数据结构或服务对象。"""
+
     approval_type: ApprovalTypeName
     subject: str
     summary: str
@@ -26,6 +30,8 @@ class HumanApprovalRequest:
 
 @dataclass(frozen=True)
 class AgentRunResult:
+    """表示 处理 agent run result 的后端数据结构或服务对象。"""
+
     result_text: str
     display_plan: tuple[str, ...] = ()
     tool_calls: tuple[str, ...] = ()
@@ -36,4 +42,12 @@ class AgentRunResult:
 
 
 class AgentExecutorProtocol(Protocol):
-    async def execute(self, *, run_input: AgentRunInput) -> AgentRunResult: ...
+    """表示 处理 agent executor protocol 的后端数据结构或服务对象。"""
+
+    async def execute(self, *, run_input: AgentRunInput) -> AgentRunResult:
+        """执行。
+
+        Args:
+            run_input: run_input 参数。
+        """
+        ...

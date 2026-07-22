@@ -22,10 +22,21 @@ from infrastructure.repositories import ModelLogCreate, ModelLogRepository
 
 
 class JudgeGateway(Protocol):
-    async def chat(self, request: GatewayRequest, model_class: str) -> GatewayResult: ...
+    """表示 处理 judge gateway 的后端数据结构或服务对象。"""
+
+    async def chat(self, request: GatewayRequest, model_class: str) -> GatewayResult:
+        """处理 chat。
+
+        Args:
+            request: request 参数。
+            model_class: model_class 参数。
+        """
+        ...
 
 
 class GatewayJudgeModel:
+    """表示 处理 gateway judge model 的后端数据结构或服务对象。"""
+
     def __init__(
         self,
         *,
@@ -33,6 +44,13 @@ class GatewayJudgeModel:
         settings: Settings,
         adapter: JudgeGateway | None = None,
     ) -> None:
+        """初始化对象实例。
+
+        Args:
+            session: session 参数。
+            settings: settings 参数。
+            adapter: adapter 参数。
+        """
         self.session = session
         self.settings = settings
         self.adapter = adapter or DeepSeekAdapter(
@@ -52,6 +70,11 @@ class GatewayJudgeModel:
         )
 
     async def evaluate(self, request: JudgeRequest) -> JudgeDecision:
+        """处理 evaluate。
+
+        Args:
+            request: request 参数。
+        """
         gateway_request = GatewayRequest(
             user_id=request.user_id,
             task_id=request.task_id,
@@ -118,6 +141,11 @@ class GatewayJudgeModel:
 
 
 def parse_judge_decision(value: str) -> JudgeDecision:
+    """解析 judge decision。
+
+    Args:
+        value: value 参数。
+    """
     payload = json.loads(value)
     if not isinstance(payload, dict):
         raise ValueError("Judge output must be a JSON object")
@@ -133,6 +161,11 @@ def parse_judge_decision(value: str) -> JudgeDecision:
 
 
 def _score(value: object) -> float:
+    """执行 处理 score 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+    """
     if isinstance(value, bool) or not isinstance(value, int | float):
         raise ValueError("Judge score must be numeric")
     return float(value)

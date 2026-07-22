@@ -22,6 +22,8 @@ SkillSource = Literal["builtin", "managed"]
 
 @dataclass(frozen=True)
 class SkillInventoryItem:
+    """表示 处理 skill inventory item 的后端数据结构或服务对象。"""
+
     name: str
     display_name: str
     summary: str
@@ -32,13 +34,24 @@ class SkillInventoryItem:
 
 
 class SkillLifecycleError(ValueError):
+    """表示 处理 skill lifecycle error 的后端数据结构或服务对象。"""
+
     def __init__(self, *, code: str, message: str, status_code: int) -> None:
+        """初始化对象实例。
+
+        Args:
+            code: code 参数。
+            message: message 参数。
+            status_code: status_code 参数。
+        """
         super().__init__(message)
         self.code = code
         self.status_code = status_code
 
 
 class SkillLifecycleService:
+    """表示 处理 skill lifecycle service 的后端数据结构或服务对象。"""
+
     def __init__(
         self,
         session: AsyncSession,
@@ -46,12 +59,20 @@ class SkillLifecycleService:
         store: ManagedSkillStore,
         refresh_registry: Callable[[], None],
     ) -> None:
+        """初始化对象实例。
+
+        Args:
+            session: session 参数。
+            store: store 参数。
+            refresh_registry: refresh_registry 参数。
+        """
         self.session = session
         self.store = store
         self.refresh_registry = refresh_registry
         self.audit_repository = SkillAuditRepository(session)
 
     def list_skills(self) -> tuple[SkillInventoryItem, ...]:
+        """列出 skills。"""
         items = [
             SkillInventoryItem(
                 name=metadata.id.removeprefix("skill."),
@@ -81,6 +102,15 @@ class SkillLifecycleService:
         summary: str,
         instructions: str,
     ) -> SkillInventoryItem:
+        """创建。
+
+        Args:
+            user_id: user_id 参数。
+            name: name 参数。
+            display_name: display_name 参数。
+            summary: summary 参数。
+            instructions: instructions 参数。
+        """
         record = await self._mutate(
             user_id=user_id,
             skill_name=name,
@@ -95,6 +125,12 @@ class SkillLifecycleService:
         return self._inventory_item(record)
 
     async def install(self, *, user_id: str, package: bytes) -> SkillInventoryItem:
+        """处理 install。
+
+        Args:
+            user_id: user_id 参数。
+            package: package 参数。
+        """
         record = await self._mutate(
             user_id=user_id,
             skill_name=None,
@@ -110,6 +146,13 @@ class SkillLifecycleService:
         name: str,
         enabled: bool,
     ) -> SkillInventoryItem:
+        """处理 set enabled。
+
+        Args:
+            user_id: user_id 参数。
+            name: name 参数。
+            enabled: enabled 参数。
+        """
         action = "enable" if enabled else "disable"
         record = await self._mutate(
             user_id=user_id,
@@ -120,6 +163,12 @@ class SkillLifecycleService:
         return self._inventory_item(record)
 
     async def uninstall(self, *, user_id: str, name: str) -> None:
+        """处理 uninstall。
+
+        Args:
+            user_id: user_id 参数。
+            name: name 参数。
+        """
         await self._mutate(
             user_id=user_id,
             skill_name=name,
@@ -135,6 +184,14 @@ class SkillLifecycleService:
         action: str,
         operation: Callable[[], ManagedSkillRecord],
     ) -> ManagedSkillRecord:
+        """执行 处理 mutate 的内部辅助逻辑。
+
+        Args:
+            user_id: user_id 参数。
+            skill_name: skill_name 参数。
+            action: action 参数。
+            operation: operation 参数。
+        """
         if not await self.audit_repository.user_exists(user_id):
             raise UserNotFoundError(f"User not found: {user_id}")
 
@@ -189,6 +246,11 @@ class SkillLifecycleService:
 
     @staticmethod
     def _inventory_item(record: ManagedSkillRecord) -> SkillInventoryItem:
+        """执行 处理 inventory item 的内部辅助逻辑。
+
+        Args:
+            record: record 参数。
+        """
         return SkillInventoryItem(
             name=record.name,
             display_name=record.display_name,

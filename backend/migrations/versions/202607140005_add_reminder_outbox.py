@@ -16,6 +16,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    """执行数据库迁移升级步骤。"""
     op.create_table(
         "reminders",
         sa.Column("id", sa.String(36), nullable=False),
@@ -31,7 +32,9 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_reminders_user_due_status", "reminders", ["user_id", "due_at", "status"])
+    op.create_index(
+        "ix_reminders_user_due_status", "reminders", ["user_id", "due_at", "status"]
+    )
     op.create_table(
         "notification_outbox",
         sa.Column("id", sa.String(36), nullable=False),
@@ -49,10 +52,20 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["reminder_id"], ["reminders.id"]),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("idempotency_key", name="uq_notification_outbox_idempotency"),
+        sa.UniqueConstraint(
+            "idempotency_key", name="uq_notification_outbox_idempotency"
+        ),
     )
-    op.create_index("ix_notification_outbox_status_available", "notification_outbox", ["status", "available_at"])
-    op.create_index("ix_notification_outbox_user_status", "notification_outbox", ["user_id", "status"])
+    op.create_index(
+        "ix_notification_outbox_status_available",
+        "notification_outbox",
+        ["status", "available_at"],
+    )
+    op.create_index(
+        "ix_notification_outbox_user_status",
+        "notification_outbox",
+        ["user_id", "status"],
+    )
     op.create_table(
         "delivery_attempts",
         sa.Column("id", sa.String(36), nullable=False),
@@ -63,14 +76,23 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["outbox_id"], ["notification_outbox.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_delivery_attempts_outbox_created", "delivery_attempts", ["outbox_id", "created_at"])
+    op.create_index(
+        "ix_delivery_attempts_outbox_created",
+        "delivery_attempts",
+        ["outbox_id", "created_at"],
+    )
 
 
 def downgrade() -> None:
+    """执行数据库迁移回滚步骤。"""
     op.drop_index("ix_delivery_attempts_outbox_created", table_name="delivery_attempts")
     op.drop_table("delivery_attempts")
-    op.drop_index("ix_notification_outbox_user_status", table_name="notification_outbox")
-    op.drop_index("ix_notification_outbox_status_available", table_name="notification_outbox")
+    op.drop_index(
+        "ix_notification_outbox_user_status", table_name="notification_outbox"
+    )
+    op.drop_index(
+        "ix_notification_outbox_status_available", table_name="notification_outbox"
+    )
     op.drop_table("notification_outbox")
     op.drop_index("ix_reminders_user_due_status", table_name="reminders")
     op.drop_table("reminders")

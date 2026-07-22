@@ -16,6 +16,8 @@ EVOLUTION_SUGGESTION_TOOL_NAME = "agent.governance.evolution.suggestion"
 
 @dataclass(frozen=True)
 class BehaviorMetrics:
+    """表示 处理 behavior metrics 的后端数据结构或服务对象。"""
+
     task_count: int
     successful_task_count: int
     failed_task_count: int
@@ -28,6 +30,8 @@ class BehaviorMetrics:
 
 @dataclass(frozen=True)
 class EvolutionSuggestion:
+    """表示 处理 evolution suggestion 的后端数据结构或服务对象。"""
+
     target: str
     reason: str
     proposed_direction: str
@@ -35,6 +39,8 @@ class EvolutionSuggestion:
 
 
 class BehaviorEvolutionService:
+    """表示 处理 behavior evolution service 的后端数据结构或服务对象。"""
+
     def __init__(
         self,
         session: AsyncSession,
@@ -43,6 +49,14 @@ class BehaviorEvolutionService:
         task_failure_threshold: float = 0.5,
         approval_wait_threshold: float = 0.5,
     ) -> None:
+        """初始化对象实例。
+
+        Args:
+            session: session 参数。
+            evaluation_window_days: evaluation_window_days 参数。
+            task_failure_threshold: task_failure_threshold 参数。
+            approval_wait_threshold: approval_wait_threshold 参数。
+        """
         self.session = session
         self.evaluation_window_days = evaluation_window_days
         self.task_failure_threshold = task_failure_threshold
@@ -53,6 +67,11 @@ class BehaviorEvolutionService:
         *,
         now: datetime | None = None,
     ) -> EvolutionSuggestion | None:
+        """处理 evaluate。
+
+        Args:
+            now: now 参数。
+        """
         evaluated_at = now or utc_now()
         if await self._has_pending_suggestion(evaluated_at):
             return None
@@ -84,6 +103,16 @@ class BehaviorEvolutionService:
         target_name: str,
         now: datetime | None = None,
     ) -> EvolutionChange | None:
+        """处理 evaluate and propose。
+
+        Args:
+            governed: governed 参数。
+            task_id: task_id 参数。
+            user_id: user_id 参数。
+            target_kind: target_kind 参数。
+            target_name: target_name 参数。
+            now: now 参数。
+        """
         suggestion = await self.evaluate(now=now)
         if suggestion is None:
             return None
@@ -101,6 +130,11 @@ class BehaviorEvolutionService:
         *,
         now: datetime | None = None,
     ) -> BehaviorMetrics:
+        """处理 calculate metrics。
+
+        Args:
+            now: now 参数。
+        """
         evaluated_at = now or utc_now()
         window_start = evaluated_at - timedelta(days=self.evaluation_window_days)
         tasks = list(
@@ -140,6 +174,11 @@ class BehaviorEvolutionService:
         )
 
     async def _has_pending_suggestion(self, evaluated_at: datetime) -> bool:
+        """执行 处理 has pending suggestion 的内部辅助逻辑。
+
+        Args:
+            evaluated_at: evaluated_at 参数。
+        """
         day_start = datetime(
             evaluated_at.year,
             evaluated_at.month,
@@ -160,6 +199,11 @@ class BehaviorEvolutionService:
         return existing is not None
 
     def _suggest(self, metrics: BehaviorMetrics) -> EvolutionSuggestion | None:
+        """执行 处理 suggest 的内部辅助逻辑。
+
+        Args:
+            metrics: metrics 参数。
+        """
         if metrics.task_count == 0:
             return None
         if metrics.task_failure_rate >= self.task_failure_threshold:
@@ -179,6 +223,11 @@ class BehaviorEvolutionService:
         return None
 
     def _safe_evidence(self, metrics: BehaviorMetrics) -> str:
+        """执行 处理 safe evidence 的内部辅助逻辑。
+
+        Args:
+            metrics: metrics 参数。
+        """
         return json.dumps(
             {
                 "task_count": metrics.task_count,
@@ -194,6 +243,11 @@ class BehaviorEvolutionService:
         )
 
     def _safe_suggestion(self, suggestion: EvolutionSuggestion) -> str:
+        """执行 处理 safe suggestion 的内部辅助逻辑。
+
+        Args:
+            suggestion: suggestion 参数。
+        """
         return json.dumps(
             {
                 "target": suggestion.target,

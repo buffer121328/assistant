@@ -21,12 +21,27 @@ TASK_EVENT_APPEND_ATTEMPTS = 3
 
 
 class TaskEventRepository:
+    """表示 处理 task event repository 的后端数据结构或服务对象。"""
+
     def __init__(self, session: AsyncSession) -> None:
+        """初始化对象实例。
+
+        Args:
+            session: session 参数。
+        """
         self.session = session
 
     async def append(
         self, *, task_id: str, user_id: str, event_type: str, payload: dict[str, object]
     ) -> TaskEvent:
+        """处理 append。
+
+        Args:
+            task_id: task_id 参数。
+            user_id: user_id 参数。
+            event_type: event_type 参数。
+            payload: payload 参数。
+        """
         safe = json.dumps(
             _safe_json_value(payload),
             ensure_ascii=False,
@@ -34,14 +49,17 @@ class TaskEventRepository:
         )[:16000]
         last_error: IntegrityError | None = None
         for _ in range(TASK_EVENT_APPEND_ATTEMPTS):
-            sequence = int(
-                await self.session.scalar(
-                    select(func.coalesce(func.max(TaskEvent.sequence), 0)).where(
-                        TaskEvent.task_id == task_id
+            sequence = (
+                int(
+                    await self.session.scalar(
+                        select(func.coalesce(func.max(TaskEvent.sequence), 0)).where(
+                            TaskEvent.task_id == task_id
+                        )
                     )
+                    or 0
                 )
-                or 0
-            ) + 1
+                + 1
+            )
             item = TaskEvent(
                 task_id=task_id,
                 user_id=user_id,
@@ -61,6 +79,12 @@ class TaskEventRepository:
         raise last_error
 
     async def list_after(self, *, task_id: str, after: int) -> list[TaskEvent]:
+        """列出 after。
+
+        Args:
+            task_id: task_id 参数。
+            after: after 参数。
+        """
         items = await self.session.scalars(
             select(TaskEvent)
             .where(TaskEvent.task_id == task_id, TaskEvent.sequence > after)
@@ -70,12 +94,27 @@ class TaskEventRepository:
 
 
 class TaskEventPublisher:
+    """表示 处理 task event publisher 的后端数据结构或服务对象。"""
+
     def __init__(self, sessionmaker: async_sessionmaker[AsyncSession]) -> None:
+        """初始化对象实例。
+
+        Args:
+            sessionmaker: sessionmaker 参数。
+        """
         self.sessionmaker = sessionmaker
 
     async def publish(
         self, *, task_id: str, user_id: str, event_type: str, payload: dict[str, object]
     ) -> None:
+        """发布。
+
+        Args:
+            task_id: task_id 参数。
+            user_id: user_id 参数。
+            event_type: event_type 参数。
+            payload: payload 参数。
+        """
         try:
             async with self.sessionmaker() as session:
                 await TaskEventRepository(session).append(
@@ -92,6 +131,14 @@ class TaskEventPublisher:
     async def publish_text(
         self, *, task_id: str, user_id: str, text: str, chunk_size: int = 160
     ) -> None:
+        """发布 text。
+
+        Args:
+            task_id: task_id 参数。
+            user_id: user_id 参数。
+            text: text 参数。
+            chunk_size: chunk_size 参数。
+        """
         for start in range(0, len(text), chunk_size):
             await self.publish(
                 task_id=task_id,
@@ -102,6 +149,11 @@ class TaskEventPublisher:
 
 
 def event_record(item: TaskEvent) -> dict[str, object]:
+    """处理 event record。
+
+    Args:
+        item: item 参数。
+    """
     payload = json.loads(item.payload_json)
     return {
         "sequence": item.sequence,
@@ -112,6 +164,11 @@ def event_record(item: TaskEvent) -> dict[str, object]:
 
 
 def _safe_json_value(value: Any) -> Any:
+    """执行 处理 safe json value 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+    """
     if isinstance(value, str):
         return sanitize_text(value)
     if isinstance(value, dict):
@@ -128,8 +185,20 @@ def _safe_json_value(value: Any) -> Any:
 
 
 def _is_sensitive_key(key: str) -> bool:
+    """执行 处理 is sensitive key 的内部辅助逻辑。
+
+    Args:
+        key: key 参数。
+    """
     normalized = key.casefold()
     return any(
         marker in normalized
-        for marker in ("authorization", "cookie", "api_key", "apikey", "token", "secret")
+        for marker in (
+            "authorization",
+            "cookie",
+            "api_key",
+            "apikey",
+            "token",
+            "secret",
+        )
     )

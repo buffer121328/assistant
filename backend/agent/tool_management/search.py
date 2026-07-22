@@ -27,14 +27,20 @@ DEFAULT_SEARCH_PROVIDER_ORDER = (
 
 
 class TavilyClientError(Exception):
+    """表示 处理 tavily client error 的后端数据结构或服务对象。"""
+
     pass
 
 
 class SearchProviderError(Exception):
+    """表示 搜索 provider error 的后端数据结构或服务对象。"""
+
     pass
 
 
 class SearchProviderChainError(Exception):
+    """表示 搜索 provider chain error 的后端数据结构或服务对象。"""
+
     def __init__(
         self,
         message: str,
@@ -42,17 +48,28 @@ class SearchProviderChainError(Exception):
         attempted_providers: Sequence[str],
         failures: Sequence[ProviderFailure],
     ) -> None:
+        """初始化对象实例。
+
+        Args:
+            message: message 参数。
+            attempted_providers: attempted_providers 参数。
+            failures: failures 参数。
+        """
         super().__init__(message)
         self.attempted_providers = tuple(attempted_providers)
         self.failures = tuple(failures)
 
 
 class SearchWebToolError(Exception):
+    """表示 搜索 web tool error 的后端数据结构或服务对象。"""
+
     pass
 
 
 @dataclass(frozen=True)
 class TavilyConfig:
+    """表示 处理 tavily config 的后端数据结构或服务对象。"""
+
     base_url: str
     api_key: str
     timeout_seconds: float
@@ -67,11 +84,14 @@ class TavilyConfig:
 
     @property
     def effective_provider_timeout_seconds(self) -> float:
+        """处理 effective provider timeout seconds。"""
         return self.provider_timeout_seconds or self.timeout_seconds
 
 
 @dataclass(frozen=True)
 class TavilySearchRequest:
+    """表示 处理 tavily search request 的后端数据结构或服务对象。"""
+
     task_id: str
     user_id: str
     query: str
@@ -80,12 +100,15 @@ class TavilySearchRequest:
 
 @dataclass(frozen=True)
 class NormalizedSearchSource:
+    """表示 处理 normalized search source 的后端数据结构或服务对象。"""
+
     title: str
     url: str
     snippet: str
     provider_metadata: dict[str, Any]
 
     def to_workflow_dict(self) -> dict[str, Any]:
+        """转换为目标格式 workflow dict。"""
         return {
             "title": self.title,
             "url": self.url,
@@ -96,20 +119,26 @@ class NormalizedSearchSource:
 
 @dataclass(frozen=True)
 class SearchWebResult:
+    """表示 搜索 web result 的后端数据结构或服务对象。"""
+
     query: str
     sources: list[NormalizedSearchSource]
 
     def to_workflow_sources(self) -> list[dict[str, Any]]:
+        """转换为目标格式 workflow sources。"""
         return [source.to_workflow_dict() for source in self.sources]
 
 
 @dataclass(frozen=True)
 class ProviderFailure:
+    """表示 处理 provider failure 的后端数据结构或服务对象。"""
+
     provider: str
     category: str
     message: str
 
     def to_log_dict(self) -> dict[str, str]:
+        """转换为目标格式 log dict。"""
         return {
             "provider": self.provider,
             "category": self.category,
@@ -119,6 +148,8 @@ class ProviderFailure:
 
 @dataclass(frozen=True)
 class SearchProviderChainResult:
+    """表示 搜索 provider chain result 的后端数据结构或服务对象。"""
+
     query: str
     sources: list[NormalizedSearchSource]
     attempted_providers: tuple[str, ...]
@@ -128,22 +159,50 @@ class SearchProviderChainResult:
 
 
 class TavilyClientProtocol(Protocol):
+    """表示 处理 tavily client protocol 的后端数据结构或服务对象。"""
+
     async def search(self, request: TavilySearchRequest) -> dict[str, Any]:
+        """搜索。
+
+        Args:
+            request: request 参数。
+        """
         pass
 
 
 class SearchProvider(Protocol):
+    """表示 搜索 provider 的后端数据结构或服务对象。"""
+
     name: str
 
-    async def search(self, request: TavilySearchRequest) -> list[NormalizedSearchSource]:
+    async def search(
+        self, request: TavilySearchRequest
+    ) -> list[NormalizedSearchSource]:
+        """搜索。
+
+        Args:
+            request: request 参数。
+        """
         pass
 
 
 class TavilyApiClient:
+    """表示 处理 tavily api client 的后端数据结构或服务对象。"""
+
     def __init__(self, config: TavilyConfig) -> None:
+        """初始化对象实例。
+
+        Args:
+            config: config 参数。
+        """
         self.config = config
 
     async def search(self, request: TavilySearchRequest) -> dict[str, Any]:
+        """搜索。
+
+        Args:
+            request: request 参数。
+        """
         payload = {
             "api_key": self.config.api_key,
             "query": request.query,
@@ -175,10 +234,17 @@ class TavilyApiClient:
         return data
 
     def _safe_error(self, value: object) -> str:
+        """执行 处理 safe error 的内部辅助逻辑。
+
+        Args:
+            value: value 参数。
+        """
         return sanitize_text(value, extra_sensitive_values=[self.config.api_key])
 
 
 class TavilySearchProvider:
+    """表示 处理 tavily search provider 的后端数据结构或服务对象。"""
+
     name = PROVIDER_TAVILY
 
     def __init__(
@@ -187,10 +253,23 @@ class TavilySearchProvider:
         client: TavilyClientProtocol,
         sensitive_values: Iterable[str | None] = (),
     ) -> None:
+        """初始化对象实例。
+
+        Args:
+            client: client 参数。
+            sensitive_values: sensitive_values 参数。
+        """
         self.client = client
         self.sensitive_values = tuple(sensitive_values)
 
-    async def search(self, request: TavilySearchRequest) -> list[NormalizedSearchSource]:
+    async def search(
+        self, request: TavilySearchRequest
+    ) -> list[NormalizedSearchSource]:
+        """搜索。
+
+        Args:
+            request: request 参数。
+        """
         payload = await self.client.search(request)
         return normalize_tavily_sources(
             payload,
@@ -199,6 +278,8 @@ class TavilySearchProvider:
 
 
 class BraveSearchProvider:
+    """表示 处理 brave search provider 的后端数据结构或服务对象。"""
+
     name = PROVIDER_BRAVE
 
     def __init__(
@@ -209,20 +290,40 @@ class BraveSearchProvider:
         timeout_seconds: float,
         sensitive_values: Iterable[str | None] = (),
     ) -> None:
+        """初始化对象实例。
+
+        Args:
+            api_key: api_key 参数。
+            base_url: base_url 参数。
+            timeout_seconds: timeout_seconds 参数。
+            sensitive_values: sensitive_values 参数。
+        """
         self.api_key = api_key
         self.base_url = base_url
         self.timeout_seconds = timeout_seconds
         self.sensitive_values = (api_key, *tuple(sensitive_values))
 
-    async def search(self, request: TavilySearchRequest) -> list[NormalizedSearchSource]:
+    async def search(
+        self, request: TavilySearchRequest
+    ) -> list[NormalizedSearchSource]:
+        """搜索。
+
+        Args:
+            request: request 参数。
+        """
         headers = {
             "Accept": "application/json",
             "X-Subscription-Token": self.api_key,
         }
-        params: dict[str, str | int] = {"q": request.query, "count": request.max_results}
+        params: dict[str, str | int] = {
+            "q": request.query,
+            "count": request.max_results,
+        }
         try:
             async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-                response = await client.get(self.base_url, headers=headers, params=params)
+                response = await client.get(
+                    self.base_url, headers=headers, params=params
+                )
         except httpx.TimeoutException as exc:
             raise SearchProviderError("Brave search request timed out") from exc
         except httpx.TransportError as exc:
@@ -242,10 +343,17 @@ class BraveSearchProvider:
         )
 
     def _safe_error(self, value: object) -> str:
+        """执行 处理 safe error 的内部辅助逻辑。
+
+        Args:
+            value: value 参数。
+        """
         return sanitize_text(value, extra_sensitive_values=self.sensitive_values)
 
 
 class DuckDuckGoSearchProvider:
+    """表示 处理 duck duck go search provider 的后端数据结构或服务对象。"""
+
     name = PROVIDER_DUCKDUCKGO
 
     def __init__(
@@ -255,11 +363,25 @@ class DuckDuckGoSearchProvider:
         timeout_seconds: float,
         sensitive_values: Iterable[str | None] = (),
     ) -> None:
+        """初始化对象实例。
+
+        Args:
+            base_url: base_url 参数。
+            timeout_seconds: timeout_seconds 参数。
+            sensitive_values: sensitive_values 参数。
+        """
         self.base_url = base_url
         self.timeout_seconds = timeout_seconds
         self.sensitive_values = tuple(sensitive_values)
 
-    async def search(self, request: TavilySearchRequest) -> list[NormalizedSearchSource]:
+    async def search(
+        self, request: TavilySearchRequest
+    ) -> list[NormalizedSearchSource]:
+        """搜索。
+
+        Args:
+            request: request 参数。
+        """
         params: dict[str, str] = {
             "q": request.query,
             "format": "json",
@@ -279,9 +401,13 @@ class DuckDuckGoSearchProvider:
         try:
             payload = response.json()
         except ValueError as exc:
-            raise SearchProviderError("DuckDuckGo search returned invalid JSON") from exc
+            raise SearchProviderError(
+                "DuckDuckGo search returned invalid JSON"
+            ) from exc
         if not isinstance(payload, dict):
-            raise SearchProviderError("DuckDuckGo search returned invalid response shape")
+            raise SearchProviderError(
+                "DuckDuckGo search returned invalid response shape"
+            )
         return normalize_duckduckgo_sources(
             payload,
             extra_sensitive_values=self.sensitive_values,
@@ -289,10 +415,17 @@ class DuckDuckGoSearchProvider:
         )
 
     def _safe_error(self, value: object) -> str:
+        """执行 处理 safe error 的内部辅助逻辑。
+
+        Args:
+            value: value 参数。
+        """
         return sanitize_text(value, extra_sensitive_values=self.sensitive_values)
 
 
 class SearchProviderChain:
+    """表示 搜索 provider chain 的后端数据结构或服务对象。"""
+
     def __init__(
         self,
         providers: Sequence[SearchProvider],
@@ -301,12 +434,25 @@ class SearchProviderChain:
         max_results: int,
         sensitive_values: Iterable[str | None] = (),
     ) -> None:
+        """初始化对象实例。
+
+        Args:
+            providers: providers 参数。
+            fallback_on_empty: fallback_on_empty 参数。
+            max_results: max_results 参数。
+            sensitive_values: sensitive_values 参数。
+        """
         self.providers = tuple(providers)
         self.fallback_on_empty = fallback_on_empty
         self.max_results = max_results
         self.sensitive_values = tuple(sensitive_values)
 
     async def search(self, request: TavilySearchRequest) -> SearchProviderChainResult:
+        """搜索。
+
+        Args:
+            request: request 参数。
+        """
         attempted: list[str] = []
         failures: list[ProviderFailure] = []
         fallback_reason: str | None = None
@@ -353,6 +499,12 @@ class SearchProviderChain:
         )
 
     def _failure(self, provider: str, exc: Exception) -> ProviderFailure:
+        """执行 处理 failure 的内部辅助逻辑。
+
+        Args:
+            provider: provider 参数。
+            exc: exc 参数。
+        """
         safe_message = sanitize_text(exc, extra_sensitive_values=self.sensitive_values)
         if "traceback" in safe_message.lower():
             safe_message = "内部错误已脱敏"
@@ -364,6 +516,8 @@ class SearchProviderChain:
 
 
 class SearchWebTool:
+    """表示 搜索 web tool 的后端数据结构或服务对象。"""
+
     def __init__(
         self,
         *,
@@ -373,6 +527,15 @@ class SearchWebTool:
         provider_chain: SearchProviderChain | None = None,
         sensitive_values: Iterable[str | None] = (),
     ) -> None:
+        """初始化对象实例。
+
+        Args:
+            session: session 参数。
+            config: config 参数。
+            client: client 参数。
+            provider_chain: provider_chain 参数。
+            sensitive_values: sensitive_values 参数。
+        """
         self.session = session
         self.config = config
         self.sensitive_values = tuple(sensitive_values)
@@ -398,6 +561,13 @@ class SearchWebTool:
         user_id: str,
         query: str,
     ) -> SearchWebResult:
+        """搜索。
+
+        Args:
+            task_id: task_id 参数。
+            user_id: user_id 参数。
+            query: query 参数。
+        """
         request = TavilySearchRequest(
             task_id=task_id,
             user_id=user_id,
@@ -452,6 +622,15 @@ class SearchWebTool:
         output_text: str | None,
         error_message: str | None,
     ) -> None:
+        """执行 记录 log 的内部辅助逻辑。
+
+        Args:
+            task_id: task_id 参数。
+            status: status 参数。
+            input_text: input_text 参数。
+            output_text: output_text 参数。
+            error_message: error_message 参数。
+        """
         self.session.add(
             ToolLog(
                 task_id=task_id,
@@ -465,6 +644,11 @@ class SearchWebTool:
         await self.session.flush()
 
     def _request_summary(self, request: TavilySearchRequest) -> str:
+        """执行 处理 request summary 的内部辅助逻辑。
+
+        Args:
+            request: request 参数。
+        """
         return self._safe_json(
             {
                 "tool": SEARCH_WEB_TOOL_NAME,
@@ -480,6 +664,12 @@ class SearchWebTool:
         result: SearchWebResult,
         chain_result: SearchProviderChainResult,
     ) -> str:
+        """执行 处理 response summary 的内部辅助逻辑。
+
+        Args:
+            result: result 参数。
+            chain_result: chain_result 参数。
+        """
         return self._safe_json(
             {
                 "status": TOOL_STATUS_SUCCEEDED,
@@ -504,6 +694,13 @@ class SearchWebTool:
         attempted_providers: Sequence[str] = (),
         failures: Sequence[ProviderFailure] = (),
     ) -> str:
+        """执行 处理 error summary 的内部辅助逻辑。
+
+        Args:
+            error: error 参数。
+            attempted_providers: attempted_providers 参数。
+            failures: failures 参数。
+        """
         return self._safe_json(
             {
                 "status": TOOL_STATUS_FAILED,
@@ -514,6 +711,11 @@ class SearchWebTool:
         )
 
     def _safe_error(self, value: object) -> str:
+        """执行 处理 safe error 的内部辅助逻辑。
+
+        Args:
+            value: value 参数。
+        """
         text = sanitize_text(
             value,
             extra_sensitive_values=self._extra_sensitive_values(),
@@ -523,6 +725,11 @@ class SearchWebTool:
         return text
 
     def _safe_json(self, payload: dict[str, Any]) -> str:
+        """执行 处理 safe json 的内部辅助逻辑。
+
+        Args:
+            payload: payload 参数。
+        """
         return sanitize_text(
             json.dumps(
                 payload,
@@ -535,6 +742,7 @@ class SearchWebTool:
         )
 
     def _extra_sensitive_values(self) -> tuple[str | None, ...]:
+        """执行 处理 extra sensitive values 的内部辅助逻辑。"""
         return (
             self.config.api_key,
             self.config.brave_search_api_key,
@@ -543,6 +751,11 @@ class SearchWebTool:
 
 
 def build_tavily_config(settings: Any) -> TavilyConfig:
+    """构建 tavily config。
+
+    Args:
+        settings: settings 参数。
+    """
     timeout = getattr(settings, "search_provider_timeout_seconds", None)
     return TavilyConfig(
         base_url=settings.tavily_base_url,
@@ -579,6 +792,13 @@ def build_search_provider_chain(
     tavily_client: TavilyClientProtocol | None = None,
     sensitive_values: Iterable[str | None] = (),
 ) -> SearchProviderChain:
+    """构建 search provider chain。
+
+    Args:
+        config: config 参数。
+        tavily_client: tavily_client 参数。
+        sensitive_values: sensitive_values 参数。
+    """
     extra_sensitive_values = (
         config.api_key,
         config.brave_search_api_key,
@@ -620,6 +840,11 @@ def build_search_provider_chain(
 
 
 def parse_search_provider_order(value: object) -> tuple[str, ...]:
+    """解析 search provider order。
+
+    Args:
+        value: value 参数。
+    """
     if isinstance(value, str):
         raw_names = value.split(",")
     elif isinstance(value, Iterable):
@@ -643,6 +868,12 @@ def normalize_tavily_sources(
     *,
     extra_sensitive_values: Iterable[str | None] = (),
 ) -> list[NormalizedSearchSource]:
+    """规范化 tavily sources。
+
+    Args:
+        payload: payload 参数。
+        extra_sensitive_values: extra_sensitive_values 参数。
+    """
     results = payload.get("results")
     if not isinstance(results, list):
         return []
@@ -683,6 +914,12 @@ def normalize_brave_sources(
     *,
     extra_sensitive_values: Iterable[str | None] = (),
 ) -> list[NormalizedSearchSource]:
+    """规范化 brave sources。
+
+    Args:
+        payload: payload 参数。
+        extra_sensitive_values: extra_sensitive_values 参数。
+    """
     web = payload.get("web")
     results = web.get("results") if isinstance(web, dict) else payload.get("results")
     if not isinstance(results, list):
@@ -721,6 +958,13 @@ def normalize_duckduckgo_sources(
     extra_sensitive_values: Iterable[str | None] = (),
     max_results: int,
 ) -> list[NormalizedSearchSource]:
+    """规范化 duckduckgo sources。
+
+    Args:
+        payload: payload 参数。
+        extra_sensitive_values: extra_sensitive_values 参数。
+        max_results: max_results 参数。
+    """
     candidates: list[dict[str, Any]] = []
     abstract_url = payload.get("AbstractURL")
     abstract_text = payload.get("AbstractText")
@@ -739,7 +983,9 @@ def normalize_duckduckgo_sources(
 
     sources: list[NormalizedSearchSource] = []
     for index, item in enumerate(candidates, start=1):
-        url = _safe_field(item.get("FirstURL") or item.get("url"), extra_sensitive_values)
+        url = _safe_field(
+            item.get("FirstURL") or item.get("url"), extra_sensitive_values
+        )
         title = _safe_field(
             item.get("Text") or item.get("title") or item.get("Name"),
             extra_sensitive_values,
@@ -767,6 +1013,11 @@ def normalize_duckduckgo_sources(
 
 
 def _flatten_duckduckgo_topics(items: Sequence[Any]) -> list[dict[str, Any]]:
+    """执行 处理 flatten duckduckgo topics 的内部辅助逻辑。
+
+    Args:
+        items: items 参数。
+    """
     flattened: list[dict[str, Any]] = []
     for item in items:
         if not isinstance(item, dict):
@@ -785,6 +1036,13 @@ def _provider_metadata(
     provider: str,
     source_rank: int,
 ) -> dict[str, Any]:
+    """执行 处理 provider metadata 的内部辅助逻辑。
+
+    Args:
+        item: item 参数。
+        provider: provider 参数。
+        source_rank: source_rank 参数。
+    """
     metadata: dict[str, Any] = {"provider": provider, "source_rank": source_rank}
     for key in ("score", "published_date"):
         value = item.get(key)
@@ -793,7 +1051,14 @@ def _provider_metadata(
     return metadata
 
 
-def _dedupe_sources(sources: Sequence[NormalizedSearchSource]) -> list[NormalizedSearchSource]:
+def _dedupe_sources(
+    sources: Sequence[NormalizedSearchSource],
+) -> list[NormalizedSearchSource]:
+    """执行 处理 dedupe sources 的内部辅助逻辑。
+
+    Args:
+        sources: sources 参数。
+    """
     deduped: list[NormalizedSearchSource] = []
     seen: set[str] = set()
     for source in sources:
@@ -806,6 +1071,12 @@ def _dedupe_sources(sources: Sequence[NormalizedSearchSource]) -> list[Normalize
 
 
 def _source_key(url: str, title: str) -> str:
+    """执行 处理 source key 的内部辅助逻辑。
+
+    Args:
+        url: url 参数。
+        title: title 参数。
+    """
     parts = urlsplit(url.strip())
     if parts.scheme and parts.netloc:
         path = parts.path.rstrip("/") or "/"
@@ -817,12 +1088,23 @@ def _safe_field(
     value: object,
     extra_sensitive_values: Iterable[str | None],
 ) -> str:
+    """执行 处理 safe field 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+        extra_sensitive_values: extra_sensitive_values 参数。
+    """
     if value is None:
         return ""
     return sanitize_text(value, extra_sensitive_values=extra_sensitive_values).strip()
 
 
 def _failure_category(exc: Exception) -> str:
+    """执行 处理 failure category 的内部辅助逻辑。
+
+    Args:
+        exc: exc 参数。
+    """
     if isinstance(exc, (TimeoutError, httpx.TimeoutException)):
         return "timeout"
     text = str(exc).lower()
@@ -832,6 +1114,12 @@ def _failure_category(exc: Exception) -> str:
 
 
 def _truncate(value: str, limit: int = 1000) -> str:
+    """执行 处理 truncate 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+        limit: limit 参数。
+    """
     if len(value) <= limit:
         return value
     return f"{value[:limit]}..."

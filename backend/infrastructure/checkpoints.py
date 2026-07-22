@@ -11,14 +11,22 @@ from sqlalchemy.engine import make_url
 
 
 class AgentCheckpointConfigurationError(ValueError):
+    """表示 处理 agent checkpoint configuration error 的后端数据结构或服务对象。"""
+
     pass
 
 
 def build_checkpoint_serializer() -> JsonPlusSerializer:
+    """构建 checkpoint serializer。"""
     return JsonPlusSerializer(allowed_msgpack_modules=None)
 
 
 def normalize_checkpoint_database_url(database_url: str) -> str:
+    """规范化 checkpoint database url。
+
+    Args:
+        database_url: database_url 参数。
+    """
     try:
         url = make_url(database_url)
     except Exception as exc:
@@ -29,9 +37,7 @@ def normalize_checkpoint_database_url(database_url: str) -> str:
         raise AgentCheckpointConfigurationError(
             "Agent checkpoint persistence requires PostgreSQL"
         )
-    return url.set(drivername="postgresql").render_as_string(
-        hide_password=False
-    )
+    return url.set(drivername="postgresql").render_as_string(hide_password=False)
 
 
 @asynccontextmanager
@@ -41,6 +47,13 @@ async def open_agent_checkpointer(
     saver_factory: Callable[..., Any] | None = None,
     serializer: SerializerProtocol | None = None,
 ) -> AsyncIterator[Any]:
+    """处理 open agent checkpointer。
+
+    Args:
+        database_url: database_url 参数。
+        saver_factory: saver_factory 参数。
+        serializer: serializer 参数。
+    """
     connection_string = normalize_checkpoint_database_url(database_url)
     factory = saver_factory or AsyncPostgresSaver.from_conn_string
     serde = serializer or build_checkpoint_serializer()

@@ -18,6 +18,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    """执行数据库迁移升级步骤。"""
     op.add_column(
         "memories",
         sa.Column(
@@ -47,6 +48,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """执行数据库迁移回滚步骤。"""
     op.drop_column("processed_messages", "chat_id")
     op.drop_column("memories", "deleted_at")
     op.drop_column("memories", "is_active")

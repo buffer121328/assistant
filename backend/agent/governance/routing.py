@@ -23,23 +23,33 @@ _MAX_REASON_LENGTH = 300
 
 
 class AgentRoutingError(ValueError):
+    """表示 处理 agent routing error 的后端数据结构或服务对象。"""
+
     pass
 
 
 class NoAgentRouteCandidatesError(AgentRoutingError):
+    """表示 处理 no agent route candidates error 的后端数据结构或服务对象。"""
+
     pass
 
 
 class InvalidAgentRouteDecisionError(AgentRoutingError):
+    """表示 处理 invalid agent route decision error 的后端数据结构或服务对象。"""
+
     pass
 
 
 class AgentRouteModelError(AgentRoutingError):
+    """表示 处理 agent route model error 的后端数据结构或服务对象。"""
+
     pass
 
 
 @dataclass(frozen=True)
 class AgentRouteCandidate:
+    """表示 处理 agent route candidate 的后端数据结构或服务对象。"""
+
     capability_id: str
     task_type: str
     display_name: str
@@ -48,6 +58,8 @@ class AgentRouteCandidate:
 
 @dataclass(frozen=True)
 class AgentRouteDecision:
+    """表示 处理 agent route decision 的后端数据结构或服务对象。"""
+
     capability_id: str
     task_type: str
     confidence: float
@@ -57,6 +69,11 @@ class AgentRouteDecision:
 def build_agent_route_candidates(
     registry: CapabilityRegistry,
 ) -> tuple[AgentRouteCandidate, ...]:
+    """构建 agent route candidates。
+
+    Args:
+        registry: registry 参数。
+    """
     candidates = tuple(
         AgentRouteCandidate(
             capability_id=metadata.id,
@@ -80,6 +97,12 @@ def build_agent_route_messages(
     input_text: str,
     candidates: tuple[AgentRouteCandidate, ...],
 ) -> tuple[GatewayMessage, ...]:
+    """构建 agent route messages。
+
+    Args:
+        input_text: input_text 参数。
+        candidates: candidates 参数。
+    """
     payload = {
         "input": input_text,
         "candidates": [
@@ -117,6 +140,12 @@ def parse_agent_route_decision(
     content: str,
     candidates: tuple[AgentRouteCandidate, ...],
 ) -> AgentRouteDecision:
+    """解析 agent route decision。
+
+    Args:
+        content: content 参数。
+        candidates: candidates 参数。
+    """
     try:
         payload = json.loads(content)
     except (json.JSONDecodeError, TypeError) as exc:
@@ -155,4 +184,5 @@ def parse_agent_route_decision(
 
 
 def _invalid_decision() -> InvalidAgentRouteDecisionError:
+    """执行 处理 invalid decision 的内部辅助逻辑。"""
     return InvalidAgentRouteDecisionError("Invalid Agent route decision")

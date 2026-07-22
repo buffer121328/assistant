@@ -788,6 +788,48 @@ class TaskWindow(QMainWindow):
                 self.status_label.setText(f"任务状态：{status}")
                 if status in {"success", "failed", "waiting_approval", "cancelled"}:
                     self.refresh_conversation_messages()
+        elif isinstance(event_type, str) and (
+            event_type.startswith("task.budget")
+            or event_type.startswith("task.recovery")
+        ):
+            diagnostic = self._format_task_diagnostic(payload)
+            if diagnostic:
+                if self.task_result.toPlainText() in {"尚未选择任务", "等待模型输出…"}:
+                    self.task_result.clear()
+                if self.task_result.toPlainText():
+                    self.task_result.appendPlainText("")
+                self.task_result.appendPlainText(diagnostic)
+
+    def _format_task_diagnostic(self, payload: dict) -> str:
+        lines: list[str] = []
+        stop_reason = payload.get("stop_reason")
+        if isinstance(stop_reason, str) and stop_reason:
+            lines.append(f"停止原因：{stop_reason}")
+        budget = payload.get("budget")
+        if isinstance(budget, dict):
+            used = budget.get("used")
+            if isinstance(used, dict):
+                parts = []
+                for label, key in (
+                    ("steps", "steps"),
+                    ("tools", "tool_calls"),
+                    ("input_tokens", "input_tokens"),
+                    ("output_tokens", "output_tokens"),
+                ):
+                    value = used.get(key)
+                    if isinstance(value, int | float):
+                        parts.append(f"{label}={value}")
+                if parts:
+                    lines.append("预算使用：" + ", ".join(parts))
+        recovery_status = payload.get("recovery_status")
+        if isinstance(recovery_status, str) and recovery_status:
+            retryable = payload.get("retryable")
+            retry_label = "可重试" if retryable else "不可自动重试"
+            lines.append(f"恢复状态：{recovery_status}（{retry_label}）")
+        reason = payload.get("reason")
+        if isinstance(reason, str) and reason:
+            lines.append(f"原因：{reason}")
+        return "\n".join(lines)
 
     def _tasks_refreshed(self, value: object) -> None:
         if not isinstance(value, list):

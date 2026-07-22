@@ -23,11 +23,15 @@ _ROLE_PATTERN = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 
 
 class AgentDecisionError(ValueError):
+    """表示 处理 agent decision error 的后端数据结构或服务对象。"""
+
     pass
 
 
 @dataclass(frozen=True)
 class AgentToolCall:
+    """表示 处理 agent tool call 的后端数据结构或服务对象。"""
+
     call_id: str
     tool_name: str
     arguments: dict[str, Any] = field(default_factory=dict)
@@ -35,6 +39,8 @@ class AgentToolCall:
 
 @dataclass(frozen=True)
 class AgentDecision:
+    """表示 处理 agent decision 的后端数据结构或服务对象。"""
+
     action: AgentAction
     plan: tuple[str, ...] = ()
     answer: str | None = None
@@ -45,6 +51,8 @@ class AgentDecision:
 
 @dataclass(frozen=True)
 class WorkPlanStep:
+    """表示 处理 work plan step 的后端数据结构或服务对象。"""
+
     objective: str
     acceptance_criteria: tuple[str, ...]
     agent_role: str | None = None
@@ -52,18 +60,24 @@ class WorkPlanStep:
 
 @dataclass(frozen=True)
 class WorkPlan:
+    """表示 处理 work plan 的后端数据结构或服务对象。"""
+
     goal: str
     steps: tuple[WorkPlanStep, ...]
 
 
 @dataclass(frozen=True)
 class ReviewDecision:
+    """表示 处理 review decision 的后端数据结构或服务对象。"""
+
     status: ReviewStatus
     feedback: str
 
 
 @dataclass(frozen=True)
 class AgentModelRequest:
+    """表示 处理 agent model request 的后端数据结构或服务对象。"""
+
     task_id: str
     user_id: str
     task_type: str
@@ -73,14 +87,39 @@ class AgentModelRequest:
 
 
 class AgentModelProtocol(Protocol):
-    async def create_plan(self, request: AgentModelRequest) -> WorkPlan: ...
+    """表示 处理 agent model protocol 的后端数据结构或服务对象。"""
 
-    async def decide(self, request: AgentModelRequest) -> AgentDecision: ...
+    async def create_plan(self, request: AgentModelRequest) -> WorkPlan:
+        """创建 plan。
 
-    async def review(self, request: AgentModelRequest) -> ReviewDecision: ...
+        Args:
+            request: request 参数。
+        """
+        ...
+
+    async def decide(self, request: AgentModelRequest) -> AgentDecision:
+        """处理 decide。
+
+        Args:
+            request: request 参数。
+        """
+        ...
+
+    async def review(self, request: AgentModelRequest) -> ReviewDecision:
+        """处理 review。
+
+        Args:
+            request: request 参数。
+        """
+        ...
 
 
 def parse_agent_decision(value: str) -> AgentDecision:
+    """解析 agent decision。
+
+    Args:
+        value: value 参数。
+    """
     try:
         payload = json.loads(value)
     except (TypeError, json.JSONDecodeError) as exc:
@@ -163,6 +202,11 @@ def parse_agent_decision(value: str) -> AgentDecision:
 
 
 def parse_work_plan(value: str) -> WorkPlan:
+    """解析 work plan。
+
+    Args:
+        value: value 参数。
+    """
     payload = _parse_json_object(value, "Work plan")
     goal = _bounded_text(payload.get("goal"), "Work plan goal")
     raw_steps = payload.get("steps")
@@ -208,6 +252,11 @@ def parse_work_plan(value: str) -> WorkPlan:
 
 
 def parse_review_decision(value: str) -> ReviewDecision:
+    """解析 review decision。
+
+    Args:
+        value: value 参数。
+    """
     payload = _parse_json_object(value, "Review decision")
     status = payload.get("status")
     if status not in {"pass", "retry", "replan", "escalate", "fail"}:
@@ -229,6 +278,16 @@ def build_agent_model_request(
     sensitive_values: tuple[str | None, ...] = (),
     prompt_builder: Any | None = None,
 ) -> AgentModelRequest:
+    """构建 agent model request。
+
+    Args:
+        run_input: run_input 参数。
+        tool_schemas: tool_schemas 参数。
+        history: history 参数。
+        work_plan: work_plan 参数。
+        sensitive_values: sensitive_values 参数。
+        prompt_builder: prompt_builder 参数。
+    """
     plan = run_input.plan
     context = run_input.context
     system_payload = {
@@ -341,6 +400,12 @@ def build_work_plan_request(
     *,
     sensitive_values: tuple[str | None, ...] = (),
 ) -> AgentModelRequest:
+    """构建 work plan request。
+
+    Args:
+        run_input: run_input 参数。
+        sensitive_values: sensitive_values 参数。
+    """
     plan = run_input.plan
     context = run_input.context
     payload = {
@@ -377,6 +442,14 @@ def build_review_model_request(
     candidate_result: str,
     sensitive_values: tuple[str | None, ...] = (),
 ) -> AgentModelRequest:
+    """构建 review model request。
+
+    Args:
+        run_input: run_input 参数。
+        work_plan: work_plan 参数。
+        candidate_result: candidate_result 参数。
+        sensitive_values: sensitive_values 参数。
+    """
     payload = {
         "goal": run_input.plan.goal,
         "output_format": run_input.plan.output_format,
@@ -394,6 +467,11 @@ def build_review_model_request(
 
 
 def _parse_display_plan(value: object) -> tuple[str, ...]:
+    """执行 解析 display plan 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+    """
     if not isinstance(value, list) or len(value) > _MAX_DISPLAY_PLAN_STEPS:
         raise AgentDecisionError("Agent display plan is invalid")
     steps: list[str] = []
@@ -408,6 +486,12 @@ def _parse_display_plan(value: object) -> tuple[str, ...]:
 
 
 def _parse_json_object(value: str, label: str) -> dict[str, Any]:
+    """执行 解析 json object 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+        label: label 参数。
+    """
     try:
         payload = json.loads(value)
     except (TypeError, json.JSONDecodeError) as exc:
@@ -423,6 +507,13 @@ def _bounded_text(
     *,
     max_length: int = _MAX_DISPLAY_PLAN_STEP_LENGTH,
 ) -> str:
+    """执行 处理 bounded text 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+        label: label 参数。
+        max_length: max_length 参数。
+    """
     if not isinstance(value, str):
         raise AgentDecisionError(f"{label} must be text")
     normalized = value.strip()
@@ -432,6 +523,11 @@ def _bounded_text(
 
 
 def _work_plan_payload(work_plan: WorkPlan) -> dict[str, Any]:
+    """执行 处理 work plan payload 的内部辅助逻辑。
+
+    Args:
+        work_plan: work_plan 参数。
+    """
     return {
         "goal": work_plan.goal,
         "steps": [
@@ -450,6 +546,13 @@ def _phase_request(
     system_text: str,
     sensitive_values: tuple[str | None, ...],
 ) -> AgentModelRequest:
+    """执行 处理 phase request 的内部辅助逻辑。
+
+    Args:
+        run_input: run_input 参数。
+        system_text: system_text 参数。
+        sensitive_values: sensitive_values 参数。
+    """
     context = run_input.context
     messages = [
         GatewayMessage(
@@ -487,6 +590,12 @@ def _safe_json(
     payload: dict[str, Any],
     sensitive_values: tuple[str | None, ...],
 ) -> str:
+    """执行 处理 safe json 的内部辅助逻辑。
+
+    Args:
+        payload: payload 参数。
+        sensitive_values: sensitive_values 参数。
+    """
     return sanitize_text(
         json.dumps(
             payload,

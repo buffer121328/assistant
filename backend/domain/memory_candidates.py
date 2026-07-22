@@ -25,13 +25,22 @@ from domain.services import MemoryService
 
 @dataclass(frozen=True)
 class CandidatePipelineResult:
+    """表示 处理 candidate pipeline result 的后端数据结构或服务对象。"""
+
     status: str
     reason_code: str
     memory_id: str | None = None
 
 
 class MemoryPolicyService:
+    """表示 处理 memory policy service 的后端数据结构或服务对象。"""
+
     def __init__(self, session: AsyncSession) -> None:
+        """初始化对象实例。
+
+        Args:
+            session: session 参数。
+        """
         self.session = session
 
     async def set_never_remember(
@@ -43,6 +52,15 @@ class MemoryPolicyService:
         scope_id: str | None = None,
         enabled: bool = True,
     ) -> MemoryPolicy:
+        """处理 set never remember。
+
+        Args:
+            user_id: user_id 参数。
+            memory_type: memory_type 参数。
+            scope_kind: scope_kind 参数。
+            scope_id: scope_id 参数。
+            enabled: enabled 参数。
+        """
         key = f"never_remember:{memory_type}"
         item = await self.session.scalar(
             select(MemoryPolicy).where(
@@ -70,6 +88,14 @@ class MemoryPolicyService:
     async def blocks_candidate(
         self, *, user_id: str, memory_type: str, scope_kind: str, scope_id: str | None
     ) -> bool:
+        """处理 blocks candidate。
+
+        Args:
+            user_id: user_id 参数。
+            memory_type: memory_type 参数。
+            scope_kind: scope_kind 参数。
+            scope_id: scope_id 参数。
+        """
         key = f"never_remember:{memory_type}"
         return (
             await self.session.scalar(
@@ -86,6 +112,8 @@ class MemoryPolicyService:
 
 
 class MemoryCandidatePipeline:
+    """表示 处理 memory candidate pipeline 的后端数据结构或服务对象。"""
+
     def __init__(
         self,
         session: AsyncSession,
@@ -93,6 +121,13 @@ class MemoryCandidatePipeline:
         extractor: MemoryCandidateExtractor,
         allow_runtime_auto_activation: bool = False,
     ) -> None:
+        """初始化对象实例。
+
+        Args:
+            session: session 参数。
+            extractor: extractor 参数。
+            allow_runtime_auto_activation: allow_runtime_auto_activation 参数。
+        """
         self.session = session
         self.extractor = extractor
         self.allow_runtime_auto_activation = allow_runtime_auto_activation
@@ -100,6 +135,11 @@ class MemoryCandidatePipeline:
         self.policies = MemoryPolicyService(session)
 
     async def process(self, event: SourceEvent) -> CandidatePipelineResult:
+        """处理 process。
+
+        Args:
+            event: event 参数。
+        """
         source_safety = classify_memory_sensitivity(event.content)
         if source_safety.sensitivity == "forbidden":
             return CandidatePipelineResult("rejected", "forbidden_source")

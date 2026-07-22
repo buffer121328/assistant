@@ -24,6 +24,8 @@ from agent.memory.safety import memory_content_hash, normalize_memory_content
 
 @dataclass(frozen=True)
 class ReconciliationReport:
+    """表示 处理 reconciliation report 的后端数据结构或服务对象。"""
+
     missing_memory_ids: tuple[str, ...] = ()
     orphan_index_ids: tuple[str, ...] = ()
     deleted_orphan_count: int = 0
@@ -31,12 +33,23 @@ class ReconciliationReport:
 
 
 class SemanticIndexReconciler(Protocol):
+    """表示 处理 semantic index reconciler 的后端数据结构或服务对象。"""
+
     async def reconcile(
         self, *, user_id: str, active_memory_ids: tuple[str, ...]
-    ) -> ReconciliationReport: ...
+    ) -> ReconciliationReport:
+        """处理 reconcile。
+
+        Args:
+            user_id: user_id 参数。
+            active_memory_ids: active_memory_ids 参数。
+        """
+        ...
 
 
 class MemoryConsolidationService:
+    """表示 处理 memory consolidation service 的后端数据结构或服务对象。"""
+
     def __init__(
         self,
         session: AsyncSession,
@@ -44,6 +57,13 @@ class MemoryConsolidationService:
         reconciler: SemanticIndexReconciler | None = None,
         batch_limit: int = 200,
     ) -> None:
+        """初始化对象实例。
+
+        Args:
+            session: session 参数。
+            reconciler: reconciler 参数。
+            batch_limit: batch_limit 参数。
+        """
         self.session = session
         self.reconciler = reconciler
         self.batch_limit = max(1, min(batch_limit, 1_000))
@@ -51,6 +71,13 @@ class MemoryConsolidationService:
     async def run_daily(
         self, *, user_id: str, window_start: datetime, window_end: datetime
     ) -> MemoryConsolidationRun:
+        """运行 daily。
+
+        Args:
+            user_id: user_id 参数。
+            window_start: window_start 参数。
+            window_end: window_end 参数。
+        """
         existing = await self._existing(user_id, "daily", window_start, window_end)
         if existing is not None:
             return existing
@@ -113,6 +140,13 @@ class MemoryConsolidationService:
     async def run_weekly(
         self, *, user_id: str, window_start: datetime, window_end: datetime
     ) -> MemoryConsolidationRun:
+        """运行 weekly。
+
+        Args:
+            user_id: user_id 参数。
+            window_start: window_start 参数。
+            window_end: window_end 参数。
+        """
         existing = await self._existing(user_id, "weekly", window_start, window_end)
         if existing is not None:
             return existing
@@ -214,6 +248,14 @@ class MemoryConsolidationService:
     async def _existing(
         self, user_id: str, run_type: str, start: datetime, end: datetime
     ) -> MemoryConsolidationRun | None:
+        """执行 处理 existing 的内部辅助逻辑。
+
+        Args:
+            user_id: user_id 参数。
+            run_type: run_type 参数。
+            start: start 参数。
+            end: end 参数。
+        """
         return await self.session.scalar(
             select(MemoryConsolidationRun).where(
                 MemoryConsolidationRun.user_id == user_id,
@@ -229,6 +271,13 @@ class MemoryConsolidationService:
         memories: list[Memory],
         observed_at: datetime,
     ) -> int:
+        """执行 处理 merge duplicates 的内部辅助逻辑。
+
+        Args:
+            run: run 参数。
+            memories: memories 参数。
+            observed_at: observed_at 参数。
+        """
         groups: dict[str, list[Memory]] = {}
         for memory in memories:
             digest = memory.content_hash or memory_content_hash(memory.content)
@@ -275,6 +324,12 @@ class MemoryConsolidationService:
     async def _mark_conflicts(
         self, run: MemoryConsolidationRun, memories: list[Memory]
     ) -> int:
+        """执行 标记 conflicts 的内部辅助逻辑。
+
+        Args:
+            run: run 参数。
+            memories: memories 参数。
+        """
         conflicts = 0
         active = [item for item in memories if item.status == "active"]
         candidates = [item for item in memories if item.status == "candidate"]
@@ -315,6 +370,12 @@ class MemoryConsolidationService:
     async def _record_temporal_updates(
         self, run: MemoryConsolidationRun, memories: list[Memory]
     ) -> None:
+        """执行 记录 temporal updates 的内部辅助逻辑。
+
+        Args:
+            run: run 参数。
+            memories: memories 参数。
+        """
         for memory in memories:
             if memory.supersedes_id is None or memory.status != "active":
                 continue
@@ -338,6 +399,11 @@ class MemoryConsolidationService:
             )
 
     async def _reconcile(self, user_id: str) -> ReconciliationReport:
+        """执行 处理 reconcile 的内部辅助逻辑。
+
+        Args:
+            user_id: user_id 参数。
+        """
         if self.reconciler is None:
             return ReconciliationReport()
         active_ids = tuple(
@@ -384,6 +450,15 @@ class MemoryConsolidationService:
         created_by: str,
         evidence_id: str,
     ) -> MemoryLink:
+        """执行 处理 link 的内部辅助逻辑。
+
+        Args:
+            source_id: source_id 参数。
+            target_id: target_id 参数。
+            link_type: link_type 参数。
+            created_by: created_by 参数。
+            evidence_id: evidence_id 参数。
+        """
         existing = await self.session.scalar(
             select(MemoryLink).where(
                 MemoryLink.source_memory_id == source_id,
@@ -413,6 +488,14 @@ async def run_memory_consolidation_maintenance(
     user_limit: int = 50,
     batch_limit: int = 200,
 ) -> dict[str, object]:
+    """运行 memory consolidation maintenance。
+
+    Args:
+        session: session 参数。
+        now: now 参数。
+        user_limit: user_limit 参数。
+        batch_limit: batch_limit 参数。
+    """
     from datetime import UTC, timedelta
     from domain.models import User
 

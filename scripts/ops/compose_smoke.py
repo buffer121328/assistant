@@ -5,9 +5,13 @@ import json
 from pathlib import Path
 import subprocess
 from typing import Any
+from urllib import error as urllib_error
+from urllib import request as urllib_request
 
 
 PROJECT = "assistant-v5-integration"
+API_BASE_URL = "http://127.0.0.1:18000"
+INTEGRATION_API_TOKEN = "integration-only-token"
 BASE = (
     "docker",
     "compose",
@@ -35,6 +39,19 @@ def run_compose_smoke(*, run: Run = subprocess.run) -> dict[str, Any]:
         checks["compose_config"] = "passed"
         _command(run, "up", "-d", "--build", "--wait")
         checks["stack_health"] = "passed"
+        _http_check(f"{API_BASE_URL}/health")
+        checks["api_health"] = "passed"
+        _http_check(
+            f"{API_BASE_URL}/local/config",
+            expected_status=401,
+        )
+        _http_check(
+            f"{API_BASE_URL}/local/config",
+            authorization=f"Bearer {INTEGRATION_API_TOKEN}",
+        )
+        checks["api_auth"] = "passed"
+        _runtime_storage_checks(run)
+        checks["runtime_storage"] = "passed"
         migration = _command(
             run,
             "exec",
@@ -93,6 +110,45 @@ def _worker_ping(run: Run) -> None:
     )
     if "pong" not in result.stdout.lower():
         raise ComposeSmokeError("worker_ping_failed")
+
+
+def _http_check(
+    url: str,
+    *,
+    authorization: str | None = None,
+    expected_status: int = 200,
+) -> None:
+    headers = {}
+    if authorization is not None:
+        headers["Authorization"] = authorization
+    request = urllib_request.Request(url, headers=headers)
+    try:
+        with urllib_request.urlopen(request, timeout=10) as response:
+            status = response.status
+    except urllib_error.HTTPError as exc:
+        status = exc.code
+    except OSError as exc:
+        raise ComposeSmokeError("api_request_failed") from exc
+    if status != expected_status:
+        raise ComposeSmokeError("api_unexpected_status")
+
+
+def _runtime_storage_checks(run: Run) -> None:
+    probes = (
+        ("assistant-api", "/app/data/artifacts"),
+        ("assistant-api", "/app/data/workspace/sessions"),
+        ("celery-beat", "/app/run"),
+    )
+    for service, path in probes:
+        _command(
+            run,
+            "exec",
+            "-T",
+            service,
+            "sh",
+            "-c",
+            f"touch {path}/.compose-smoke && rm {path}/.compose-smoke",
+        )
 
 
 def _command(run: Run, *args: str) -> subprocess.CompletedProcess[str]:
