@@ -21,7 +21,7 @@
 | 受控工具调用 | 工具由 ToolRegistry 注册，按风险等级执行；高风险动作需要审批，工具调用和结果写入审计事件。 |
 | 桌面任务控制台 | Electron + React 展示任务列表、详情、timeline、logs、approvals、changes、settings 和 remote bridge。 |
 | 远程桥接账本 | `/api/remote-control/bridge/sessions` 记录 LangBot 入站消息、任务绑定、回推状态和重放信息。 |
-| Owner-scoped 本地 API | `/local/*` 请求显式携带 `user_id`，用于任务、会话、审批、记忆和账号连接的 owner 校验；Electron 在 User ID 未配置时只做健康/配置检查，不请求任务列表。 |
+| Owner-scoped 本地 API | `/local/*` 请求显式携带 `user_id`，用于任务、会话、审批、记忆和账号连接的 owner 校验。 |
 | 记忆与上下文 | 支持 conversation、knowledge、agentic memory、session workspace 和只读 workspace context 工具。 |
 | 可演进能力边界 | Skill acquisition、schedule、prompt bootstrap、search provider chain 等能力保持受治理、可测试、可回滚。 |
 
@@ -62,14 +62,15 @@
 .
 ├── backend/
 │   ├── app/                         # FastAPI 应用壳、路由、schema、依赖和支持模块
-│   ├── session/                     # 会话、上下文压缩、conversation memory blocks
-│   ├── tasks/                       # 任务生命周期、事件、命令、状态与结果回推
+│   ├── agent/                       # 能力注册、规划、治理、评审、Skill 和 Prompt 管理
 │   ├── channels/
 │   │   ├── desktop/                 # `/local/*` API、WebSocket 事件流、审批桥接
 │   │   └── langbot/                 # LangBot webhook、intent 路由、结果回推
 │   ├── domain/                      # SQLAlchemy 实体、状态枚举和纯领域规则边界
 │   │   ├── models/                  # 按领域拆分的模型包；外部仍从 `domain.models` 导入
 │   │   └── policies/                # 状态转换、审批绑定和脱敏等纯策略规则
+│   ├── evaluation/                  # 离线评测与发布门禁
+│   ├── features/                    # plan / learn / daily / office 四类任务入口
 │   ├── infrastructure/              # 基础设施适配层；按职责分层放置实现
 │   │   ├── adapters/                 # runtime port 的 SQLAlchemy adapter
 │   │   ├── persistence/              # 数据库 sessionmaker、checkpoint 持久化
@@ -77,31 +78,30 @@
 │   │   ├── security/                 # 本地 API 鉴权中间件
 │   │   ├── settings/                 # Settings 与配置加载
 │   │   └── telemetry/                # 日志、脱敏 telemetry、Observability/Langfuse 适配
-│   ├── agent/                       # Agent 规划、治理、建模、评审、Skill 和 Prompt 管理
-│   │   └── capabilities.py          # 能力注册、发现和内置 skill metadata 读取
+│   ├── integrations/                # 账号连接、通知提醒、凭据和外部 provider 适配
+│   ├── memory/                      # 短期/长期记忆、候选提取、检索、合并和索引 outbox
+│   ├── migrations/                  # Alembic 环境和数据库迁移版本
+│   ├── model_gateway/               # 模型网关、provider、模型池、fallback 和 streaming helpers
+│   ├── rag/                         # RAG/knowledge 导入、解析、检索、citation 唯一实现
+│   ├── resources/                   # prompt 模板、配置示例和内置 skillpacks
 │   ├── runtime/                     # Agent runner、LangGraph executor、预算、loop、子 Agent
 │   │   ├── runner_*.py              # 拆分后的 harness、执行边界、事件安全和类型模块；公共入口仍是 `runtime.runner`
 │   │   └── langgraph_*.py           # 扁平化后的 LangGraph 执行器模块；公共入口仍是 `runtime.langgraph_executor`
 │   ├── tools/                       # core registry/catalog/approval、builtin tools、providers、sandbox
 │   │   └── builtin/                 # 内置工具；agent_memory、search、schedule、workspace_context 已拆为子包
-│   ├── memory/                      # 短期/长期记忆、用户记忆服务、检索、候选、合并、索引 outbox
-│   ├── evaluation/                  # 离线评测与发布门禁
-│   ├── features/                    # plan / learn / daily / office 四类任务入口
-│   ├── integrations/                # 账号连接、通知提醒、凭据和外部 provider 适配
-│   ├── rag/                         # RAG/knowledge 导入、解析、检索、citation 唯一实现
-│   ├── model_gateway/               # 模型网关、provider、模型池、fallback 和 streaming helpers
-│   ├── resources/                   # prompt 模板、配置示例和内置 skillpacks
-│   └── workers/                     # Celery app 和后台任务入口
-│       └── heartbeat.py             # 定时维护、监控和调度心跳入口
+│   ├── session/                     # 会话、上下文压缩、conversation memory blocks
+│   ├── tasks/                       # 任务生命周期、事件、命令、状态与结果回推
+│   └── workers/                     # Celery app、运行时和 heartbeat 维护
 ├── frontend/
 │   └── desktop/                     # Electron + Vite + React 桌面端源码
 ├── legacy/
 │   └── desktop-qt/                  # 历史 Qt 桌面端源码，仅保留参考和旧测试
-├── docs/                            # 启动配置、阶段文档、前后端链路、API 手册和设计说明
+├── docs/                            # 启动配置、阶段文档、前后端链路和设计说明
 ├── img/                             # README 架构图 SVG
 ├── openspec/                        # OpenSpec 变更与规范资料
 ├── scripts/                         # 运维、评测、smoke 脚本
 ├── tests/                           # acceptance / evals / integration / unit
+├── .env.example                     # 本地配置占位模板
 ├── docker-compose.yml               # 后端、PostgreSQL、Redis、Celery、Beat 编排
 ├── Dockerfile                       # API 镜像
 ├── Dockerfile.ops                   # 运维/辅助镜像
