@@ -21,7 +21,7 @@ from domain.models import (
 )
 from common.redaction import sanitize_text
 
-from tools.core.approval import (
+from policies.tool_approval import (
     EXACT_APPROVAL_TOOLS,
     external_approval_binding,
     external_audit_arguments,

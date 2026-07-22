@@ -8,7 +8,8 @@ from typing import Any, Protocol
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from application.task_commands import _safe_json, _safe_summary
-from application.task_lifecycle import DISPATCHABLE_TASK_STATUSES, TaskNotFoundError
+from application.task_lifecycle import TaskNotFoundError
+from policies.task_status import DISPATCHABLE_TASK_STATUSES
 from domain.models import ProcessedMessage, Task, TaskStatus
 from infrastructure.repositories import (
     MessageRepository,

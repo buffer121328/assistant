@@ -8,7 +8,7 @@ from tools.builtin.artifacts import ProductivityTools
 from tools.builtin.browser import PlaywrightBrowserReader
 from tools.core.catalog import ToolDescriptor
 from tools.providers import CalendarProvider, EmailProvider
-from tools.core.approval import external_approval_binding
+from policies.tool_approval import external_approval_binding
 from tools.core.registry import ToolHandler, ToolInvocation, ToolRiskLevel, ToolSpec
 from tools.sandbox import SandboxRunner
 

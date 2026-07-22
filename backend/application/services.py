@@ -17,15 +17,14 @@ from application.task_lifecycle import (
     ApprovalDecisionResult,
     ApprovalNotFoundError,
     ApprovalService,
-    DISPATCHABLE_TASK_STATUSES,
     InvalidCommandTaskError,
     InvalidTaskStatusTransitionError,
-    TERMINAL_TASK_STATUSES,
     TaskNotFoundError,
     TaskService,
     TaskServiceError,
     UserNotFoundError,
 )
+from policies.task_status import DISPATCHABLE_TASK_STATUSES, TERMINAL_TASK_STATUSES
 
 __all__ = [
     "ApprovalDecisionConflictError",

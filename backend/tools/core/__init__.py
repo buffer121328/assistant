@@ -1,6 +1,10 @@
 """Core tool governance contracts, registry, catalog, and approvals."""
 
-from tools.core.approval import EXACT_APPROVAL_TOOLS, ExternalApprovalBinding, external_approval_binding
+from policies.tool_approval import (
+    EXACT_APPROVAL_TOOLS,
+    ExternalApprovalBinding,
+    external_approval_binding,
+)
 from .catalog import (
     StaticToolSource,
     ToolCandidateSelector,

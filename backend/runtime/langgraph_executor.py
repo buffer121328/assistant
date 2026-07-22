@@ -11,9 +11,9 @@ from langgraph.types import Command, interrupt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from runtime.budget import RunBudget
+from runtime.budget import STOP_REASON_DEADLINE, BudgetExceededError, RunBudget
 from domain.models import Approval, ApprovalStatus, Task
-from tools.core.approval import (
+from policies.tool_approval import (
     EXACT_APPROVAL_TOOLS,
     external_approval_binding,
     external_audit_arguments,
@@ -156,11 +156,16 @@ class LangGraphExecutor:
             graph_input: _ExecutionState | Command = Command(resume=True)
         else:
             graph_input = initial_state
-        async with asyncio.timeout(run_input.plan.timeout_seconds):
-            final_state = cast(
-                _ExecutionState,
-                await graph.ainvoke(graph_input, config=config),
-            )
+        try:
+            async with asyncio.timeout(run_input.plan.timeout_seconds):
+                final_state = cast(
+                    _ExecutionState,
+                    await graph.ainvoke(graph_input, config=config),
+                )
+        except BudgetExceededError as exc:
+            if exc.stop_reason == STOP_REASON_DEADLINE:
+                raise TimeoutError("Agent execution deadline exceeded") from exc
+            raise
 
         snapshot = await self._snapshot(graph, config)
         checkpoint_id = self._checkpoint_id(snapshot)

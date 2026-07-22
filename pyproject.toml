@@ -68,6 +68,7 @@ packages = [
     "backend/models",
     "backend/notifications",
     "backend/observability",
+    "backend/policies",
     "backend/scheduler",
     "backend/workers",
 ]
@@ -110,6 +111,7 @@ source = [
     "backend/models",
     "backend/notifications",
     "backend/observability",
+    "backend/policies",
     "backend/workers",
 ]
 
@@ -118,7 +120,7 @@ fail_under = 80
 show_missing = true
 
 [tool.mypy]
-files = ["backend/app", "backend/application", "backend/channels", "backend/common", "backend/domain", "backend/agent", "backend/runtime", "backend/tools", "backend/memory", "backend/capabilities", "backend/evaluation", "backend/infrastructure", "backend/integrations", "backend/knowledge", "backend/rag", "backend/models", "backend/notifications", "backend/observability", "backend/workers", "scripts", "tests"]
+files = ["backend/app", "backend/application", "backend/channels", "backend/common", "backend/domain", "backend/agent", "backend/runtime", "backend/tools", "backend/memory", "backend/capabilities", "backend/evaluation", "backend/infrastructure", "backend/integrations", "backend/knowledge", "backend/rag", "backend/models", "backend/notifications", "backend/observability", "backend/policies", "backend/workers", "scripts", "tests"]
 mypy_path = "backend"
 explicit_package_bases = true
 ignore_missing_imports = true

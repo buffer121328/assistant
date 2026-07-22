@@ -43,7 +43,7 @@ def test_project_has_clear_frontend_backend_legacy_layout() -> None:
         "skill_management",
     ):
         assert (ROOT / "backend" / "agent" / layer / "__init__.py").is_file()
-    for package in ("application", "common", "runtime", "tools", "memory"):
+    for package in ("application", "common", "policies", "runtime", "tools", "memory"):
         assert (ROOT / "backend" / package / "__init__.py").is_file()
     assert (ROOT / "backend" / "channels" / "langbot" / "router.py").is_file()
     assert (ROOT / "backend" / "channels" / "desktop" / "router.py").is_file()
@@ -52,6 +52,12 @@ def test_project_has_clear_frontend_backend_legacy_layout() -> None:
         "__init__.py",
         "models.py",
     ]
+    for module in (
+        "approval_requests",
+        "task_status",
+        "tool_approval",
+    ):
+        assert (ROOT / "backend" / "policies" / f"{module}.py").is_file()
     for module in (
         "account_connections",
         "conversation_memory",
@@ -214,6 +220,7 @@ def test_runtime_metadata_uses_new_layout_paths() -> None:
         "backend/models",
         "backend/notifications",
         "backend/observability",
+        "backend/policies",
         "backend/scheduler",
         "backend/workers",
     ]

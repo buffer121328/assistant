@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Iterable, Mapping
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from common.redaction import sanitize_text
 
 from domain.models import (
     Approval,
@@ -15,6 +13,8 @@ from domain.models import (
     TaskStatus,
     utc_now,
 )
+from policies.approval_requests import normalize_approval_requests
+from policies.task_status import VALID_TRANSITIONS
 from infrastructure.repositories import ApprovalRepository, TaskCreate, TaskRepository
 
 
@@ -65,66 +65,6 @@ class InvalidCommandTaskError(TaskServiceError):
 
     code = "invalid_command_task"
     status_code = 400
-
-
-VALID_TRANSITIONS: dict[TaskStatus, set[TaskStatus]] = {
-    TaskStatus.PENDING: {TaskStatus.RUNNING, TaskStatus.CANCELLED},
-    TaskStatus.RUNNING: {
-        TaskStatus.SUCCESS,
-        TaskStatus.FAILED,
-        TaskStatus.CANCELLED,
-        TaskStatus.WAITING_APPROVAL,
-    },
-    TaskStatus.WAITING_APPROVAL: {TaskStatus.PENDING, TaskStatus.CANCELLED},
-}
-
-TERMINAL_TASK_STATUSES = {
-    TaskStatus.SUCCESS.value,
-    TaskStatus.FAILED.value,
-    TaskStatus.CANCELLED.value,
-}
-DISPATCHABLE_TASK_STATUSES = TERMINAL_TASK_STATUSES | {
-    TaskStatus.WAITING_APPROVAL.value
-}
-
-
-def _normalize_approval_requests(
-    requests: Iterable[object],
-) -> tuple[tuple[str, str, str, str | None], ...]:
-    """执行 规范化 approval requests 的内部辅助逻辑。
-
-    Args:
-        requests: requests 参数。
-    """
-    normalized: list[tuple[str, str, str, str | None]] = []
-    for request in requests:
-        if isinstance(request, Mapping):
-            approval_type = request.get("approval_type")
-            subject = request.get("subject")
-            summary = request.get("summary")
-            tool_name = request.get("tool_name")
-        else:
-            approval_type = getattr(request, "approval_type", None)
-            subject = getattr(request, "subject", None)
-            summary = getattr(request, "summary", None)
-            tool_name = getattr(request, "tool_name", None)
-        if not isinstance(approval_type, str) or approval_type not in {
-            item.value for item in ApprovalType
-        }:
-            continue
-        if not isinstance(subject, str) or not subject.strip():
-            continue
-        safe_subject = sanitize_text(subject).strip()[:128]
-        safe_summary = sanitize_text(summary or "需要人工审批。").strip()[:1000]
-        safe_tool_name = (
-            sanitize_text(tool_name).strip()[:128]
-            if isinstance(tool_name, str) and tool_name.strip()
-            else None
-        )
-        item = (approval_type, safe_subject, safe_summary, safe_tool_name)
-        if item not in normalized:
-            normalized.append(item)
-    return tuple(normalized)
 
 
 class TaskService:
@@ -327,7 +267,7 @@ class TaskService:
                     task_id=task.id,
                     tool_name=tool_name,
                 )
-        normalized_requests = _normalize_approval_requests(approval_requests)
+        normalized_requests = normalize_approval_requests(approval_requests)
         for approval_type, subject, summary, requested_tool_name in normalized_requests:
             existing = await approval_repository.get_active_for_request(
                 task_id=task.id,
