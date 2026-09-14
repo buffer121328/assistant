@@ -1,0 +1,305 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+import hashlib
+import json
+import logging
+from typing import Protocol
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from domain.models import Task, ToolLog
+from infrastructure.telemetry.observability import Observability
+
+
+logger = logging.getLogger(__name__)
+
+try:
+    from prometheus_client import Counter
+except ModuleNotFoundError:
+
+    class _NoopCounter:
+        """表示 处理 noop counter 的后端数据结构或服务对象。"""
+
+        def labels(self, **_: object) -> _NoopCounter:
+            """处理 labels。
+
+            Args:
+                _: _ 参数。
+            """
+            return self
+
+        def inc(self) -> None:
+            """处理 inc。"""
+            return None
+
+    def Counter(*_: object, **__: object) -> _NoopCounter:
+        """处理 counter。
+
+        Args:
+            _: _ 参数。
+            __: __ 参数。
+        """
+        return _NoopCounter()
+
+
+QUALITY_SAMPLED = Counter("agent_quality_sampled_total", "Sampled Agent outputs")
+QUALITY_EVALUATIONS = Counter(
+    "agent_quality_evaluations_total",
+    "Agent quality evaluation outcomes",
+    ("status",),
+)
+QUALITY_LOW_SCORE = Counter(
+    "agent_quality_low_score_total",
+    "Agent quality scores below threshold",
+    ("dimension",),
+)
+
+
+@dataclass(frozen=True)
+class SamplingPolicy:
+    """表示 处理 sampling policy 的后端数据结构或服务对象。"""
+
+    rate: float = 0.0  # rate 对应的数据字段。
+    version: str = "judge-v1"  # version 对应的数据字段。
+
+    def __post_init__(self) -> None:
+        """完成数据类初始化后的补充处理。"""
+        if not 0.0 <= self.rate <= 1.0:
+            raise ValueError("Sampling rate must be between 0 and 1")
+        if not self.version.strip() or len(self.version) > 64:
+            raise ValueError("Sampling policy version is invalid")
+
+    def should_sample(self, task_id: str) -> bool:
+        """处理 should sample。
+
+        Args:
+            task_id: task_id 参数。
+        """
+        if self.rate <= 0:
+            return False
+        if self.rate >= 1:
+            return True
+        digest = hashlib.sha256(f"{self.version}:{task_id}".encode("utf-8")).digest()
+        bucket = int.from_bytes(digest[:8], "big") / float(2**64)
+        return bucket < self.rate
+
+
+@dataclass(frozen=True)
+class JudgeRequest:
+    """表示 处理 judge request 的后端数据结构或服务对象。"""
+
+    task_id: str  # task_id 对应的数据字段。
+    user_id: str  # user_id 对应的数据字段。
+    task_type: str  # task_type 对应的数据字段。
+    input_text: str  # input_text 对应的数据字段。
+    output_text: str  # output_text 对应的数据字段。
+    policy_version: str  # policy_version 对应的数据字段。
+
+
+@dataclass(frozen=True)
+class JudgeDecision:
+    """表示 处理 judge decision 的后端数据结构或服务对象。"""
+
+    relevance: float  # relevance 对应的数据字段。
+    completeness: float  # completeness 对应的数据字段。
+    faithfulness: float  # faithfulness 对应的数据字段。
+    rationale: str = ""  # rationale 对应的数据字段。
+
+    def __post_init__(self) -> None:
+        """完成数据类初始化后的补充处理。"""
+        for value in (self.relevance, self.completeness, self.faithfulness):
+            if not 0.0 <= value <= 1.0:
+                raise ValueError("Judge scores must be between 0 and 1")
+        if len(self.rationale) > 1_000:
+            raise ValueError("Judge rationale is too long")
+
+
+class JudgeModel(Protocol):
+    """表示 处理 judge model 的后端数据结构或服务对象。"""
+
+    async def evaluate(self, request: JudgeRequest) -> JudgeDecision:
+        """处理 evaluate。
+
+        Args:
+            request: request 参数。
+        """
+        ...
+
+
+class QualityEvaluator:
+    """表示 处理 quality evaluator 的后端数据结构或服务对象。"""
+
+    def __init__(
+        self,
+        *,
+        sampling: SamplingPolicy,
+        judge: JudgeModel,
+        observability: Observability,
+        threshold: float = 0.6,
+        max_input_chars: int = 10_000,
+        max_output_chars: int = 20_000,
+    ) -> None:
+        """初始化对象实例。
+
+        Args:
+            sampling: sampling 参数。
+            judge: judge 参数。
+            observability: observability 参数。
+            threshold: threshold 参数。
+            max_input_chars: max_input_chars 参数。
+            max_output_chars: max_output_chars 参数。
+        """
+        if not 0.0 <= threshold <= 1.0:
+            raise ValueError("Quality threshold must be between 0 and 1")
+        self.sampling = sampling
+        self.judge = judge
+        self.observability = observability
+        self.threshold = threshold
+        self.max_input_chars = max(1_000, min(max_input_chars, 20_000))
+        self.max_output_chars = max(1_000, min(max_output_chars, 50_000))
+
+    async def evaluate_task(
+        self,
+        *,
+        session: AsyncSession,
+        task: Task,
+    ) -> JudgeDecision | None:
+        """处理 evaluate task。
+
+        Args:
+            session: session 参数。
+            task: task 参数。
+        """
+        if (
+            task.status != "success"
+            or task.task_type not in {"agent", "plan", "learn", "daily", "office"}
+            or not task.result_text
+            or not self.sampling.should_sample(task.id)
+        ):
+            return None
+        tool_name = f"quality.judge:{self.sampling.version}"
+        task_id = task.id
+        existing = await session.scalar(
+            select(ToolLog)
+            .where(
+                ToolLog.task_id == task_id,
+                ToolLog.tool_name == tool_name,
+                ToolLog.status == "succeeded",
+            )
+            .limit(1)
+        )
+        if existing is not None and existing.output_text:
+            return _parse_stored_decision(existing.output_text)
+
+        QUALITY_SAMPLED.inc()
+        request = JudgeRequest(
+            task_id=task_id,
+            user_id=task.user_id,
+            task_type=task.task_type,
+            input_text=task.input_text[: self.max_input_chars],
+            output_text=task.result_text[: self.max_output_chars],
+            policy_version=self.sampling.version,
+        )
+        try:
+            score_trace_id: str | None = None
+            score_observation_id: str | None = None
+            with self.observability.observe(
+                "agent.quality.judge",
+                as_type="evaluator",
+                input={"task_id": task_id, "policy": self.sampling.version},
+                metadata={"task_id": task_id},
+                user_id=task.user_id,
+                session_id=task_id,
+                tags=("quality", self.sampling.version),
+                version=self.sampling.version,
+            ) as observation:
+                decision = await self.judge.evaluate(request)
+                score_trace_id = observation.trace_id
+                score_observation_id = observation.observation_id
+                observation.update(output={"status": "success"})
+            scores = {
+                "relevance": decision.relevance,
+                "completeness": decision.completeness,
+                "faithfulness": decision.faithfulness,
+            }
+            for dimension, value in scores.items():
+                self.observability.score(
+                    name=f"judge.{dimension}",
+                    value=value,
+                    data_type="NUMERIC",
+                    trace_id=score_trace_id,
+                    observation_id=score_observation_id,
+                    metadata={
+                        "task_id": task_id,
+                        "policy_version": self.sampling.version,
+                    },
+                )
+                if value < self.threshold:
+                    QUALITY_LOW_SCORE.labels(dimension=dimension).inc()
+                    logger.warning(
+                        "agent_quality_threshold_crossed task_id=%s dimension=%s",
+                        task_id,
+                        dimension,
+                    )
+            session.add(
+                ToolLog(
+                    task_id=task_id,
+                    tool_name=tool_name,
+                    status="succeeded",
+                    input_text=json.dumps(
+                        {"policy_version": self.sampling.version},
+                        separators=(",", ":"),
+                    ),
+                    output_text=json.dumps(
+                        {
+                            **scores,
+                            "rationale": decision.rationale,
+                        },
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                        sort_keys=True,
+                    ),
+                )
+            )
+            QUALITY_EVALUATIONS.labels(status="succeeded").inc()
+            await session.commit()
+            return decision
+        except Exception as exc:
+            await session.rollback()
+            session.add(
+                ToolLog(
+                    task_id=task_id,
+                    tool_name=tool_name,
+                    status="failed",
+                    input_text=json.dumps(
+                        {"policy_version": self.sampling.version},
+                        separators=(",", ":"),
+                    ),
+                    error_message=type(exc).__name__,
+                )
+            )
+            QUALITY_EVALUATIONS.labels(status="failed").inc()
+            await session.commit()
+            return None
+
+
+def _parse_stored_decision(value: str) -> JudgeDecision | None:
+    """执行 解析 stored decision 的内部辅助逻辑。
+
+    Args:
+        value: value 参数。
+    """
+    try:
+        payload = json.loads(value)
+        if not isinstance(payload, dict):
+            return None
+        return JudgeDecision(
+            relevance=float(payload["relevance"]),
+            completeness=float(payload["completeness"]),
+            faithfulness=float(payload["faithfulness"]),
+            rationale=str(payload.get("rationale", ""))[:1_000],
+        )
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+        return None

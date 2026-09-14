@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="440" viewBox="0 0 1240 440" role="img">
+<style>
+  .bg { fill: #f8fafc; }
+  .title { font: 700 26px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #0f172a; }
+  .label { font: 700 15px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #0f172a; }
+  .small { font: 400 13px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #334155; }
+  .tiny { font: 400 12px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #475569; }
+  .blue { stroke: #2563eb; fill: #eff6ff; }
+  .green { stroke: #16a34a; fill: #f0fdf4; }
+  .orange { stroke: #ea580c; fill: #fff7ed; }
+  .purple { stroke: #7c3aed; fill: #f5f3ff; }
+  .slate { stroke: #64748b; fill: #f8fafc; }
+  .red { stroke: #dc2626; fill: #fef2f2; }
+  .box { stroke-width: 1.6; rx: 14; }
+  .arrow { stroke: #334155; stroke-width: 1.8; fill: none; marker-end: url(#arrow); }
+  .dash { stroke-dasharray: 6 6; }
+  .lane { stroke: #cbd5e1; stroke-width: 1.2; stroke-dasharray: 5 5; fill: none; }
+</style>
+<defs>
+  <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+    <path d="M0,0 L0,6 L9,3 z" fill="#334155" />
+  </marker>
+</defs>
+<rect width="100%" height="100%" class="bg"/>
+<text x="32" y="44" text-anchor="start" class="title">扩展新工具：当前 tool_management 目录下的治理链路</text>
+<rect x="45" y="120" width="180" height="92" class="box orange" rx="14"/>
+<text x="135.0" y="148" text-anchor="middle" class="label">工具实现</text>
+<text x="135.0" y="172" text-anchor="middle" class="small">agent/tool_management</text>
+<rect x="275" y="120" width="180" height="92" class="box blue" rx="14"/>
+<text x="365.0" y="148" text-anchor="middle" class="label">ToolRegistry</text>
+<text x="365.0" y="172" text-anchor="middle" class="small">registry.py</text>
+<rect x="505" y="120" width="180" height="92" class="box red" rx="14"/>
+<text x="595.0" y="148" text-anchor="middle" class="label">Risk Policy</text>
+<text x="595.0" y="172" text-anchor="middle" class="small">风险等级与开关</text>
+<rect x="735" y="120" width="180" height="92" class="box red" rx="14"/>
+<text x="825.0" y="148" text-anchor="middle" class="label">Approval</text>
+<text x="825.0" y="172" text-anchor="middle" class="small">approval.py / 后端审批</text>
+<rect x="965" y="120" width="180" height="92" class="box red" rx="14"/>
+<text x="1055.0" y="148" text-anchor="middle" class="label">Audit / Event</text>
+<text x="1055.0" y="172" text-anchor="middle" class="small">ToolLog / TaskEvent</text>
+<path d="M225,166 L275,166" class="arrow"/>
+<path d="M455,166 L505,166" class="arrow"/>
+<path d="M685,166 L735,166" class="arrow"/>
+<path d="M915,166 L965,166" class="arrow"/>
+<rect x="75" y="302" width="1090" height="82" class="box red" rx="14"/>
+<text x="620" y="333" text-anchor="middle" class="label">搜索、workspace、memory、schedule、task、browser、shell 等工具都必须从 tool_management 注册进入治理链路</text>
+<text x="620" y="360" text-anchor="middle" class="small">前端、脚本或测试不能绕过工具注册、风险等级、后端审批和审计</text>
+</svg>

@@ -1,0 +1,12 @@
+services:
+  assistant-api:
+    ports: !override
+      - "127.0.0.1:18000:8000"
+
+  postgres:
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U assistant -d assistant_integration"]
+
+  celery-beat:
+    environment:
+      SCHEDULER_MAINTENANCE_INTERVAL_SECONDS: "3600"

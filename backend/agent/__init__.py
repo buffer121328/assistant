@@ -1,0 +1,216 @@
+from typing import TYPE_CHECKING
+
+from agent.prompting.model_contract import (
+    AgentDecision,
+    AgentDecisionError,
+    AgentModelProtocol,
+    AgentModelRequest,
+    AgentToolCall,
+    ReviewDecision,
+    WorkPlan,
+    WorkPlanStep,
+    build_agent_model_request,
+    build_review_model_request,
+    build_work_plan_request,
+    parse_agent_decision,
+    parse_review_decision,
+    parse_work_plan,
+)
+from agent.planning.capabilities import (
+    CapabilitiesBuilder,
+    CapabilitySnapshot,
+    ToolCapability,
+)
+from agent.planning.context import ContextBuilder, TaskContext
+from agent.ports import (
+    AgentExecutorProtocol,
+    AgentRunInput,
+    AgentRunResult,
+    HumanApprovalRequest,
+)
+from agent.governance.evolution import (
+    EVOLUTION_SUGGESTION_TOOL_NAME,
+    BehaviorEvolutionService,
+    BehaviorMetrics,
+    EvolutionSuggestion,
+)
+from runtime.langgraph_executor import LangGraphExecutor
+from agent.governance.governed_evolution import (
+    EvolutionApprovalError,
+    EvolutionError,
+    EvolutionStaleError,
+    EvolutionValidationError,
+    GovernedEvolutionService,
+)
+from runtime.loop import ControlledLoop, LoopStepLimitError
+from agent.planning.planner import DefaultPlanningLayer, ExecutionPlan
+from agent.ports import (
+    ConversationContextPack,
+    ConversationContextPort,
+    ExecutionTracePort,
+    HarnessTaskRecord,
+    LocalTaskServicePort,
+    MemoryContextPort,
+    StatusContextPort,
+    TaskLifecyclePort,
+    UserLookupPort,
+)
+from agent.planning.profiles import (
+    AgentProfile,
+    DefaultProfileSelector,
+    UnsupportedModelClassError,
+    UnsupportedWorkflowTaskTypeError,
+)
+from agent.governance.routing import (
+    AGENT_PROFILE_TASK_TYPES,
+    AgentRouteCandidate,
+    AgentRouteDecision,
+    AgentRouteModelError,
+    AgentRoutingError,
+    InvalidAgentRouteDecisionError,
+    NoAgentRouteCandidatesError,
+    build_agent_route_candidates,
+    build_agent_route_messages,
+    parse_agent_route_decision,
+)
+from agent.skill_management import (
+    SkillDefinition,
+    SkillLoadError,
+    SkillResourceError,
+    SkillsLoader,
+)
+from agent.skill_management.store import (
+    InvalidManagedSkillError,
+    InvalidSkillPackageError,
+    ManagedSkillConflictError,
+    ManagedSkillImmutableError,
+    ManagedSkillNotFoundError,
+    ManagedSkillRecord,
+    ManagedSkillStore,
+    ManagedSkillStoreError,
+)
+from runtime.subagents import (
+    SubAgentCoordinator,
+    SubAgentRequest,
+    SubAgentResult,
+    SubAgentRunner,
+)
+
+if TYPE_CHECKING:
+    from runtime.runner import (
+        AgentHarness,
+        AgentHarnessError,
+        ExecutionBoundary,
+        ExecutionOutcome,
+        LangGraphExecutionResult,
+        MinimalLangGraphExecutor,
+        NonPendingTaskExecutionError,
+    )
+
+
+_RUNTIME_RUNNER_EXPORTS = {
+    "AgentHarness",
+    "AgentHarnessError",
+    "ExecutionBoundary",
+    "ExecutionOutcome",
+    "LangGraphExecutionResult",
+    "MinimalLangGraphExecutor",
+    "NonPendingTaskExecutionError",
+}
+
+
+def __getattr__(name: str) -> object:
+    """按需加载兼容导出，避免导入 agent 包时提前初始化运行时依赖。"""
+    if name in _RUNTIME_RUNNER_EXPORTS:
+        from runtime import runner
+
+        value = getattr(runner, name)
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+__all__ = [
+    "AgentDecision",
+    "AgentDecisionError",
+    "AgentModelProtocol",
+    "AgentModelRequest",
+    "AgentToolCall",
+    "AgentHarness",
+    "AgentHarnessError",
+    "AgentExecutorProtocol",
+    "AgentProfile",
+    "AgentRouteCandidate",
+    "AgentRouteDecision",
+    "AgentRouteModelError",
+    "AgentRoutingError",
+    "AgentRunInput",
+    "AgentRunResult",
+    "HumanApprovalRequest",
+    "ConversationContextPort",
+    "ConversationContextPack",
+    "LocalTaskServicePort",
+    "TaskLifecyclePort",
+    "StatusContextPort",
+    "MemoryContextPort",
+    "HarnessTaskRecord",
+    "BehaviorEvolutionService",
+    "BehaviorMetrics",
+    "CapabilitiesBuilder",
+    "CapabilitySnapshot",
+    "ContextBuilder",
+    "ControlledLoop",
+    "DefaultPlanningLayer",
+    "DefaultProfileSelector",
+    "ExecutionBoundary",
+    "ExecutionOutcome",
+    "ExecutionPlan",
+    "ExecutionTracePort",
+    "EVOLUTION_SUGGESTION_TOOL_NAME",
+    "EvolutionSuggestion",
+    "EvolutionApprovalError",
+    "EvolutionError",
+    "EvolutionStaleError",
+    "EvolutionValidationError",
+    "GovernedEvolutionService",
+    "LangGraphExecutionResult",
+    "LangGraphExecutor",
+    "LoopStepLimitError",
+    "MinimalLangGraphExecutor",
+    "NonPendingTaskExecutionError",
+    "NoAgentRouteCandidatesError",
+    "SkillDefinition",
+    "SkillLoadError",
+    "SkillResourceError",
+    "SkillsLoader",
+    "SubAgentCoordinator",
+    "SubAgentRequest",
+    "SubAgentResult",
+    "SubAgentRunner",
+    "TaskContext",
+    "UserLookupPort",
+    "ToolCapability",
+    "UnsupportedModelClassError",
+    "UnsupportedWorkflowTaskTypeError",
+    "InvalidAgentRouteDecisionError",
+    "InvalidManagedSkillError",
+    "InvalidSkillPackageError",
+    "ManagedSkillConflictError",
+    "ManagedSkillImmutableError",
+    "ManagedSkillNotFoundError",
+    "ManagedSkillRecord",
+    "ManagedSkillStore",
+    "ManagedSkillStoreError",
+    "build_agent_route_candidates",
+    "build_agent_route_messages",
+    "build_agent_model_request",
+    "build_review_model_request",
+    "build_work_plan_request",
+    "AGENT_PROFILE_TASK_TYPES",
+    "parse_agent_decision",
+    "parse_review_decision",
+    "parse_work_plan",
+    "parse_agent_route_decision",
+    "ReviewDecision",
+    "WorkPlan",
+    "WorkPlanStep",
+]

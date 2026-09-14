@@ -1,0 +1,93 @@
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+from pydantic import SecretStr
+
+from infrastructure.settings.config import Settings
+from app.main import create_app
+from integrations import CredentialCipher, CredentialError
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def test_local_api_authentication_protects_internal_routes() -> None:
+    app = create_app(
+        Settings(
+            local_api_auth_required=True,
+            local_api_token=SecretStr("test-local-token"),
+        )
+    )
+    with TestClient(app) as client:
+        assert client.get("/health").status_code == 200
+        missing = client.get("/api/capabilities")
+        wrong = client.get(
+            "/api/capabilities", headers={"authorization": "Bearer wrong"}
+        )
+        allowed = client.get(
+            "/api/capabilities",
+            headers={"authorization": "Bearer test-local-token"},
+        )
+
+    assert missing.status_code == 401
+    assert wrong.status_code == 401
+    assert allowed.status_code == 200
+    assert "token" not in missing.text.lower()
+
+
+def test_required_auth_without_token_fails_closed() -> None:
+    app = create_app(
+        Settings(local_api_auth_required=True, local_api_token=SecretStr(""))
+    )
+    with TestClient(app) as client:
+        response = client.get("/api/capabilities")
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "local_api_auth_unconfigured"
+
+
+def test_compose_defines_local_engineering_boundaries() -> None:
+    compose = (ROOT / "docker-compose.yml").read_text()
+
+    assert '"127.0.0.1:${ASSISTANT_API_HOST_PORT:-18080}:8000"' in compose
+    for name in (
+        "LOCAL_API_AUTH_REQUIRED",
+        "LOCAL_API_TOKEN",
+        "ARTIFACTS_ROOT",
+        "KNOWLEDGE_ROOT",
+        "MEM0_CONFIG_PATH",
+        "QUALITY_JUDGE_SAMPLE_RATE",
+    ):
+        assert name in compose
+    for volume in ("artifacts-data", "knowledge-data"):
+        assert volume in compose
+
+
+def test_agent_engineering_packages_have_explicit_owners() -> None:
+    for package in ("integrations", "rag"):
+        assert (ROOT / "backend" / package / "__init__.py").is_file()
+    assert (ROOT / "backend/integrations/notification_delivery.py").is_file()
+    assert not (ROOT / "backend/notifications").exists()
+    assert (ROOT / "tests/integration/README.md").is_file()
+
+
+def test_credentials_are_versioned_encrypted_and_fail_closed() -> None:
+    cipher = CredentialCipher("test-master-key-that-is-at-least-32-characters")
+    encrypted = cipher.encrypt(
+        {"username": "user@example.invalid", "password": "private-password"}
+    )
+
+    assert "private-password" not in encrypted
+    assert cipher.decrypt(encrypted)["username"] == "user@example.invalid"
+    try:
+        CredentialCipher("")
+    except CredentialError as exc:
+        assert str(exc) == "credential_master_key_invalid"
+    else:
+        raise AssertionError("missing credential key must fail closed")
+
+    try:
+        cipher.decrypt(encrypted[:-2] + "xx")
+    except CredentialError as exc:
+        assert str(exc) == "credential_decryption_failed"
+        assert "private-password" not in str(exc)
+    else:
+        raise AssertionError("tampered ciphertext must fail closed")

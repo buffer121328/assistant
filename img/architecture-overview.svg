@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1260" height="550" viewBox="0 0 1260 550" role="img">
+<style>
+  .bg { fill: #f8fafc; }
+  .title { font: 700 26px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #0f172a; }
+  .label { font: 700 15px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #0f172a; }
+  .small { font: 400 13px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #334155; }
+  .tiny { font: 400 12px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #475569; }
+  .blue { stroke: #2563eb; fill: #eff6ff; }
+  .green { stroke: #16a34a; fill: #f0fdf4; }
+  .orange { stroke: #ea580c; fill: #fff7ed; }
+  .purple { stroke: #7c3aed; fill: #f5f3ff; }
+  .slate { stroke: #64748b; fill: #f8fafc; }
+  .red { stroke: #dc2626; fill: #fef2f2; }
+  .box { stroke-width: 1.6; rx: 14; }
+  .arrow { stroke: #334155; stroke-width: 1.8; fill: none; marker-end: url(#arrow); }
+  .dash { stroke-dasharray: 6 6; }
+  .lane { stroke: #cbd5e1; stroke-width: 1.2; stroke-dasharray: 5 5; fill: none; }
+</style>
+<defs>
+  <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+    <path d="M0,0 L0,6 L9,3 z" fill="#334155" />
+  </marker>
+</defs>
+<rect width="100%" height="100%" class="bg"/>
+<text x="32" y="44" text-anchor="start" class="title">整体架构：按当前 backend / frontend 目录重构后的主线</text>
+<rect x="36" y="88" width="180" height="100" class="box green" rx="14"/>
+<text x="126.0" y="116" text-anchor="middle" class="label">入口层</text>
+<text x="126.0" y="140" text-anchor="middle" class="small">LangBot</text>
+<text x="126.0" y="158" text-anchor="middle" class="small">Electron Desktop</text>
+<rect x="260" y="88" width="190" height="100" class="box blue" rx="14"/>
+<text x="355.0" y="116" text-anchor="middle" class="label">backend/channels</text>
+<text x="355.0" y="140" text-anchor="middle" class="small">langbot/router.py</text>
+<text x="355.0" y="158" text-anchor="middle" class="small">desktop/router.py</text>
+<rect x="494" y="88" width="190" height="100" class="box blue" rx="14"/>
+<text x="589.0" y="116" text-anchor="middle" class="label">backend/app/api</text>
+<text x="589.0" y="140" text-anchor="middle" class="small">APIRouter 汇总</text>
+<text x="589.0" y="158" text-anchor="middle" class="small">schema / Depends</text>
+<rect x="728" y="88" width="190" height="100" class="box purple" rx="14"/>
+<text x="823.0" y="116" text-anchor="middle" class="label">backend/domain</text>
+<text x="823.0" y="140" text-anchor="middle" class="small">TaskService</text>
+<text x="823.0" y="158" text-anchor="middle" class="small">Conversation / Memory</text>
+<rect x="962" y="88" width="220" height="100" class="box orange" rx="14"/>
+<text x="1072.0" y="116" text-anchor="middle" class="label">backend/workers</text>
+<text x="1072.0" y="140" text-anchor="middle" class="small">Celery runtime.py</text>
+<text x="1072.0" y="158" text-anchor="middle" class="small">worker.py / Beat</text>
+<path d="M216,138 L260,138" class="arrow"/>
+<path d="M450,138 L494,138" class="arrow"/>
+<path d="M684,138 L728,138" class="arrow"/>
+<path d="M918,138 L962,138" class="arrow"/>
+<rect x="70" y="266" width="190" height="110" class="box slate" rx="14"/>
+<text x="165.0" y="294" text-anchor="middle" class="label">backend/infrastructure</text>
+<text x="165.0" y="318" text-anchor="middle" class="small">config / database</text>
+<text x="165.0" y="336" text-anchor="middle" class="small">auth / logging</text>
+<text x="165.0" y="354" text-anchor="middle" class="small">agent_ports.py</text>
+<rect x="310" y="266" width="190" height="110" class="box slate" rx="14"/>
+<text x="405.0" y="294" text-anchor="middle" class="label">backend/agent/core</text>
+<text x="405.0" y="318" text-anchor="middle" class="small">AgentHarness</text>
+<text x="405.0" y="336" text-anchor="middle" class="small">LangGraphExecutor</text>
+<text x="405.0" y="354" text-anchor="middle" class="small">SubAgentCoordinator</text>
+<rect x="550" y="266" width="190" height="110" class="box red" rx="14"/>
+<text x="645.0" y="294" text-anchor="middle" class="label">backend/agent/tool_management</text>
+<text x="645.0" y="318" text-anchor="middle" class="small">registry / risk</text>
+<text x="645.0" y="336" text-anchor="middle" class="small">approval / audit</text>
+<text x="645.0" y="354" text-anchor="middle" class="small">search / workspace</text>
+<rect x="790" y="266" width="190" height="110" class="box slate" rx="14"/>
+<text x="885.0" y="294" text-anchor="middle" class="label">backend/features</text>
+<text x="885.0" y="318" text-anchor="middle" class="small">plan / learn</text>
+<text x="885.0" y="336" text-anchor="middle" class="small">daily / office</text>
+<text x="885.0" y="354" text-anchor="middle" class="small">场景入口</text>
+<rect x="1030" y="266" width="190" height="110" class="box slate" rx="14"/>
+<text x="1125.0" y="294" text-anchor="middle" class="label">frontend/desktop</text>
+<text x="1125.0" y="318" text-anchor="middle" class="small">Electron + React</text>
+<text x="1125.0" y="336" text-anchor="middle" class="small">/local/* + WS</text>
+<text x="1125.0" y="354" text-anchor="middle" class="small">设置与审批</text>
+<path d="M260,321 L310,321" class="arrow"/>
+<path d="M500,321 L550,321" class="arrow"/>
+<path d="M740,321 L790,321" class="arrow"/>
+<path d="M980,321 L1030,321" class="arrow"/>
+<path d="M1072,266 L1072,188" class="arrow dash"/>
+<text x="1087" y="232" text-anchor="start" class="tiny">本地 API / 事件流 / 审批</text>
+<rect x="40" y="440" width="1180" height="76" class="box red" rx="14"/>
+<text x="630" y="470" text-anchor="middle" class="label">目录重构后的边界：channels 负责入口协议，app/api 负责 HTTP 组装，domain 承载业务服务，workers 装配 Agent Runtime</text>
+<text x="630" y="494" text-anchor="middle" class="small">所有用户可观察动作继续经过 owner-scoped 校验、风险分级、审批和审计</text>
+</svg>

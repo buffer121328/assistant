@@ -1,0 +1,93 @@
+{
+  "version": "v6-07",
+  "thresholds": {
+    "min_accuracy": 1.0,
+    "min_evidence_precision": 1.0,
+    "min_evidence_recall": 1.0,
+    "min_abstention_accuracy": 1.0,
+    "max_stale_use_rate": 0.0,
+    "max_contradiction_rate": 0.0,
+    "max_p95_latency_ms": 80.0,
+    "max_average_context_tokens": 64.0,
+    "max_sql_index_drift": 0
+  },
+  "manual_evidence": {
+    "required": [
+      "knowledge_update",
+      "correction",
+      "forgetting",
+      "long_session_compaction"
+    ],
+    "provided": []
+  },
+  "cases": [
+    {
+      "id": "current-preference",
+      "accurate": true,
+      "evidence_true_positive": 1,
+      "evidence_retrieved": 1,
+      "evidence_expected": 1,
+      "stale_used": false,
+      "contradiction_injected": false,
+      "abstention_expected": false,
+      "abstained": false,
+      "cross_user_leak": false,
+      "forbidden_write": false,
+      "latency_ms": 22.0,
+      "context_tokens": 28,
+      "feedback": "helpful",
+      "sql_index_drift": 0
+    },
+    {
+      "id": "updated-fact",
+      "accurate": true,
+      "evidence_true_positive": 1,
+      "evidence_retrieved": 1,
+      "evidence_expected": 1,
+      "stale_used": false,
+      "contradiction_injected": false,
+      "abstention_expected": false,
+      "abstained": false,
+      "cross_user_leak": false,
+      "forbidden_write": false,
+      "latency_ms": 30.0,
+      "context_tokens": 34,
+      "feedback": "helpful",
+      "sql_index_drift": 0
+    },
+    {
+      "id": "unknown-abstention",
+      "accurate": true,
+      "evidence_true_positive": 0,
+      "evidence_retrieved": 0,
+      "evidence_expected": 0,
+      "stale_used": false,
+      "contradiction_injected": false,
+      "abstention_expected": true,
+      "abstained": true,
+      "cross_user_leak": false,
+      "forbidden_write": false,
+      "latency_ms": 12.0,
+      "context_tokens": 0,
+      "feedback": "none",
+      "sql_index_drift": 0
+    },
+    {
+      "id": "project-isolation",
+      "accurate": true,
+      "evidence_true_positive": 1,
+      "evidence_retrieved": 1,
+      "evidence_expected": 1,
+      "stale_used": false,
+      "contradiction_injected": false,
+      "abstention_expected": false,
+      "abstained": false,
+      "cross_user_leak": false,
+      "forbidden_write": false,
+      "latency_ms": 26.0,
+      "context_tokens": 24,
+      "feedback": "none",
+      "sql_index_drift": 0
+    }
+  ]
+}

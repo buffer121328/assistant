@@ -1,0 +1,273 @@
+{
+  "version": "v6-00",
+  "token_estimator": "unicode-unit-v1",
+  "taxonomy": {
+    "time_ranges": [
+      "execution",
+      "conversation",
+      "long_term"
+    ],
+    "cognitive_types": [
+      "profile",
+      "fact",
+      "preference",
+      "episode",
+      "procedure",
+      "constraint",
+      "working",
+      "reflection"
+    ],
+    "scopes": [
+      "user/global",
+      "user/project",
+      "user/conversation",
+      "agent/profile",
+      "system/read_only"
+    ]
+  },
+  "legacy_tasks": [
+    {
+      "id": "legacy-task-without-memory-metadata",
+      "conversation_metadata": null,
+      "memory_metadata": null,
+      "executable": true
+    }
+  ],
+  "isolation_cases": [
+    {
+      "id": "identical-text-and-external-conversation",
+      "owned_memory_ids": {
+        "user-a": [
+          "memory-a"
+        ],
+        "user-b": [
+          "memory-b"
+        ]
+      },
+      "observed_memory_ids": {
+        "user-a": [
+          "memory-a"
+        ],
+        "user-b": [
+          "memory-b"
+        ]
+      }
+    }
+  ],
+  "conflict_cases": [
+    {
+      "id": "conflicting-active-preferences",
+      "active_preference_ids": [
+        "preference-light",
+        "preference-dark"
+      ],
+      "resolution_memory_id": null
+    }
+  ],
+  "forbidden_samples": [
+    {
+      "id": "synthetic-authorization-header",
+      "sample_kind": "authorization_header",
+      "placeholder": "[synthetic-secret]",
+      "expected_action": "reject",
+      "observed_action": "reject"
+    },
+    {
+      "id": "synthetic-api-key",
+      "sample_kind": "api_key",
+      "placeholder": "<API_KEY>",
+      "expected_action": "reject",
+      "observed_action": "reject"
+    }
+  ],
+  "long_conversations": [
+    {
+      "id": "long-conversation-critical-evidence",
+      "window_size": 12,
+      "messages": [
+        {
+          "id": "message-01",
+          "critical": true
+        },
+        {
+          "id": "message-02",
+          "critical": false
+        },
+        {
+          "id": "message-03",
+          "critical": false
+        },
+        {
+          "id": "message-04",
+          "critical": false
+        },
+        {
+          "id": "message-05",
+          "critical": false
+        },
+        {
+          "id": "message-06",
+          "critical": false
+        },
+        {
+          "id": "message-07",
+          "critical": false
+        },
+        {
+          "id": "message-08",
+          "critical": false
+        },
+        {
+          "id": "message-09",
+          "critical": false
+        },
+        {
+          "id": "message-10",
+          "critical": false
+        },
+        {
+          "id": "message-11",
+          "critical": false
+        },
+        {
+          "id": "message-12",
+          "critical": false
+        },
+        {
+          "id": "message-13",
+          "critical": false
+        },
+        {
+          "id": "message-14",
+          "critical": false
+        }
+      ],
+      "answer_affected": true
+    }
+  ],
+  "preference_injection_cases": [
+    {
+      "id": "full-sql-preference-injection",
+      "preferences": [
+        {
+          "id": "preference-01",
+          "text": "回答保持简洁",
+          "relevant": true
+        },
+        {
+          "id": "preference-02",
+          "text": "代码示例使用 Python",
+          "relevant": true
+        },
+        {
+          "id": "preference-03",
+          "text": "周末提醒稍后处理",
+          "relevant": false
+        },
+        {
+          "id": "preference-04",
+          "text": "文档标题使用中文",
+          "relevant": false
+        }
+      ]
+    }
+  ],
+  "semantic_modes": [
+    {
+      "mode": "enabled",
+      "cases": [
+        {
+          "id": "semantic-enabled-preference",
+          "relevant_total": 2,
+          "retrieved_relevant": 2,
+          "latency_ms": 20,
+          "failed": false
+        },
+        {
+          "id": "semantic-enabled-update",
+          "relevant_total": 3,
+          "retrieved_relevant": 2,
+          "latency_ms": 25,
+          "failed": false
+        },
+        {
+          "id": "semantic-enabled-timeout",
+          "relevant_total": 0,
+          "retrieved_relevant": 0,
+          "latency_ms": 100,
+          "failed": true
+        }
+      ],
+      "id": "semantic-mode-enabled"
+    },
+    {
+      "mode": "disabled",
+      "cases": [
+        {
+          "id": "semantic-disabled-preference",
+          "relevant_total": 2,
+          "retrieved_relevant": 0,
+          "latency_ms": 0,
+          "failed": false
+        },
+        {
+          "id": "semantic-disabled-update",
+          "relevant_total": 3,
+          "retrieved_relevant": 0,
+          "latency_ms": 0,
+          "failed": false
+        }
+      ],
+      "id": "semantic-mode-disabled"
+    }
+  ],
+  "cross_session_cases": [
+    {
+      "id": "preference-across-sessions",
+      "category": "preference",
+      "correct": true
+    },
+    {
+      "id": "knowledge-update-latest-wins",
+      "category": "knowledge_update",
+      "correct": true
+    },
+    {
+      "id": "temporal-ordering",
+      "category": "temporal",
+      "correct": true
+    },
+    {
+      "id": "abstention-unknown-preference",
+      "category": "abstention",
+      "correct": false
+    }
+  ],
+  "stale_memory_cases": [
+    {
+      "id": "stale-preference-used",
+      "used_stale_memory": true
+    },
+    {
+      "id": "current-preference-used",
+      "used_stale_memory": false
+    }
+  ],
+  "memory_command_gaps": [
+    {
+      "id": "memory-write-no-provenance",
+      "command": "write",
+      "severity": "high"
+    },
+    {
+      "id": "memory-list-no-conflict-state",
+      "command": "list",
+      "severity": "medium"
+    },
+    {
+      "id": "memory-delete-no-index-outbox",
+      "command": "delete",
+      "severity": "medium"
+    }
+  ]
+}

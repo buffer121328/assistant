@@ -1,0 +1,15 @@
+{
+  "version": "v1.1",
+  "vector_store": {
+    "provider": "pgvector",
+    "config": {
+      "collection_name": "personal_agent_memories",
+      "dbname": "replace-locally",
+      "user": "replace-locally",
+      "password": "replace-locally",
+      "host": "127.0.0.1",
+      "port": 5432,
+      "embedding_model_dims": 1536
+    }
+  }
+}

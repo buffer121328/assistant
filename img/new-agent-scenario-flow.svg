@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1230" height="440" viewBox="0 0 1230 440" role="img">
+<style>
+  .bg { fill: #f8fafc; }
+  .title { font: 700 26px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #0f172a; }
+  .label { font: 700 15px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #0f172a; }
+  .small { font: 400 13px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #334155; }
+  .tiny { font: 400 12px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Noto Sans CJK SC",sans-serif; fill: #475569; }
+  .blue { stroke: #2563eb; fill: #eff6ff; }
+  .green { stroke: #16a34a; fill: #f0fdf4; }
+  .orange { stroke: #ea580c; fill: #fff7ed; }
+  .purple { stroke: #7c3aed; fill: #f5f3ff; }
+  .slate { stroke: #64748b; fill: #f8fafc; }
+  .red { stroke: #dc2626; fill: #fef2f2; }
+  .box { stroke-width: 1.6; rx: 14; }
+  .arrow { stroke: #334155; stroke-width: 1.8; fill: none; marker-end: url(#arrow); }
+  .dash { stroke-dasharray: 6 6; }
+  .lane { stroke: #cbd5e1; stroke-width: 1.2; stroke-dasharray: 5 5; fill: none; }
+</style>
+<defs>
+  <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+    <path d="M0,0 L0,6 L9,3 z" fill="#334155" />
+  </marker>
+</defs>
+<rect width="100%" height="100%" class="bg"/>
+<text x="32" y="44" text-anchor="start" class="title">扩展新 Agent 场景：匹配重构后的 feature / domain / worker 边界</text>
+<rect x="45" y="120" width="180" height="90" class="box green" rx="14"/>
+<text x="135.0" y="148" text-anchor="middle" class="label">OpenSpec / ATDD</text>
+<text x="135.0" y="172" text-anchor="middle" class="small">先定义验收标准</text>
+<rect x="280" y="120" width="180" height="90" class="box blue" rx="14"/>
+<text x="370.0" y="148" text-anchor="middle" class="label">backend/features</text>
+<text x="370.0" y="172" text-anchor="middle" class="small">plan/learn/daily/office</text>
+<rect x="515" y="120" width="180" height="90" class="box blue" rx="14"/>
+<text x="605.0" y="148" text-anchor="middle" class="label">agent/planning</text>
+<text x="605.0" y="172" text-anchor="middle" class="small">profile/context/prompt</text>
+<rect x="750" y="120" width="180" height="90" class="box orange" rx="14"/>
+<text x="840.0" y="148" text-anchor="middle" class="label">domain TaskService</text>
+<text x="840.0" y="172" text-anchor="middle" class="small">任务生命周期</text>
+<rect x="985" y="120" width="180" height="90" class="box orange" rx="14"/>
+<text x="1075.0" y="148" text-anchor="middle" class="label">workers/runtime.py</text>
+<text x="1075.0" y="172" text-anchor="middle" class="small">装配 AgentHarness</text>
+<path d="M225,165 L280,165" class="arrow"/>
+<path d="M460,165 L515,165" class="arrow"/>
+<path d="M695,165 L750,165" class="arrow"/>
+<path d="M930,165 L985,165" class="arrow"/>
+<rect x="75" y="302" width="1080" height="82" class="box red" rx="14"/>
+<text x="615" y="333" text-anchor="middle" class="label">新增场景应沿 features、planning、domain、workers 主线扩展，不直接塞进 worker，也不绕过 TaskService</text>
+<text x="615" y="360" text-anchor="middle" class="small">阶段完成时同步 README / 阶段文档，测试覆盖用户可观察行为</text>
+</svg>

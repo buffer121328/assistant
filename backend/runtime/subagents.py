@@ -1,0 +1,153 @@
+from __future__ import annotations
+
+import asyncio
+from dataclasses import dataclass, replace
+from typing import Mapping, Protocol
+
+from domain.policies.enterprise import (
+    AgentDefinition,
+    GovernedAgentProfile,
+    derive_child_agent_profile,
+)
+
+
+@dataclass(frozen=True)
+class SubAgentRequest:
+    """表示 处理 sub agent request 的后端数据结构或服务对象。"""
+
+    step_index: int  # step_index 对应的数据字段。
+    role: str  # role 对应的数据字段。
+    objective: str  # objective 对应的数据字段。
+    context: str  # context 对应的数据字段。
+    task_id: str = ""  # task_id 对应的数据字段。
+    user_id: str = ""  # user_id 对应的数据字段。
+    conversation_id: str | None = None  # conversation_id 对应的数据字段。
+    governed_profile: GovernedAgentProfile | None = (
+        None  # governed_profile 对应的数据字段。
+    )
+
+
+@dataclass(frozen=True)
+class SubAgentResult:
+    """表示 处理 sub agent result 的后端数据结构或服务对象。"""
+
+    step_index: int  # step_index 对应的数据字段。
+    role: str  # role 对应的数据字段。
+    content: str  # content 对应的数据字段。
+    error: str | None = None  # error 对应的数据字段。
+
+
+class SubAgentRunner(Protocol):
+    """表示 处理 sub agent runner 的后端数据结构或服务对象。"""
+
+    async def run(self, request: SubAgentRequest) -> SubAgentResult:
+        """运行。
+
+        Args:
+            request: request 参数。
+        """
+        ...
+
+
+class SubAgentCoordinator:
+    """表示 处理 sub agent coordinator 的后端数据结构或服务对象。"""
+
+    def __init__(
+        self,
+        *,
+        runner: SubAgentRunner,
+        max_subagents: int = 3,
+        concurrency: int = 2,
+        timeout_seconds: float = 30.0,
+        max_result_chars: int = 10_000,
+    ) -> None:
+        """初始化对象实例。
+
+        Args:
+            runner: runner 参数。
+            max_subagents: max_subagents 参数。
+            concurrency: concurrency 参数。
+            timeout_seconds: timeout_seconds 参数。
+            max_result_chars: max_result_chars 参数。
+        """
+        self.runner = runner
+        self.max_subagents = max(0, min(max_subagents, 3))
+        self.concurrency = max(1, min(concurrency, 3))
+        self.timeout_seconds = max(1.0, min(timeout_seconds, 60.0))
+        self.max_result_chars = max(500, min(max_result_chars, 20_000))
+
+    async def run(
+        self,
+        *,
+        task_id: str,
+        user_id: str,
+        requests: tuple[SubAgentRequest, ...],
+        parent_profile: GovernedAgentProfile | None = None,
+        agent_definitions: Mapping[str, AgentDefinition] | None = None,
+    ) -> tuple[SubAgentResult, ...]:
+        """运行。
+
+        Args:
+            task_id: task_id 参数。
+            user_id: user_id 参数。
+            requests: requests 参数。
+        """
+        selected = requests[: self.max_subagents]
+        semaphore = asyncio.Semaphore(self.concurrency)
+
+        async def execute(request: SubAgentRequest) -> SubAgentResult:
+            """执行。
+
+            Args:
+                request: request 参数。
+            """
+            child_profile = None
+            if parent_profile is not None:
+                definition = (agent_definitions or {}).get(request.role)
+                if definition is None:
+                    return SubAgentResult(
+                        step_index=request.step_index,
+                        role=request.role[:64],
+                        content="",
+                        error="AgentDefinitionUnavailable",
+                    )
+                try:
+                    child_profile = derive_child_agent_profile(
+                        parent_profile, definition
+                    )
+                except ValueError as exc:
+                    return SubAgentResult(
+                        step_index=request.step_index,
+                        role=request.role[:64],
+                        content="",
+                        error=type(exc).__name__,
+                    )
+            scoped = replace(
+                request,
+                task_id=task_id,
+                user_id=user_id,
+                context=request.context[:20_000],
+                governed_profile=child_profile,
+            )
+            try:
+                async with semaphore:
+                    result = await asyncio.wait_for(
+                        self.runner.run(scoped),
+                        timeout=self.timeout_seconds,
+                    )
+            except Exception as exc:
+                return SubAgentResult(
+                    step_index=scoped.step_index,
+                    role=scoped.role[:64],
+                    content="",
+                    error=type(exc).__name__,
+                )
+            return SubAgentResult(
+                step_index=scoped.step_index,
+                role=result.role[:64],
+                content=result.content[: self.max_result_chars],
+                error=(result.error[:200] if result.error else None),
+            )
+
+        results = await asyncio.gather(*(execute(item) for item in selected))
+        return tuple(sorted(results, key=lambda item: item.step_index))

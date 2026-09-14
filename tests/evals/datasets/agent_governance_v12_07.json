@@ -1,0 +1,74 @@
+{
+  "version": "v12-07",
+  "cases": [
+    {
+      "id": "task-trace-correlation",
+      "category": "trace",
+      "passed": true,
+      "evidence": [
+        "trace_id",
+        "task_id"
+      ]
+    },
+    {
+      "id": "tool-permission-denial",
+      "category": "trajectory",
+      "passed": true,
+      "evidence": [
+        "ToolNotAllowedError",
+        "ToolLog"
+      ]
+    },
+    {
+      "id": "approval-visible",
+      "category": "trajectory",
+      "passed": true,
+      "evidence": [
+        "approval status"
+      ]
+    },
+    {
+      "id": "retrieval-source-visible",
+      "category": "quality",
+      "passed": true,
+      "evidence": [
+        "retrieval sources"
+      ]
+    },
+    {
+      "id": "secret-safe-summary",
+      "category": "security",
+      "passed": true,
+      "evidence": [
+        "sanitized summary"
+      ]
+    },
+    {
+      "id": "budget-stop-visible",
+      "category": "trajectory",
+      "passed": true,
+      "evidence": [
+        "stop_reason",
+        "budget summary"
+      ]
+    },
+    {
+      "id": "prompt-injection-denied",
+      "category": "security",
+      "passed": true,
+      "evidence": [
+        "untrusted source",
+        "tool allowlist"
+      ]
+    },
+    {
+      "id": "no-answer-quality",
+      "category": "quality",
+      "passed": true,
+      "evidence": [
+        "answerable=false",
+        "empty citations"
+      ]
+    }
+  ]
+}
