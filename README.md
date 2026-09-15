@@ -15,42 +15,43 @@
 
 详细业务语境与决策原因见 [`docs/knowledge.md`](docs/knowledge.md)。
 
+## 产品界面
+
+### 企业管理台（Web）
+
+管理台是企业管理员的独立浏览器控制面（远程部署后通过 `:4173` 访问），统一管理组织、成员、能力分发、审批与审计。
+
+![管理台登录](img/admin-login.png)
+
+登录后进入工作区总览：部门与组织数量、已授权成员、可用能力、待处理事项和最近治理事件一目了然。
+
+![管理台总览](img/admin-overview.png)
+
+能力中心展示全部经过治理批准的能力目录，按部门查看分发状态，并支持一键分发能力给部门。
+
+![能力中心](img/admin-capabilities.png)
+
+组织与成员页管理部门、成员与角色边界；角色决定成员在当前工作区可查看和可执行的管理范围。
+
+![组织与成员](img/admin-org.png)
+
+### 员工桌面工作台（Electron）
+
+员工在桌面端完成登录后，按部门获得对应能力。新建工作区、发起会话、选择协助能力（制定计划 / 调研学习 / 生成日报 / 办公写作）即可开始协作。
+
+下图为一次真实对话：员工请求"整理一份本周工作计划的简版大纲"，选择"制定计划"能力，贾维斯生成结构化大纲；右侧任务信息面板实时展示处理步骤（明确目标 → 拆解阶段步骤 → 给出下一步行动）与会话 token 用量（3,293 / 500,000，输入 1,740 / 输出 1,553）。
+
+![桌面端会话与任务信息](img/desktop-conversation.png)
+
 ## 系统架构
 
-```mermaid
-flowchart LR
-    subgraph entry [入口层]
-        LB[LangBot 消息入口]
-        ED[Electron 桌面端]
-        WA[Web 管理台<br/>浏览器直接访问]
-    end
+三种入口（LangBot 消息、Electron 员工工作台、企业管理台）汇入同一套 FastAPI 后端：队列只传话，PostgreSQL 才是账本。
 
-    subgraph api [backend/app/api]
-        CH[channels 通道适配]
-        RT[APIRouter 汇总<br/>schema / 会话鉴权]
-    end
+![三种入口汇入同一套后端](img/diagram-entries.png)
 
-    subgraph domain [backend/domain + application]
-        TS[任务 / 会话 / 记忆]
-        GOV[企业治理<br/>tenant / org / role / policy]
-    end
+请求进入后按"要不要大模型"分流：查状态、管记忆、截屏等确定性动作直接执行；计划、调研、日报、办公写作先鉴权、冻结资源快照，再入队给 Worker 跑 Agent 计划-执行-评审。
 
-    subgraph runtime [backend/workers + agent]
-        W[Celery Worker / Beat<br/>超时维护与补偿]
-        H[Agent Harness<br/>LangGraph 执行]
-        TR[ToolRegistry<br/>风险分级 / 审批 / 审计]
-    end
-
-    LB --> CH
-    ED -->|SSH 隧道或本机端口| RT
-    WA --> RT
-    CH --> RT
-    RT --> TS
-    TS --> GOV
-    TS --> W
-    W --> H
-    H --> TR
-```
+![请求分流与任务执行链路](img/diagram-routing.png)
 
 一次 Agent 任务的完整执行链路如下。每一步都落在服务端：入口只提交意图，模型不能修改执行计划，工具执行前必须再次通过治理裁决。
 
@@ -79,6 +80,14 @@ sequenceDiagram
     M-->>G: 结果脱敏后返回
     A-->>U: 事件流 + 最终结果回推，写入审计
 ```
+
+工具调用按风险分级放行：低风险直接调用，需本人确认的在工作台弹确认，需他人审批的暂停等待；结果写事件并回推桌面端与 IM。
+
+![工具风险分级与审批](img/diagram-risk-approval.png)
+
+人、能力、策略在运行时收成一份 Governed Agent Profile 快照，所有工具走同一治理入口，审批和审计绑在这一次执行上。
+
+![运行时治理画像](img/diagram-governance.png)
 
 ## 核心功能
 
