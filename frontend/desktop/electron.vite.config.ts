@@ -22,7 +22,15 @@ export default defineConfig({
   renderer: {
     root: resolve(__dirname, "src/renderer"),
     plugins: [react()],
-    server: { host: "127.0.0.1" },
+    server: {
+      host: "127.0.0.1",
+      proxy: {
+        // Browser-only preview of renderer entries without the Electron shell:
+        // forward API calls to a reachable backend. Electron builds do not use this.
+        "/api": { target: process.env.ASSISTANT_DEV_API_ORIGIN ?? "http://127.0.0.1:18080", changeOrigin: true },
+        "/local": { target: process.env.ASSISTANT_DEV_API_ORIGIN ?? "http://127.0.0.1:18080", changeOrigin: true }
+      }
+    },
     build: {
       rollupOptions: {
         input: {
